@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { PlayerController } from '../src/player/playerController.js';
-import { GLB_OBSTACLES, GLB_BOUNDS, PROCEDURAL_OBSTACLES, PROCEDURAL_BOUNDS } from '../src/world/farmLoader.js';
+import { GLB_OBSTACLES, GLB_BOUNDS, PROCEDURAL_OBSTACLES, PROCEDURAL_BOUNDS, collectGlbSceneObstacles } from '../src/world/farmLoader.js';
 import { PhysicsWorld } from '../src/physics/physicsWorld.js';
 
 describe('PlayerController — Colisiones contra Paredes y Estructuras', () => {
@@ -161,5 +161,31 @@ describe('PlayerController — Colisiones contra Paredes y Estructuras', () => {
     physicsWorld.setObstacles(GLB_OBSTACLES);
     // Debe haber registrado todos los obstáculos de GLB como cuerpos físicos estáticos
     expect(physicsWorld.staticObstacleBodies.length).toBe(GLB_OBSTACLES.length);
+  });
+
+  it('extrae colisiones de casa nueva (FAB_converted_model001), granero, silo y vallas Farm_Fence*', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    const player = new PlayerController(camera, null, scene, { autoLoad: false });
+
+    const root = new THREE.Group();
+    const makeBox = (name, x, z, w, d) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), new THREE.MeshBasicMaterial());
+      m.name = name;
+      m.position.set(x, 1.5, z);
+      root.add(m);
+    };
+    makeBox('FAB_converted_model001', 21.4, 0.6, 7.0, 6.2); // Casa nueva
+    makeBox('Farm_House_Silo_01001', 15.6, 10.0, 8.0, 8.5); // Silo rojo nuevo
+    makeBox('Farm_Fence_C_01', 23.95, -5.0, 0.4, 2.0); // Valla este
+
+    const obstacles = collectGlbSceneObstacles(root);
+    expect(obstacles.length).toBe(3);
+
+    player.setObstacles(obstacles, { minX: -20, maxX: 25, minZ: -25, maxZ: 20 });
+    expect(player.isColliding(21.4, 0.6)).toBe(true); // Casa nueva bloqueada
+    expect(player.isColliding(15.6, 10.0)).toBe(true); // Silo bloqueado
+    expect(player.isColliding(23.95, -5.0)).toBe(true); // Valla bloqueada
+    expect(player.isColliding(0, -2)).toBe(false); // Patio libre
   });
 });

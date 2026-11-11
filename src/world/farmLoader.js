@@ -13,6 +13,65 @@ export const GLB_BOUNDS = {
   maxZ: 18.2
 };
 
+const GLB_OBSTACLE_PREFIXES = [
+  'casarural',
+  'almacen',
+  'farmhousebarn',
+  'farmhousesilo',
+  'fabconvertedmodel',
+  'bombaagua',
+  'tanqueagua',
+  'compostera',
+  'panelsolarbase',
+  'cajonherramientas',
+  'espantapajarosposte',
+  'fardopaja',
+  'farmfence'
+];
+
+/**
+ * Extrae cajas de colisión reales (Box3) de edificios y vallas desde un grafo glTF ya sanitizado por Three.js.
+ * Tolera nombres con espacios/puntos sanitizados (ej. 'FAB converted model.001' -> 'FAB_converted_model001').
+ * @param {THREE.Object3D} root
+ * @returns {Array<object>}
+ */
+export function collectGlbSceneObstacles(root) {
+  if (!root) return [];
+  root.updateMatrixWorld(true);
+  const obstacles = [];
+  const seenRoots = new Set();
+  const box = new THREE.Box3();
+
+  const walk = (node) => {
+    const clean = (node.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const matched = clean && GLB_OBSTACLE_PREFIXES.some((p) => clean.startsWith(p));
+    if (matched && !seenRoots.has(node)) {
+      box.setFromObject(node);
+      if (!box.isEmpty()) {
+        obstacles.push({
+          id: node.name,
+          type: 'box',
+          minX: box.min.x,
+          maxX: box.max.x,
+          minZ: box.min.z,
+          maxZ: box.max.z,
+          height: Math.max(1.2, box.max.y - box.min.y)
+        });
+        seenRoots.add(node);
+        return; // No duplicar hijos dentro de una estructura ya medida (ej. casa FAB o granero)
+      }
+    }
+    if (node.children) {
+      for (let i = 0; i < node.children.length; i++) {
+        walk(node.children[i]);
+      }
+    }
+  };
+
+  walk(root);
+  return obstacles;
+}
+
 /**
  * Obstáculos sólidos para colisión precisa contra las estructuras de finca.glb
  * Coordenadas convertidas desde generar_finca.py: [x_blender, z_blender, -y_blender]

@@ -10,7 +10,7 @@ import { ParticleSystem } from './systems/particleSystem.js';
 import { AudioSystem } from './systems/audioSystem.js';
 import { SkySystem } from './systems/skySystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
-import { FarmLoader } from './world/farmLoader.js';
+import { FarmLoader, collectGlbSceneObstacles } from './world/farmLoader.js';
 import { createNaturalHorizon } from './world/landscapeEnhancer.js';
 import { MultimediaStation } from './world/multimediaStation.js';
 import { GuideChicken } from './world/guideChicken.js';
@@ -191,42 +191,11 @@ async function bootstrap() {
       player.bounds = { minX: -19.4, maxX: 22.6, minZ: -22.0, maxZ: 18.2 };
     }
 
-    const glbObstacleNames = [
-      'casa_rural',
-      'almacen',
-      'Farm_House_Barn_01',
-      'Farm_House_Silo_01.001',
-      'Farm_House_Silo_01',
-      'FAB converted model.001',
-      'panel_solar_base',
-      'cajon_herramientas',
-      'espantapajaros_poste',
-      'bomba_agua',
-      'tanque_agua',
-      'compostera',
-      'fardo_paja',
-      'fardo_paja.001',
-      'fardo_paja.002'
-    ];
-    const glbObstacles = [];
-    for (const obsName of glbObstacleNames) {
-      const node = farmEnv.namedObjects?.get(obsName) || farmEnv.root.getObjectByName(obsName);
-      if (!node) continue;
-      const box = new THREE.Box3().setFromObject(node);
-      if (!box.isEmpty()) {
-        glbObstacles.push({
-          id: obsName,
-          type: 'box',
-          minX: box.min.x,
-          maxX: box.max.x,
-          minZ: box.min.z,
-          maxZ: box.max.z
-        });
-      }
-    }
-    // Unir cajas medidas del GLB con los obstáculos declarados (árboles, tanque, panel, etc.)
-    player.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])], player.bounds);
-    physicsWorld.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])]);
+    const glbObstacles = collectGlbSceneObstacles(farmEnv.root);
+    // Unir cajas reales del GLB (casa nueva, granero, silo, vallas Farm_Fence*, fardos, etc.) con obstáculos declarados
+    const mergedObstacles = [...glbObstacles, ...(farmEnv.obstacles || [])];
+    player.setObstacles(mergedObstacles, player.bounds);
+    physicsWorld.setObstacles(mergedObstacles);
   } else if (farmEnv?.obstacles) {
     player.setObstacles(farmEnv.obstacles, farmEnv.bounds);
     physicsWorld.setObstacles(farmEnv.obstacles);
@@ -553,13 +522,14 @@ async function bootstrap() {
     }
   });
 
-  // F. Estación Multimedia (Semana 3) y Portal Neón (Semana 9)
-  const spawn = farmEnv?.coordinates?.spawn || { x: 0, y: 0, z: -2 };
-  const multimediaStation = new MultimediaStation(scene, new THREE.Vector3(spawn.x + 2.5, 0, spawn.z - 3.5));
+  // F. Estación Multimedia (Semana 3) y Portal Neón (Semana 9) en área despejada del patio central
+  const stationPos = new THREE.Vector3(-2.8, 0, -2.2);
+  const multimediaStation = new MultimediaStation(scene, stationPos);
+  player.addObstacle({ id: 'multimedia_station', type: 'circle', x: stationPos.x, z: stationPos.z, r: 0.65 });
   interactionSystem.register({
     id: 'interact_multimedia',
     name: 'Estación Multimedia de Telemetría',
-    position: { x: spawn.x + 2.5, y: 1.5, z: spawn.z - 3.5 },
+    position: { x: stationPos.x, y: 1.5, z: stationPos.z },
     actionText: 'Presiona E para pausar/reanudar pantalla multimedia',
     onInteract: () => {
       audioSystem.playClick();
@@ -884,8 +854,8 @@ async function bootstrap() {
       multimediaStation.update(delta);
       if (multimediaStation.checkTeleport(pPos)) {
         audioSystem.playSuccess();
-        hud.showToast('🌀 Portal activado: regresando al punto inicial', 'success', 3000);
-        player.setPosition(spawn.x, spawn.y, spawn.z);
+        hud.showToast('🌀 Portal activado: regresando al patio central', 'success', 3000);
+        player.setPosition(0, 0, -2);
       }
 
       // D. Detección de proximidad para interacción [E]
