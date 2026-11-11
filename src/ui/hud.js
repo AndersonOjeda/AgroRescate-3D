@@ -309,6 +309,10 @@ export class HUD {
   showToast(message, type = 'info', durationMs = 3800) {
     if (!this.toastContainer || !this.doc) return;
 
+    while (this.toastContainer.children.length >= 3) {
+      this.toastContainer.removeChild(this.toastContainer.firstChild);
+    }
+
     const toast = this.doc.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;

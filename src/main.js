@@ -11,6 +11,7 @@ import { AudioSystem } from './systems/audioSystem.js';
 import { SkySystem } from './systems/skySystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader } from './world/farmLoader.js';
+import { createNaturalHorizon } from './world/landscapeEnhancer.js';
 import { MultimediaStation } from './world/multimediaStation.js';
 import { GuideChicken } from './world/guideChicken.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
@@ -85,6 +86,7 @@ async function bootstrap() {
   const farmEnv = await farmLoader.loadFarm((percent, msg) => {
     hud.updateLoadingProgress(percent, msg);
   });
+  createNaturalHorizon(scene);
 
   // Vincular las parcelas visuales con el adaptador agrícola (procedural o nodos de etapa en finca.glb)
   if (farmEnv && farmEnv.cropPlots) {

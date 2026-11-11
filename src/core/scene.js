@@ -6,7 +6,7 @@ import * as THREE from 'three';
 export function createScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa0d8ef); // Cielo rural despejado
-  scene.fog = new THREE.Fog(0xa0d8ef, 35, 95);
+  scene.fog = new THREE.Fog(0xa0d8ef, 75, 240);
 
   // 1. Luz Hemisférica (Cielo suave y rebote del suelo)
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4a6b32, 0.6);

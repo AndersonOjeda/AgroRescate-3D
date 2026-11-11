@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FarmEnvironment } from './environment.js';
+import { applyNaturalMountainShading } from './landscapeEnhancer.js';
 
 /**
  * Límites del terreno en Three.js para el modelo GLB de Blender (40x40 m)
@@ -534,6 +535,7 @@ export class FarmLoader {
         }
       }
     });
+    applyNaturalMountainShading(modelScene);
   }
 
   getEnvironment() {

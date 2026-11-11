@@ -824,8 +824,9 @@ kbd {
 /* Panel de Misiones (Tutorial Guiado) */
 .mission-hud {
   position: absolute;
-  top: 122px;
-  left: 16px;
+  top: 78px;
+  right: 16px;
+  left: auto;
   z-index: 15;
   width: 270px;
   padding: 10px 12px;
