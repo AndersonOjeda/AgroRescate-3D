@@ -21,6 +21,7 @@ export class FarmEnvironment {
     this.humiditySensorMesh = null;
     this.composterMesh = null;
     this.warehouseMesh = null;
+    this.windmillBlades = null;
     this.cropPlots = {};
 
     this._buildEnvironment();
@@ -31,6 +32,7 @@ export class FarmEnvironment {
     this._createRuralHouse();
     this._createBarn();
     this._createWaterTankAndPump();
+    this._createWindmill();
     this._createCropPlots();
     this._createHumiditySensors();
     this._createComposter();
@@ -479,6 +481,63 @@ export class FarmEnvironment {
         rail2.position.y = 0.8;
         this.group.add(rail2);
       }
+    }
+  }
+
+  // 10. MOLINO DE VIENTO RURAL CON ASPAS ROTATORIAS
+  _createWindmill() {
+    const wmGroup = new THREE.Group();
+    wmGroup.position.set(-8, 0, -11);
+    wmGroup.name = 'molino_viento';
+
+    // Torre cónica de madera
+    const towerGeo = new THREE.CylinderGeometry(1.2, 1.9, 7.5, 8);
+    const towerMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
+    const tower = new THREE.Mesh(towerGeo, towerMat);
+    tower.position.y = 3.75;
+    tower.castShadow = true;
+    tower.receiveShadow = true;
+    wmGroup.add(tower);
+
+    // Cúpula / techo del molino
+    const domeGeo = new THREE.ConeGeometry(1.6, 1.4, 8);
+    const domeMat = new THREE.MeshLambertMaterial({ color: 0x991b1b });
+    const dome = new THREE.Mesh(domeGeo, domeMat);
+    dome.position.y = 8.2;
+    dome.castShadow = true;
+    wmGroup.add(dome);
+
+    // Eje frontal
+    const hub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.2, 0.4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.2 })
+    );
+    hub.rotateX(Math.PI / 2);
+    hub.position.set(0, 7.5, 1.3);
+    wmGroup.add(hub);
+
+    // Aspas giratorias
+    this.windmillBlades = new THREE.Group();
+    this.windmillBlades.position.set(0, 7.5, 1.45);
+
+    const bladeMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+    const bladeGeo = new THREE.BoxGeometry(0.35, 3.2, 0.04);
+    bladeGeo.translate(0, 1.6, 0);
+
+    for (let i = 0; i < 4; i++) {
+      const blade = new THREE.Mesh(bladeGeo, bladeMat);
+      blade.rotation.z = (Math.PI / 2) * i;
+      blade.castShadow = true;
+      this.windmillBlades.add(blade);
+    }
+
+    wmGroup.add(this.windmillBlades);
+    this.group.add(wmGroup);
+  }
+
+  update(delta) {
+    if (this.windmillBlades) {
+      this.windmillBlades.rotation.z += delta * 1.2;
     }
   }
 

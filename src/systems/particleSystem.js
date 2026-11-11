@@ -79,6 +79,38 @@ export class ParticleSystem {
     this.rainPoints.frustumCulled = false;
     this.rainPoints.visible = false;
     this.scene.add(this.rainPoints);
+
+    // --- 3. SISTEMA DE POLVO DE PISADAS AL DESPLAZARSE ---
+    this.dustCount = 60;
+    this.dustPositions = new Float32Array(this.dustCount * 3);
+    this.dustVelocities = new Float32Array(this.dustCount * 3);
+    this.dustLifetimes = new Float32Array(this.dustCount);
+    this.dustMaxLifetimes = new Float32Array(this.dustCount);
+    this.dustActive = new Uint8Array(this.dustCount);
+    this.dustIndex = 0;
+
+    for (let i = 0; i < this.dustCount; i++) {
+      this.dustPositions[i * 3 + 1] = -100;
+      this.dustActive[i] = 0;
+    }
+
+    this.dustGeometry = new THREE.BufferGeometry();
+    this.dustGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(this.dustPositions, 3)
+    );
+
+    this.dustMaterial = new THREE.PointsMaterial({
+      color: 0xd4a373, // Polvo ocre rural
+      size: 0.18,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false
+    });
+
+    this.dustPoints = new THREE.Points(this.dustGeometry, this.dustMaterial);
+    this.dustPoints.frustumCulled = false;
+    this.scene.add(this.dustPoints);
   }
 
   _initSprinklerParticles() {
@@ -153,6 +185,33 @@ export class ParticleSystem {
   }
 
   /**
+   * Genera un efecto visual de polvo sutil bajo las botas del agricultor al desplazarse
+   */
+  emitFootstepDust(pos) {
+    if (!pos) return;
+    const count = 4;
+    for (let k = 0; k < count; k++) {
+      const idx = this.dustIndex;
+      this.dustIndex = (this.dustIndex + 1) % this.dustCount;
+      const i3 = idx * 3;
+
+      this.dustPositions[i3] = pos.x + (Math.random() - 0.5) * 0.22;
+      this.dustPositions[i3 + 1] = 0.05 + Math.random() * 0.06;
+      this.dustPositions[i3 + 2] = pos.z + (Math.random() - 0.5) * 0.22;
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.4 + Math.random() * 0.6;
+      this.dustVelocities[i3] = Math.cos(angle) * speed;
+      this.dustVelocities[i3 + 1] = 0.4 + Math.random() * 0.5;
+      this.dustVelocities[i3 + 2] = Math.sin(angle) * speed;
+
+      this.dustLifetimes[idx] = 0;
+      this.dustMaxLifetimes[idx] = 0.35 + Math.random() * 0.2;
+      this.dustActive[idx] = 1;
+    }
+  }
+
+  /**
    * Actualización de partículas llamada en el bucle animate()
    * Reutiliza vectores y memoria pre-asignada sin crear objetos nuevos
    */
@@ -214,6 +273,31 @@ export class ParticleSystem {
       }
 
       rainPosAttr.needsUpdate = true;
+    }
+
+    // 3. Actualizar Polvo de Pisadas
+    let dustNeedsUpdate = false;
+    for (let i = 0; i < this.dustCount; i++) {
+      if (this.dustActive[i]) {
+        this.dustLifetimes[i] += delta;
+        const i3 = i * 3;
+
+        if (this.dustLifetimes[i] >= this.dustMaxLifetimes[i]) {
+          this.dustActive[i] = 0;
+          this.dustPositions[i3 + 1] = -100;
+          dustNeedsUpdate = true;
+          continue;
+        }
+
+        this.dustVelocities[i3 + 1] -= gravity * delta * 0.6;
+        this.dustPositions[i3] += this.dustVelocities[i3] * delta;
+        this.dustPositions[i3 + 1] += this.dustVelocities[i3 + 1] * delta;
+        this.dustPositions[i3 + 2] += this.dustVelocities[i3 + 2] * delta;
+        dustNeedsUpdate = true;
+      }
+    }
+    if (dustNeedsUpdate) {
+      this.dustGeometry.attributes.position.needsUpdate = true;
     }
   }
 }

@@ -97,17 +97,36 @@ export class CropPlot {
   }
 
   _createPlantMeshes() {
-    // Geometrías compartidas para los tallos y hojas
+    // Materiales comunes según salud
+    this.healthyMat = new THREE.MeshLambertMaterial({ color: 0x22c55e }); // Verde vivo
+    this.witheredMat = new THREE.MeshLambertMaterial({ color: 0x785338 }); // Marchito marrón
+
+    // Materiales específicos por tipo de cultivo
+    this.cornFruitMat = new THREE.MeshLambertMaterial({ color: 0xeab308 }); // Mazorca dorada
+    this.tomatoFruitMat = new THREE.MeshLambertMaterial({ color: 0xef4444 }); // Tomate rojo
+    this.sunflowerMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 }); // Girasol amarillo brillante
+    this.pumpkinMat = new THREE.MeshLambertMaterial({ color: 0xf97316 }); // Calabaza naranja
+
+    // Tubos de microriego por goteo para agricultura de precisión
+    if (this.mode === 'precision') {
+      const dripMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+      const dripGeo = new THREE.CylinderGeometry(0.03, 0.03, this.depth - 0.4, 6);
+      dripGeo.rotateX(Math.PI / 2);
+
+      for (let c = 0; c < this.cols; c++) {
+        const x = -this.width / 2 + (this.width / (this.cols + 1)) * (c + 1) + 0.15;
+        const dripPipe = new THREE.Mesh(dripGeo, dripMat);
+        dripPipe.position.set(x, 0.16, 0);
+        this.group.add(dripPipe);
+      }
+    }
+
+    // Geometrías para las plantas
     const stemGeo = new THREE.CylinderGeometry(0.04, 0.06, 1.0, 5);
     stemGeo.translate(0, 0.5, 0);
 
     const leafGeo = new THREE.ConeGeometry(0.2, 0.5, 4);
     leafGeo.rotateZ(Math.PI / 4);
-
-    // Materiales según salud de la planta
-    this.healthyMat = new THREE.MeshLambertMaterial({ color: 0x22c55e }); // Verde vivo
-    this.matureFruitMat = new THREE.MeshLambertMaterial({ color: 0xf59e0b }); // Fruto dorado/naranja
-    this.witheredMat = new THREE.MeshLambertMaterial({ color: 0x785338 }); // Marchito marrón
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -117,7 +136,7 @@ export class CropPlot {
         const plantGroup = new THREE.Group();
         plantGroup.position.set(x, 0.15, z);
 
-        // Tallo
+        // Tallo base
         const stem = new THREE.Mesh(stemGeo, this.healthyMat);
         stem.castShadow = true;
         plantGroup.add(stem);
@@ -133,16 +152,51 @@ export class CropPlot {
         leaf2.position.set(-0.1, 0.6, 0);
         plantGroup.add(leaf2);
 
-        // Fruto / Espiga (visible solo cuando madura)
-        const fruitGeo = new THREE.DodecahedronGeometry(0.18);
-        const fruit = new THREE.Mesh(fruitGeo, this.matureFruitMat);
-        fruit.position.set(0, 1.0, 0);
-        fruit.castShadow = true;
-        fruit.name = 'fruit';
-        plantGroup.add(fruit);
+        // Fruto / Flor según la filosofía agrícola
+        let fruitMesh;
+        if (this.mode === 'subsistence') {
+          // Maíz tradicional: Mazorcas alargadas
+          const earGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.45, 6);
+          fruitMesh = new THREE.Mesh(earGeo, this.cornFruitMat);
+          fruitMesh.position.set(0, 0.8, 0.1);
+          fruitMesh.rotation.x = 0.25;
+        } else if (this.mode === 'precision') {
+          // Hortalizas tecnificadas: Tomates esféricos rojos
+          const tomatoGeo = new THREE.SphereGeometry(0.16, 8, 8);
+          fruitMesh = new THREE.Mesh(tomatoGeo, this.tomatoFruitMat);
+          fruitMesh.position.set(0, 0.9, 0);
+        } else {
+          // Policultivo agroecológico: Girasoles y calabazas alternados
+          if ((r + c) % 2 === 0) {
+            // Girasol con centro oscuro y corona de pétalos
+            const flowerGroup = new THREE.Group();
+            const petalGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.06, 10);
+            petalGeo.rotateX(Math.PI / 2);
+            const petals = new THREE.Mesh(petalGeo, this.sunflowerMat);
+            flowerGroup.add(petals);
+
+            const centerGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.07, 8);
+            centerGeo.rotateX(Math.PI / 2);
+            const center = new THREE.Mesh(centerGeo, new THREE.MeshLambertMaterial({ color: 0x451a03 }));
+            flowerGroup.add(center);
+
+            flowerGroup.position.set(0, 1.1, 0);
+            fruitMesh = flowerGroup;
+          } else {
+            // Calabaza en la base
+            const pumpkinGeo = new THREE.SphereGeometry(0.22, 8, 8);
+            pumpkinGeo.scale(1.2, 0.8, 1.2);
+            fruitMesh = new THREE.Mesh(pumpkinGeo, this.pumpkinMat);
+            fruitMesh.position.set(0, 0.25, 0.15);
+          }
+        }
+
+        fruitMesh.castShadow = true;
+        fruitMesh.name = 'fruit';
+        plantGroup.add(fruitMesh);
 
         this.group.add(plantGroup);
-        this.plants.push({ group: plantGroup, stem, fruit, leaf1, leaf2 });
+        this.plants.push({ group: plantGroup, stem, fruit: fruitMesh, leaf1, leaf2 });
       }
     }
   }

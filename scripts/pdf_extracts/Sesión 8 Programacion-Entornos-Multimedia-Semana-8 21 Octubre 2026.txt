@@ -1,0 +1,512 @@
+--- PAGE 1 ---
+PROGRAMACIÓN ENTORNOS MULTIMEDIA · SEMANA 8 (21/10/2026)
+Integración Total:
+De Blender a la Web
+El puente entre Blender y la web.
+Hoy pasamos de modelos descargados a ser arquitectos de 
+nuestro propio metaverso. Lo que modeles hoy será un entorno 
+explorable en la web al final de la clase.
+Docente: Mg. Gabriel Guerrero Arellano
+
+
+--- PAGE 2 ---
+BLOQUE 1 · HORA 1
+Fundamentos y
+Diseño Espacial
+
+--- PAGE 3 ---
+¿Por qué usamos dos programas?
+Blender
+El taller del arquitecto.
+Creación espacial visual: esculpir, construir y 
+pintar un edificio toma minutos con el ratón. Con 
+código serían cientos de líneas.
+Three.js
+La cámara y el motor.
+El escenario final: interactividad, luz en tiempo 
+real y publicación en el navegador.
+Blender → .glb → Three.js
+
+--- PAGE 4 ---
+Nuestro Stack Tecnológico
+Blender 3.x+
+Diseño de niveles y materiales base.
+Servidor local lanzado desde el html + 
+Node.js
+Servidor de desarrollo rápido para no realizar mas 
+configuraciones.
+Three.js
+GLTFLoader para importar el mundo y OrbitControls 
+para navegarlo.
+Formato .glb
+Empaqueta mallas, posiciones y colores en un solo 
+paquete optimizado para la web.
+
+--- PAGE 5 ---
+Tu Escena 3D tiene un Presupuesto Estricto
+En el diseño web 3D, no gana el que hace el modelo más realista, gana el que logra la mejor ilusión óptica usando la 
+menor cantidad de recursos posibles.
+1
+Elimina lo invisible
+Si el jugador nunca va a ver la parte 
+de abajo de tu mapa o el interior de 
+una caja, borra esas caras en 
+Blender. Son matemáticas inútiles 
+que el navegador sigue calculando.
+2
+Cilindros y Esferas son 
+peligrosos
+Un cubo tiene 6 caras. Una esfera 
+suave por defecto en Blender puede 
+tener miles. Usa cilindros de pocos 
+lados (ej. 8 o 12 caras) para simular 
+árboles o columnas.
+3
+Colores vs. Texturas
+Cargar una imagen JPG de ladrillos 
+en 4K pesa muchísimo en la 
+memoria RAM del navegador. Usar 
+materiales de "Colores Sólidos" no 
+pesa absolutamente nada.
+Guia en Blender: Pídeles que activen la opción "Statistics" en Blender haciendo clic derecho en la barra inferior 
+oscura. Así podrán ver en tiempo real cuántos polígonos tiene su mundo antes de cometer el error de exportarlo. 
+
+
+--- PAGE 6 ---
+No derritas los computadores
+de tus usuarios (Equilibrio en modelado)
+0 20k 40k 60k 80k 100k
+Polígonos
+Consola · un personaje
+Web · toda la escena
+Contexto
+100k
+50k
+En consola, un personaje puede tener 
+100,000 polígonos.
+En web, más de 50,000 polígonos en toda 
+la escena y los celulares fallan.
+Filosofía Low Poly
+Menos vértices, geometría simple, 
+colores sólidos.
+
+--- PAGE 7 ---
+Atajos esenciales de Blender (1/2)
+Atajo de Teclado Modo Activo Función Principal Uso Práctico en la Clase
+Shift + A Object / Edit Agregar (Add) Sacar el menú para crear nuevos cubos, 
+cilindros, planos, etc.
+X o Supr Object / Edit Eliminar (Delete) Borrar el cubo por defecto o cualquier objeto 
+seleccionado.
+G (Grab) Object / Edit Mover Mover objetos. (Tip: Presionar G y luego X, Y o 
+Z lo mueve solo en ese eje).
+S (Scale) Object / Edit Escalar Agrandar o encoger objetos. (Tip: Presionar S y 
+luego escribir un número).
+R (Rotate) Object / Edit Rotar Girar objetos sobre su propio eje.
+
+--- PAGE 8 ---
+Atajos esenciales de Blender (2/2)
+Atajo de Teclado Modo Activo Función Principal Uso Práctico en la Clase
+Tab Ambos Cambiar de Modo 
+de edición a modo 
+de selección.
+Alternar rápidamente entre Object Mode 
+(organizar) y Edit Mode (modificar malla).
+E (Extrude) Solo Edit Mode Extruir Sacar nueva geometría (como ramas de un 
+árbol) a partir de una cara seleccionada.
+Shift + D Object / Edit Duplicar Clonar un objeto exacto (útil para hacer un 
+bosque o muchas columnas).
+Ctrl + A Solo Object 
+Mode
+Aplicar 
+Transformación
+¡Vital para la web! Le dice a Blender que el 
+tamaño y rotación actual son los definitivos.
+Numpad . Ambos Enfocar (Focus) Centra la cámara instantáneamente en el 
+objeto que tengan seleccionado.
+
+--- PAGE 9 ---
+LABORATORIO · PASO 1
+Modelando el Nivel en Blender
+1 Abre Blender, proyecto General, y borra el cubo inicial con X.
+2 Suelo: Shift + A → Mesh → Plane.
+3 Hazlo masivo: S, escribe 20, Enter.
+4 Obstáculos: Shift + A → Mesh → Cube o Cylinder.
+5 G para mover y Shift + D para duplicar. Diseña un parque, un laberinto o un museo se puede siñear 
+manualmente o tambien se puede hacer utilizando python como veremos a continuación.
+
+--- PAGE 10 ---
+LABORATORIO · AUTOMATIZACIÓN
+Automatización con Python (Un Parque en Segundos)
+El Truco: Blender no solo es visual, también entiende código. Vamos a generar un parque entero sin modelar a mano.
+Paso a paso:
+1 Dirígete a la pestaña superior Scripting (si no la ves, desliza dos dedos sobre el touchpad en la barra superior o usa el 
+scroll del ratón).
+2 Haz clic en el botón New en el panel central.
+3 Copia y pega el script de Python proporcionado (el que incluye el pasto, la fuente y el árbol). 
+4 Presiona el botón de Play (▶) arriba a la derecha. Vuelve a la pestaña Layout para ver el parque creado, modificarlo 
+agregando paredes o bancas.
+
+--- PAGE 11 ---
+Script de Python completo
+import bpy
+# 1. Limpiar la escena por defecto
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete(use_global=False)
+# --- FUNCIÓN AUXILIAR PARA CREAR MATERIALES RÁPIDO ---
+def crear_material(nombre, color):
+    mat = bpy.data.materials.new(name=nombre)
+    mat.diffuse_color = color
+    return mat
+# --- DEFINIR LA PALETA DE COLORES ---
+mat_pasto = crear_material("Pasto", (0.1, 0.5, 0.1, 1))
+mat_piedra = crear_material("Piedra", (0.6, 0.6, 0.6, 1))
+mat_agua = crear_material("Agua", (0.1, 0.4, 0.8, 1))
+mat_madera = crear_material("Madera", (0.3, 0.15, 0.05, 1))
+mat_hojas = crear_material("Hojas", (0.2, 0.8, 0.2, 1))
+# 2. CREAR EL SUELO
+bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 0, 0))
+bpy.context.active_object.data.materials.append(mat_pasto)
+# 3. CONSTRUIR LA FUENTE CENTRAL
+# Base redonda de la fuente
+bpy.ops.mesh.primitive_cylinder_add(radius=3, depth=0.5, location=(0, 0, 0.25))
+bpy.context.active_object.data.materials.append(mat_piedra)
+# Nivel de agua de la piscina
+bpy.ops.mesh.primitive_cylinder_add(radius=2.8, depth=0.5, location=(0, 0, 0.3))
+bpy.context.active_object.data.materials.append(mat_agua)
+# Pedestal central
+bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=2.5, location=(0, 0, 1.25))
+bpy.context.active_object.data.materials.append(mat_piedra)
+# Plato superior
+bpy.ops.mesh.primitive_cylinder_add(radius=1.5, depth=0.3, location=(0, 0, 2.5))
+bpy.context.active_object.data.materials.append(mat_piedra)
+# Cúpula de agua superior (Low Poly)
+bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.8, location=(0, 0, 2.8))
+bpy.context.active_object.data.materials.append(mat_agua)
+# 4. CONSTRUIR EL BORDE DE COLUMNAS (Usando bucles para automatizar)
+# Columnas laterales (Eje Y)
+for x in [-9, 9]:
+    for y in range(-9, 10, 3):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, 1))
+        bpy.context.active_object.scale = (0.3, 0.3, 2) # Las hacemos altas y delgadas
+        bpy.context.active_object.data.materials.append(mat_piedra)
+# Columnas frontales y traseras (Eje X)
+for y in [-9, 9]:
+    for x in range(-6, 7, 3):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, 1))
+        bpy.context.active_object.scale = (0.3, 0.3, 2)
+        bpy.context.active_object.data.materials.append(mat_piedra)
+# 5. AGREGAR UN ÁRBOL EN UNA ESQUINA
+bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=2, location=(5, 5, 1))
+bpy.context.active_object.data.materials.append(mat_madera)
+bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=2, location=(5, 5, 2.5))
+bpy.context.active_object.data.materials.append(mat_hojas)
+
+--- PAGE 12 ---
+LABORATORIO · REGLAS
+Expansión del Parque (Reglas de Supervivencia 
+Web)
+1 Prohibido usar Sculpting (Esculpido): Esta pestaña añade miles de polígonos por segundo. Si la usas 
+para detallar el parque, el archivo final será tan pesado que colapsará el navegador de los usuarios al 
+intentar renderizarlo en Three.js.
+2 Modo correcto 1 (Object Mode): Para añadir faroles o bancas o paredes, presiona Shift + A y 
+ensambla formas primitivas matemáticas (cubos, cilindros) como si fueran bloques de Lego. Asigna 
+colores sólidos, no texturas pesadas. (Gira con tecla R y utiliza R + X, Y, Z para girar la forma en un eje, G 
+para mover la forma, shift D para duplicarla.
+3 Modo correcto 2 (Edit Mode): Selecciona cualquier objeto y presiona Tab. Usa E (Extruir) para crear 
+nuevas ramas en el árbol o G (Mover) para deformar la fuente, modificando el modelo original sin 
+multiplicar su peso.
+
+--- PAGE 13 ---
+BLOQUE 2 · HORA 2
+Matemáticas 
+Invisibles y 
+Exportación
+
+
+--- PAGE 14 ---
+Cuidado con el “Punto Naranja”
+Cada objeto tiene un punto central naranja que define su eje.
+Fuera del centro
+La rotación en JavaScript girará el objeto como atado 
+a una cuerda invisible.
+Solución obligatoria
+Selecciona los objetos, clic derecho:
+Set Origin
+→ Origin to Geometry
+
+
+--- PAGE 15 ---
+Aplicar Transformaciones (Ctrl + A)
+Blender recuerda el tamaño original de 1 metro y solo aplica una “ilusión” de estiramiento. Al exportar a Three.js, 
+el cubo vuelve a encogerse.
+El paso que salva vidas
+01
+A
+Seleccionar todo.
+02
+Ctrl + A
+Aplicar transformaciones.
+03
+Scale
+Elegir Scale.
+“Este es su tamaño real y definitivo”.
+
+--- PAGE 16 ---
+LABORATORIO · PASO 2
+Materiales Base
+1 Selecciona el piso y abre el panel de Materiales, ícono de la 
+esfera roja.
+2 Clic en New. Base Color: verde pasto o gris asfalto.
+3 Aumenta Roughness (Rugosidad) para que no parezca plástico 
+resbaladizo.
+4 Repite con colores distintos para muros y obstáculos.
+
+--- PAGE 17 ---
+TEXTURIZADO WEB · PASO 1
+Realismo sin derretir la RAM
+Texturas de Internet (Pintando el Terreno)
+Formato estricto
+Usa siempre JPG. El PNG pesa más y solo sirve si hay transparencias.
+Resolución
+Máximo 512x512 o 1024x1024 píxeles. Pantallas pequeñas no notan más detalle, pero su batería sí.
+"Seamless" (Sin costuras)
+Usa texturas que se puedan repetir por el piso como baldosas perfectas.
+
+--- PAGE 18 ---
+TEXTURIZADO WEB · LABORATORIO
+Preparación del Suelo: Desdoblado 
+UV
+1 Seleccionar el piso (Plane).
+2 Entrar a Edit Mode con Tab.
+3 Seleccionar toda la cara con A.
+4 Presionar U → Elegir Smart UV Project → Clic en OK.
+5 Salir a Object Mode con Tab.
+
+--- PAGE 19 ---
+TEXTURIZADO WEB · LABORATORIO
+El Árbol de Nodos (Pestaña 
+Shading)
+1 Insertar Imagen: en la ventana inferior oscura, presiona Shift + A → 
+Texture → Image Texture. Clic en Open y carga tu JPG de pasto.
+2 Aplicar el Color: conecta el punto amarillo (Color) al punto amarillo 
+(Base Color) del Principled BSDF.
+3 Nodos de Escala: Shift + A → Mapping (a la izquierda) y Shift + A → 
+Texture Coordinate (al inicio).
+4 El Cableado: conecta el punto azul UV al primer Vector, y el Vector de 
+salida al Vector morado de tu imagen.
+5 Ajuste Final: en Mapping, sube Scale (X y Y) a 10 o 20. ¡La textura se 
+repetirá con tamaño realista!
+
+
+--- PAGE 20 ---
+TEXTURIZADO WEB · LABORATORIO
+Sincronización de Colores con 
+Python
+1 Ir a la pestaña Scripting en la barra superior.
+2 Clic en el botón New.
+3 Pegar y ejecutar este código (evita sobreescribir imágenes).
+4 Clic en Play ▶.
+import bpy
+for mat in bpy.data.materials:
+    if mat.use_nodes and mat.node_tree:
+        principled = mat.node_tree.nodes.get("Principled BSDF")
+        if principled:
+            if not principled.inputs["Base Color"].is_linked:
+                principled.inputs["Base Color"].default_value = 
+mat.diffuse_color
+
+--- PAGE 21 ---
+LABORATORIO · PASO 3
+Generando el archivo .glb
+1. PASO OBLIGATORIO (Empaquetar la imagen):
+Ve al menú superior: File > External Data > Pack 
+Resources.
+Esto inyecta la textura pasto.jpg dentro del archivo sin 
+perder su ruta.
+2. SELECCIÓN Y EXPORTACIÓN:
+Tab en modo objeto, luego presiona A en Blender: todo 
+el escenario resaltado en naranja.
+Ir a: File > Export > glTF 2.0 (.glb).
+Configuración estricta
+Opción Valor
+Format glTF Binary (.glb)
+Include Selected Objects (sin luces ni cámaras inútiles).
+Transform +Y Up (para que el piso no quede de lado).
+Data > Material Materials: Export / Images: Automatic
+⚠ REGLA DE ORO DE RUTA: Nombra el archivo metaverso.glb y guárdalo en la raíz de tu carpeta del laboratorio (junto a 
+index.html y main.js). Control de calidad: El archivo final debe pesar más de 300 KiB - 500 KiB. Si pesa 90 KiB, no se 
+empaquetó la textura y debes hacer el paso 1 nuevamente.
+
+--- PAGE 22 ---
+BLOQUE 3 · HORA 3
+Código, Depuración
+e Integración
+
+--- PAGE 23 ---
+INTEGRACIÓN WEB · PASO 1
+Estructura Base en VS Code
+Configuración del entorno de trabajo oficial. Para comenzar la integración web, necesitamos preparar nuestro 
+lienzo de código:
+1
+Abre tu carpeta oficial 
+Lab_21_10_2026_Blender en 
+VS Code.
+2
+Verifica que tu archivo 
+exportado metaverso.glb esté 
+en la raíz de esta carpeta.
+3
+Crea dos archivos nuevos 
+completamente vacíos: 
+index.html y main.js.
+
+--- PAGE 24 ---
+INTEGRACIÓN WEB · PASO 2
+El Lienzo Web (index.html)
+Conexión a Three.js mediante CDN. Usaremos un Importmap para traer el motor de Three.js directamente desde internet. Copia este código en tu 
+index.html:
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, 
+initial-scale=1.0">
+    <title>Mi Parque 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: 
+#87CEEB; } /* Cielo azul claro */
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <!-- Importamos Three.js y el cargador de modelos GLTF -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": 
+"https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": 
+"https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
+
+--- PAGE 25 ---
+INTEGRACIÓN WEB · PASO 3
+Configuración del Mundo 3D (main.js - Parte 1)
+Cámara, Luces y Escena. Aquí preparamos el entorno virtual donde vivirá nuestro parque. Es vital alejar la cámara para no aparecer enterrados 
+en el piso. Pega esta primera parte en tu main.js:
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// 1. CREAR LA ESCENA
+const scene = new THREE.Scene();
+// 2. CONFIGURAR LA CÁMARA
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 
+window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 15); // Altura a nivel de los ojos y distancia hacia 
+atrás
+// 3. RENDERIZADOR
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: 
+true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+// 4. CONTROLES DE ÓRBITA (Para girar con el 
+mouse)
+const controls = new OrbitControls(camera, 
+renderer.domElement);
+controls.target.set(0, 2, 0);
+controls.update();
+// 5. ILUMINACIÓN
+const luzAmbiental = new 
+THREE.AmbientLight(0xffffff, 0.6);
+scene.add(luzAmbiental);
+const luzDireccional = new 
+THREE.DirectionalLight(0xffffff, 1);
+luzDireccional.position.set(10, 20, 10);
+scene.add(luzDireccional);
+
+--- PAGE 26 ---
+INTEGRACIÓN WEB · PASO 4
+Carga del Modelo y Animación (main.js - Parte 2)
+Llamando al archivo .glb. Ahora insertaremos el parque que modelamos en Blender y le daremos movimiento a la escena. Pega esto justo 
+debajo del código anterior en main.js:
+// 6. CARGAR EL MODELO (.glb)
+const loader = new GLTFLoader();
+loader.load(
+    'metaverso.glb', // El nombre de tu archivo exportado 
+de Blender
+    function (gltf) {
+        scene.add(gltf.scene);
+        console.log("¡Parque cargado!");
+    },
+    undefined,
+    function (error) {
+        console.error("Error al cargar:", error);
+    }
+);
+// 7. BUCLE DE ANIMACIÓN
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+animate();
+// 8. ADAPTAR A LA PANTALLA
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / 
+window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, 
+window.innerHeight);
+});
+
+--- PAGE 27 ---
+INTEGRACIÓN WEB · PASO 5
+Ejecución del Proyecto
+Encendiendo el servidor local. Por razones de seguridad, los navegadores bloquean la carga de modelos 3D si abres el 
+HTML directamente.
+1
+Ve a la lista de archivos en VS 
+Code.
+2
+Haz clic derecho sobre 
+index.html.
+3
+Selecciona Open with Live 
+Server.
+¡Tu parque de Blender ahora es una experiencia web interactiva!
+
+
+--- PAGE 28 ---
+¿Cómo lo pruebo y qué debo ver?
+Ejecución
+En la terminal de VS Code corre npm run 
+dev y abre http://localhost:5173.
+Visual
+Tu mapa de Blender a pantalla completa, 
+con los colores exactos y bien iluminado.
+Interacción
+Clic y arrastrar para sobrevolar todo el nivel 
+fluidamente.
+Técnico
+Con F12, mensaje en verde “¡Metaverso 
+cargado en la escena!” y cero errores rojos.
+
+--- PAGE 29 ---
+Preparando la Semana 9
+Hoy
+Creamos un “mundo 
+fantasma”: atravesamos 
+paredes y volamos 
+libremente.
+Semana 9
+Motores de físicas, muros 
+sólidos y gravedad.
+Soltaremos un personaje en primera o tercera persona que camine por 
+este metaverso.
+¡Guarden muy bien sus escenarios!
+
+

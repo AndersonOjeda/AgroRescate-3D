@@ -1,0 +1,144 @@
+--- PAGE 1 ---
+TALLER PRÁCTICO: MEDIOS, ANIMACIÓN Y AUDIO ESPACIAL EN 
+THREE.JS (16/09/2026): 
+Asignatura: Programación de Entornos Multimedia 
+Semana 3: Medios, Animación y Audio 
+Modalidad: Trabajo Autónomo Asincrónico 
+Fase 0: Setup del Proyecto 
+1. Abre tu terminal y crea un nuevo proyecto con Vite: 
+Bash 
+npm create vite@latest taller-semana3 -- --template vanilla 
+cd taller-semana3 
+npm install three 
+2. Crea una carpeta llamada public/assets/ y coloca dentro: 
+o Un archivo de video (video.mp4). 
+o Un archivo de audio (audio.mp3). 
+3. Ejecuta el servidor de desarrollo: 
+Bash 
+npm run dev 
+Fase 1: Escena Base y Bucle de Animación (60 FPS) 
+En tu archivo main.js, configura la escena, cámara, renderizador y el bucle continuo de 
+renderizado: 
+JavaScript 
+import * as THREE from 'three'; 
+ 
+// 1. Escena, Cámara y Renderizador 
+const scene = new THREE.Scene(); 
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 
+window.innerHeight, 0.1, 1000); 
+camera.position.z = 5; 
+ 
+const renderer = new THREE.WebGLRenderer({ antialias: true }); 
+renderer.setSize(window.innerWidth, window.innerHeight); 
+document.body.appendChild(renderer.domElement); 
+ 
+// 2. Bucle de Animación a 60 FPS 
+function animate() { 
+  requestAnimationFrame(animate); 
+ 
+  // Ejemplo de rotación continua 
+  if (meshObjeto) { 
+
+--- PAGE 2 ---
+    meshObjeto.rotation.y += 0.01; 
+  } 
+ 
+  renderer.render(scene, camera); 
+} 
+animate(); 
+Fase 2: Proyección de Video como Textura 3D 
+Agrega un elemento de video en memoria y conéctalo como textura a una geometría plana: 
+JavaScript 
+// 1. Crear elemento HTML5 de Video 
+const video = document.createElement('video'); 
+video.src = '/assets/video.mp4'; 
+video.load(); 
+video.loop = true; 
+video.muted = true; // Requerido por navegador para autoplay 
+video.play(); 
+ 
+// 2. Crear VideoTexture en Three.js 
+const videoTexture = new THREE.VideoTexture(video); 
+ 
+// 3. Aplicar a una Malla 3D (Pantalla) 
+const geometry = new THREE.PlaneGeometry(4, 2.25); 
+const material = new THREE.MeshBasicMaterial({ map: videoTexture, side: 
+THREE.DoubleSide }); 
+const pantallaMesh = new THREE.Mesh(geometry, material); 
+scene.add(pantallaMesh); 
+Fase 3: Integración de Audio Espacial (PositionalAudio) 
+Vincula el audio directamente a la posición de la pantalla 3D para que el sonido cambie 
+según la distancia de la cámara: 
+JavaScript 
+// 1. Crear Listener y vincularlo a la cámara 
+const listener = new THREE.AudioListener(); 
+camera.add(listener); 
+ 
+// 2. Crear fuente de sonido posicional 
+const sound = new THREE.PositionalAudio(listener); 
+ 
+// 3. Cargar el archivo de audio 
+const audioLoader = new THREE.AudioLoader(); 
+audioLoader.load('/assets/audio.mp3', function(buffer) { 
+  sound.setBuffer(buffer); 
+  sound.setRefDistance(1); // Distancia donde el volumen es máximo 
+  sound.setMaxDistance(10); // Distancia donde el audio deja de 
+escucharse 
+  sound.setLoop(true); 
+  sound.setVolume(0.8); 
+  sound.play(); 
+}); 
+
+--- PAGE 3 ---
+ 
+// 4. Adjuntar el audio a la pantalla 3D 
+pantallaMesh.add(sound); 
+DESAFÍO Y ENTREGABLE FINAL: "ESTACIÓN MULTIMEDIA INMERSIVA" 
+Consigna Creativa En lugar de presentar una simple pantalla plana flotando, los 
+estudiantes deben diseñar una escena 3D temática orientada a un concepto a su elección. 
+El objetivo es que la tecnología (video + audio espacial + animación) sirva a una narrativa 
+visual. 
+Opciones de Conceptos Sugeridos: 
+• Cyberpunk Billboard: Un anuncio publicitario flotando entre edificios oscuros con 
+luces neón. 
+• Retro Arcade 80s: Una máquina de videojuegos clásica en una habitación oscura 
+donde la pantalla reproduce el video. 
+• Televisor Vintage Embrujado: Un TV de tubo catódico antiguo en medio de un 
+escenario misterioso con animación distorsionada. 
+• Holograma Alienígena: Una plataforma futurista que proyecta el video con 
+rotaciones complejas y materiales semitransparentes. 
+• Concepto Libre: El estudiante puede proponer su propio universo visual. 
+Requisitos del Entregable: 
+1. Entorno 3D completo: Incorporar al menos 3 objetos geométricos o modelos 
+adicionales que ambienten el concepto elegido. 
+2. Animación fluida: El objeto principal o elementos del entorno deben animarse en 
+el bucle a 60 FPS. 
+3. Interacción de Usuario: Agregar un botón u orden de teclado para iniciar/pausar la 
+reproducción de video y sonido (para superar la restricción de Autoplay de los 
+navegadores). 
+4. Audio Espacial Funcional: Permitir al usuario mover la cámara o el objeto para 
+comprobar cómo disminuye/aumenta el volumen según la posición en el espacio 
+3D. 
+Formato de Entrega (carga hasta el día de hoy a las 12:00 am): 
+Archivo .RAR con estos 3 documentos cargado a este enlace (SIN CONTRASEÑA): 
+https://drive.google.com/drive/folders/13vGgNpE7ULf_jA1rd-
+ygcEblxI9DZqPc?usp=sharing 
+• 1. Enlace a repositorio público: Carpeta con el código fuente estructurado. 
+• 2. Demostración en video (30 a 60 seg): Video corto mostrando la escena en 
+funcionamiento con audio activado, para mostrar en la siguiente clase. 
+
+--- PAGE 4 ---
+• Documento/Ficha del Concepto (PDF - 1 página): Explicación del concepto 
+creativo elegido y cómo utilizaron la animación, el video y el audio espacial para 
+lograr la escena que crearon, una explicación sencilla pero clara, con su nombre al 
+final del documento. 
+• El archivo cargado al espacio en drive debe tener esta estructura (ver imagen), 
+cuando ingresa al drive debe tener los 3 documentos explicados anteriormente 
+Repositorio del ejercicio, video corto en mp4 30 a 60 segundos del escenario 
+funcionando, documento en pdf explicando el concepto (FAVOR SER 
+CREATIVOS LAS IDEAS QUE DI SOLAMENTE FUERON COMO 
+REFERENCIA) no quiero 20 proyectos de un escenario en 3d vintage por favor. 
+ 
+ 
+
+

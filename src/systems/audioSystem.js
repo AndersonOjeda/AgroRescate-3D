@@ -32,6 +32,15 @@ export class AudioSystem {
     this.globalClick = new THREE.Audio(this.listener);
     this.globalClick.setVolume(0.4);
 
+    // Audio de Pisadas del Jugador
+    this.footstepAudio = new THREE.Audio(this.listener);
+    this.footstepAudio.setVolume(0.35);
+
+    // Audio de Ambiente Rural (brisa y campo)
+    this.ambientAudio = new THREE.Audio(this.listener);
+    this.ambientAudio.setLoop(true);
+    this.ambientAudio.setVolume(0.28);
+
     this.loadedBuffers = {};
     this._loadAudioAssets();
   }
@@ -43,7 +52,9 @@ export class AudioSystem {
     const assets = [
       { key: 'pump', path: '/audio/pump.wav', target: this.positionalWater },
       { key: 'success', path: '/audio/success.wav', target: this.globalSuccess },
-      { key: 'click', path: '/audio/click.wav', target: this.globalClick }
+      { key: 'click', path: '/audio/click.wav', target: this.globalClick },
+      { key: 'footstep', path: '/audio/footstep.wav', target: this.footstepAudio },
+      { key: 'ambient', path: '/audio/ambient.wav', target: this.ambientAudio }
     ];
 
     for (const asset of assets) {
@@ -176,11 +187,41 @@ export class AudioSystem {
     }
   }
 
+  /**
+   * Reproduce el sonido de una pisada del jugador con modulación sutil de tono
+   */
+  playFootstep() {
+    if (this.isMuted) return;
+    if (this.footstepAudio && this.footstepAudio.buffer) {
+      if (this.footstepAudio.isPlaying) {
+        this.footstepAudio.stop();
+      }
+      // Modulación sutil de volumen y tono para realismo
+      this.footstepAudio.setVolume(0.28 + Math.random() * 0.12);
+      this.footstepAudio.playbackRate = 0.95 + Math.random() * 0.15;
+      this.footstepAudio.play();
+    }
+  }
+
+  /**
+   * Inicia el sonido ambiente continuo de brisa rural
+   */
+  startAmbient() {
+    if (this.isMuted) return;
+    this.unlockAudio();
+    if (this.ambientAudio && this.ambientAudio.buffer && !this.ambientAudio.isPlaying) {
+      this.ambientAudio.play();
+    }
+  }
+
   toggleMute() {
     this.isMuted = !this.isMuted;
     if (this.isMuted) {
       if (this.positionalWater.isPlaying) this.positionalWater.pause();
       if (this.globalSuccess.isPlaying) this.globalSuccess.stop();
+      if (this.ambientAudio.isPlaying) this.ambientAudio.pause();
+    } else {
+      if (this.ambientAudio.buffer) this.ambientAudio.play();
     }
     return !this.isMuted;
   }

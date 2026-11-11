@@ -48,8 +48,11 @@ async function bootstrap() {
   const triggerSystem = new TriggerSystem();
   const interactionSystem = new InteractionSystem();
 
-  // 6. Navegación del Jugador
+  // 6. Navegación del Jugador y Efectos de Audio de Pisadas
   const player = new PlayerController(camera, canvas, scene);
+  player.onFootstep = () => {
+    audioSystem.playFootstep();
+  };
 
   // 7. Adaptador del Simulador Agrícola
   const farmAdapter = new FarmAdapter();
@@ -291,6 +294,7 @@ async function bootstrap() {
     hud.btnStartGame.addEventListener('click', () => {
       player.requestLock();
       audioSystem.unlockAudio();
+      audioSystem.startAmbient();
     });
   }
 
@@ -366,11 +370,19 @@ async function bootstrap() {
     player.update(delta);
     const pPos = player.getPosition();
 
+    // Actualizar colisionador cinemático del jugador en Cannon-es para empujar objetos
+    physicsWorld.updatePlayerPosition(pPos);
+
     // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
     physicsWorld.step(delta);
 
     // C. Actualizar sistemas de partículas (aspersores y lluvia) sin asignaciones dinámicas
     particleSystem.update(delta);
+
+    // Actualizar animaciones ambientales (molino de viento, etc.)
+    if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
+      farmEnv.environment.update(delta);
+    }
 
     // D. Detección de proximidad para interacción [E]
     interactionSystem.update(pPos);

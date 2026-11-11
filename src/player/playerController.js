@@ -54,6 +54,83 @@ export class PlayerController {
       maxZ: 36
     };
 
+    // Radio de colisión del jugador
+    this.radius = 0.45;
+
+    // Obstáculos sólidos del escenario para colisión física contra paredes y estructuras
+    this.obstacles = [
+      // 1. Casa Rural
+      {
+        id: 'casa_rural',
+        type: 'box',
+        minX: -16 - 4.2,
+        maxX: -16 + 4.2,
+        minZ: -14 - 3.4,
+        maxZ: -14 + 3.4
+      },
+      // 2. Granero
+      {
+        id: 'granero',
+        type: 'box',
+        minX: 16 - 4.7,
+        maxX: 16 + 4.7,
+        minZ: -14 - 3.9,
+        maxZ: -14 + 3.9
+      },
+      // 3. Tanque de Agua (patas y estructura)
+      {
+        id: 'tanque_agua',
+        type: 'box',
+        minX: -4 - 1.3,
+        maxX: -4 + 1.3,
+        minZ: -4 - 1.3,
+        maxZ: -4 + 1.3
+      },
+      // 4. Bomba de Agua (motor hidráulico)
+      {
+        id: 'bomba_agua',
+        type: 'box',
+        minX: -3 - 0.7,
+        maxX: -3 + 0.7,
+        minZ: -3 - 0.7,
+        maxZ: -3 + 0.7
+      },
+      // 5. Compostera
+      {
+        id: 'compostera',
+        type: 'box',
+        minX: 14 - 1.0,
+        maxX: 14 + 1.0,
+        minZ: 1 - 1.0,
+        maxZ: 1 + 1.0
+      },
+      // 6. Cerca Norte
+      {
+        id: 'cerca_norte',
+        type: 'box',
+        minX: -30.5,
+        maxX: 30.5,
+        minZ: -34.4,
+        maxZ: -33.6
+      },
+      // 7. Troncos de árboles (cilíndricos)
+      { id: 'tree_1', type: 'circle', x: -28, z: -20, r: 0.5 },
+      { id: 'tree_2', type: 'circle', x: -30, z: -10, r: 0.5 },
+      { id: 'tree_3', type: 'circle', x: -25, z: 12, r: 0.5 },
+      { id: 'tree_4', type: 'circle', x: -28, z: 25, r: 0.5 },
+      { id: 'tree_5', type: 'circle', x: 28, z: -25, r: 0.5 },
+      { id: 'tree_6', type: 'circle', x: 26, z: 22, r: 0.5 },
+      { id: 'tree_7', type: 'circle', x: 30, z: 8, r: 0.5 },
+      { id: 'tree_8', type: 'circle', x: -6, z: -25, r: 0.5 },
+      { id: 'tree_9', type: 'circle', x: 6, z: -25, r: 0.5 }
+    ];
+
+    // Animación procedural del avatar
+    this.walkCycle = 0;
+    this.prevCycleSin = 0;
+    this.onFootstep = null;
+    this.parts = {};
+
     // Crear avatar visual del agricultor
     this.mesh = this._createFarmerAvatar();
     this.scene.add(this.mesh);
@@ -63,75 +140,241 @@ export class PlayerController {
   }
 
   /**
-   * Crea un avatar low-poly estilizado de agricultor con sombrero y overol
+   * Crea un avatar 3D estilizado y orgánico con extremidades articuladas,
+   * overol con tirantes, camisa de franela, sombrero campesino detallado y rostro expresivo.
    */
   _createFarmerAvatar() {
-    const group = new THREE.Group();
-    group.name = 'player_farmer';
+    const root = new THREE.Group();
+    root.name = 'player_farmer';
 
-    // Materiales compartidos
-    const skinMat = new THREE.MeshLambertMaterial({ color: 0xffd1b3 });
-    const hatMat = new THREE.MeshLambertMaterial({ color: 0xd4a373 }); // Paja
-    const shirtMat = new THREE.MeshLambertMaterial({ color: 0x2563eb }); // Camisa azul
-    const overallMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a }); // Overol
-    const bootMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Botas marrón
+    // Materiales con acabado suave y estilizado
+    const skinMat = new THREE.MeshLambertMaterial({ color: 0xfad6bf }); // Piel suave
+    const shirtMat = new THREE.MeshLambertMaterial({ color: 0xef4444 }); // Camisa franela roja
+    const overallMat = new THREE.MeshLambertMaterial({ color: 0x2563eb }); // Overol azul mezclilla
+    const strapMat = new THREE.MeshLambertMaterial({ color: 0x1d4ed8 }); // Tirantes
+    const buckleMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.2 }); // Hebillas de latón
+    const hatStrawMat = new THREE.MeshLambertMaterial({ color: 0xf5cf78 }); // Paja de sombrero tejida
+    const hatRibbonMat = new THREE.MeshLambertMaterial({ color: 0x065f46 }); // Cinta verde esmeralda
+    const bootMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Cuero oscuro
+    const bootSoleMat = new THREE.MeshLambertMaterial({ color: 0x291404 }); // Suela de bota
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b }); // Ojos
+    const leatherPouchMat = new THREE.MeshLambertMaterial({ color: 0x78350f }); // Cartuchera de herramientas
 
-    // Torso / Camisa y overol
-    const torsoGeo = new THREE.BoxGeometry(0.7, 0.8, 0.45);
-    const torso = new THREE.Mesh(torsoGeo, overallMat);
-    torso.position.y = 0.9;
-    torso.castShadow = true;
-    torso.receiveShadow = true;
-    group.add(torso);
+    // 1. PELVIS (Punto pivote inferior sobre las piernas)
+    const pelvis = new THREE.Group();
+    pelvis.position.y = 0.68;
+    root.add(pelvis);
 
-    // Cabeza
-    const headGeo = new THREE.BoxGeometry(0.45, 0.45, 0.45);
-    const head = new THREE.Mesh(headGeo, skinMat);
-    head.position.y = 1.55;
+    const pelvisMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.21, 0.25, 10),
+      overallMat
+    );
+    pelvisMesh.castShadow = true;
+    pelvis.add(pelvisMesh);
+
+    // Bolso/cartuchera lateral de campo
+    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.12), leatherPouchMat);
+    pouch.position.set(0.26, 0.02, 0.05);
+    pouch.rotation.z = -0.15;
+    pouch.castShadow = true;
+    pelvis.add(pouch);
+
+    // 2. TORSO (Pecho, tirantes y botones)
+    const torso = new THREE.Group();
+    torso.position.y = 0.15;
+    pelvis.add(torso);
+
+    // Camisa / Pecho
+    const chest = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.25, 0.52, 10),
+      shirtMat
+    );
+    chest.position.y = 0.26;
+    chest.castShadow = true;
+    torso.add(chest);
+
+    // Peto del overol (pechera azul frontal)
+    const bib = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.32, 0.08), overallMat);
+    bib.position.set(0, 0.24, 0.15);
+    torso.add(bib);
+
+    // Hebillas doradas de los tirantes
+    const buckleGeo = new THREE.BoxGeometry(0.07, 0.07, 0.03);
+    const leftBuckle = new THREE.Mesh(buckleGeo, buckleMat);
+    leftBuckle.position.set(-0.11, 0.37, 0.19);
+    torso.add(leftBuckle);
+
+    const rightBuckle = leftBuckle.clone();
+    rightBuckle.position.x = 0.11;
+    torso.add(rightBuckle);
+
+    // 3. CABEZA Y SOMBRERO CAMPESINO
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 0.56, 0);
+    torso.add(headGroup);
+
+    // Cabeza redondeada estilizada
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 12), skinMat);
+    head.position.y = 0.14;
+    head.scale.set(1.0, 1.08, 1.0);
     head.castShadow = true;
-    group.add(head);
+    headGroup.add(head);
 
-    // Sombrero campesino (ala y copa)
-    const hatBrimGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.06, 12);
-    const hatBrim = new THREE.Mesh(hatBrimGeo, hatMat);
-    hatBrim.position.y = 1.8;
+    // Ojos expresivos
+    const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.08, 0.17, 0.21);
+    headGroup.add(leftEye);
+
+    const rightEye = leftEye.clone();
+    rightEye.position.x = 0.08;
+    headGroup.add(rightEye);
+
+    // Nariz redondeada
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), skinMat);
+    nose.position.set(0, 0.13, 0.24);
+    headGroup.add(nose);
+
+    // Bigote campesino clásico
+    const stacheGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.18, 6);
+    stacheGeo.rotateZ(Math.PI / 2);
+    const mustache = new THREE.Mesh(stacheGeo, bootMat);
+    mustache.position.set(0, 0.08, 0.23);
+    headGroup.add(mustache);
+
+    // SOMBRERO CAMPESINO DE PAJA (Ala ancha curva + copa + cinta verde)
+    const hatGroup = new THREE.Group();
+    hatGroup.position.set(0, 0.27, -0.02);
+    hatGroup.rotation.x = -0.08; // Ligera inclinación hacia atrás
+    headGroup.add(hatGroup);
+
+    // Ala de paja
+    const hatBrim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.64, 0.62, 0.04, 16),
+      hatStrawMat
+    );
     hatBrim.castShadow = true;
-    group.add(hatBrim);
+    hatGroup.add(hatBrim);
 
-    const hatTopGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.35, 12);
-    const hatTop = new THREE.Mesh(hatTopGeo, hatMat);
-    hatTop.position.y = 2.0;
-    hatTop.castShadow = true;
-    group.add(hatTop);
+    // Copa del sombrero
+    const hatCrown = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.32, 0.38, 0.32, 16),
+      hatStrawMat
+    );
+    hatCrown.position.y = 0.16;
+    hatCrown.castShadow = true;
+    hatGroup.add(hatCrown);
 
-    // Piernas / Botas
-    const legGeo = new THREE.BoxGeometry(0.25, 0.55, 0.3);
-    const leftLeg = new THREE.Mesh(legGeo, bootMat);
-    leftLeg.position.set(-0.2, 0.28, 0);
-    leftLeg.castShadow = true;
-    group.add(leftLeg);
+    // Cinta verde decorativa
+    const hatRibbon = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.385, 0.385, 0.07, 16),
+      hatRibbonMat
+    );
+    hatRibbon.position.y = 0.05;
+    hatGroup.add(hatRibbon);
 
-    const rightLeg = new THREE.Mesh(legGeo, bootMat);
-    rightLeg.position.set(0.2, 0.28, 0);
-    rightLeg.castShadow = true;
-    group.add(rightLeg);
+    // 4. BRAZO IZQUIERDO ARTICULADO (Hombro -> Manga -> Mano)
+    const leftArm = new THREE.Group();
+    leftArm.position.set(-0.34, 0.44, 0);
+    torso.add(leftArm);
 
-    // Brazos
-    const armGeo = new THREE.BoxGeometry(0.2, 0.65, 0.22);
-    const leftArm = new THREE.Mesh(armGeo, shirtMat);
-    leftArm.position.set(-0.48, 0.9, 0);
-    leftArm.castShadow = true;
-    group.add(leftArm);
+    const lUpperArm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.075, 0.34, 8),
+      shirtMat
+    );
+    lUpperArm.position.y = -0.16;
+    lUpperArm.castShadow = true;
+    leftArm.add(lUpperArm);
 
-    const rightArm = new THREE.Mesh(armGeo, shirtMat);
-    rightArm.position.set(0.48, 0.9, 0);
-    rightArm.castShadow = true;
-    group.add(rightArm);
+    const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), skinMat);
+    lHand.position.y = -0.36;
+    lHand.castShadow = true;
+    leftArm.add(lHand);
 
-    return group;
+    // 5. BRAZO DERECHO ARTICULADO
+    const rightArm = new THREE.Group();
+    rightArm.position.set(0.34, 0.44, 0);
+    torso.add(rightArm);
+
+    const rUpperArm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.075, 0.34, 8),
+      shirtMat
+    );
+    rUpperArm.position.y = -0.16;
+    rUpperArm.castShadow = true;
+    rightArm.add(rUpperArm);
+
+    const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), skinMat);
+    rHand.position.y = -0.36;
+    rHand.castShadow = true;
+    rightArm.add(rHand);
+
+    // 6. PIERNA IZQUIERDA ARTICULADA (Cadera -> Muslo -> Bota)
+    const leftLeg = new THREE.Group();
+    leftLeg.position.set(-0.15, -0.08, 0);
+    pelvis.add(leftLeg);
+
+    const lThigh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.10, 0.38, 8),
+      overallMat
+    );
+    lThigh.position.y = -0.18;
+    lThigh.castShadow = true;
+    leftLeg.add(lThigh);
+
+    // Bota campesina con puntera
+    const lBoot = new THREE.Group();
+    lBoot.position.set(0, -0.38, 0);
+    const lBootLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.11, 0.18, 8), bootMat);
+    lBootLeg.position.y = 0.04;
+    lBootLeg.castShadow = true;
+    lBoot.add(lBootLeg);
+
+    const lBootFoot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.12, 0.30), bootMat);
+    lBootFoot.position.set(0, -0.05, 0.06);
+    lBootFoot.castShadow = true;
+    lBoot.add(lBootFoot);
+
+    const lSole = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.04, 0.32), bootSoleMat);
+    lSole.position.set(0, -0.11, 0.06);
+    lBoot.add(lSole);
+
+    leftLeg.add(lBoot);
+
+    // 7. PIERNA DERECHA ARTICULADA
+    const rightLeg = new THREE.Group();
+    rightLeg.position.set(0.15, -0.08, 0);
+    pelvis.add(rightLeg);
+
+    const rThigh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.10, 0.38, 8),
+      overallMat
+    );
+    rThigh.position.y = -0.18;
+    rThigh.castShadow = true;
+    rightLeg.add(rThigh);
+
+    const rBoot = lBoot.clone();
+    rightLeg.add(rBoot);
+
+    // Guardar referencias a las articulaciones animables
+    this.parts = {
+      root,
+      pelvis,
+      torso,
+      headGroup,
+      leftArm,
+      rightArm,
+      leftLeg,
+      rightLeg
+    };
+
+    return root;
   }
 
   _setupInputListeners() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
     // Teclado
     window.addEventListener('keydown', (e) => {
       switch (e.code) {
@@ -217,6 +460,50 @@ export class PlayerController {
     }
   }
 
+  addObstacle(obstacle) {
+    this.obstacles.push(obstacle);
+  }
+
+  /**
+   * Comprueba si una coordenada (x, z) colisiona contra las paredes o estructuras sólidas
+   */
+  isColliding(x, z) {
+    // 1. Límites del mapa
+    if (
+      x < this.bounds.minX + this.radius ||
+      x > this.bounds.maxX - this.radius ||
+      z < this.bounds.minZ + this.radius ||
+      z > this.bounds.maxZ - this.radius
+    ) {
+      return true;
+    }
+
+    // 2. Obstáculos y paredes de la finca
+    for (let i = 0; i < this.obstacles.length; i++) {
+      const obs = this.obstacles[i];
+      if (obs.type === 'box') {
+        if (
+          x >= obs.minX - this.radius &&
+          x <= obs.maxX + this.radius &&
+          z >= obs.minZ - this.radius &&
+          z <= obs.maxZ + this.radius
+        ) {
+          return true;
+        }
+      } else if (obs.type === 'circle') {
+        const dx = x - obs.x;
+        const dz = z - obs.z;
+        const distSq = dx * dx + dz * dz;
+        const minDist = this.radius + obs.r;
+        if (distSq <= minDist * minDist) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Actualización por cuadro con delta time
    */
@@ -248,13 +535,20 @@ export class PlayerController {
     if (isMoving) {
       this._moveDirection.normalize();
 
-      // Mover al jugador con delta time constante
-      this.position.x += this._moveDirection.x * speed * delta;
-      this.position.z += this._moveDirection.z * speed * delta;
+      const moveStep = speed * delta;
+      const dx = this._moveDirection.x * moveStep;
+      const dz = this._moveDirection.z * moveStep;
 
-      // Restricción dentro de los límites del terreno
-      this.position.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, this.position.x));
-      this.position.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, this.position.z));
+      // Desplazamiento y resolución de colisión con deslizamiento por paredes (Wall Sliding)
+      const targetX = this.position.x + dx;
+      if (!this.isColliding(targetX, this.position.z)) {
+        this.position.x = targetX;
+      }
+
+      const targetZ = this.position.z + dz;
+      if (!this.isColliding(this.position.x, targetZ)) {
+        this.position.z = targetZ;
+      }
 
       // Suelo plano a nivel Y = 0 (los pies en Y=0)
       this.position.y = 0;
@@ -272,12 +566,55 @@ export class PlayerController {
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = this.rotationY;
 
-    // Balanceo sutil de caminata
-    if (isMoving) {
-      const walkTime = performance.now() * 0.008 * (this.isSprinting ? 1.5 : 1.0);
-      this.mesh.position.y = Math.abs(Math.sin(walkTime)) * 0.08;
-    } else {
-      this.mesh.position.y = 0;
+    // ANIMACIONES PROCEDURALES DEL ESQUELETO (Caminar, Correr e Inactivo)
+    if (this.parts && this.parts.pelvis) {
+      if (isMoving) {
+        // Frecuencia y amplitud de zancada según si camina o corre
+        const cycleSpeed = this.isSprinting ? 12.5 : 8.0;
+        const legAmplitude = this.isSprinting ? 0.85 : 0.50;
+        const armAmplitude = this.isSprinting ? 0.85 : 0.50;
+        const bobAmount = this.isSprinting ? 0.08 : 0.045;
+
+        this.walkCycle += delta * cycleSpeed;
+        const sinVal = Math.sin(this.walkCycle);
+        const cosVal = Math.cos(this.walkCycle);
+
+        // Balanceo opuesto de piernas
+        this.parts.leftLeg.rotation.x = sinVal * legAmplitude;
+        this.parts.rightLeg.rotation.x = -sinVal * legAmplitude;
+
+        // Balanceo cruzado de brazos
+        this.parts.leftArm.rotation.x = -sinVal * armAmplitude;
+        this.parts.rightArm.rotation.x = sinVal * armAmplitude;
+
+        // Rebote vertical rítmico de la pelvis
+        this.parts.pelvis.position.y = 0.68 + Math.abs(cosVal) * bobAmount;
+
+        // Inclinación aerodinámica hacia adelante al correr
+        const targetTorsoLean = this.isSprinting ? 0.22 : 0.08;
+        this.parts.torso.rotation.x = THREE.MathUtils.lerp(this.parts.torso.rotation.x, targetTorsoLean, delta * 10);
+        this.parts.torso.rotation.y = sinVal * 0.06;
+
+        // Detección de impacto de pisada para audio
+        if ((this.prevCycleSin <= 0 && sinVal > 0) || (this.prevCycleSin >= 0 && sinVal < 0)) {
+          if (this.onFootstep) this.onFootstep();
+        }
+        this.prevCycleSin = sinVal;
+      } else {
+        // ESTADO INACTIVO (IDLE): Retorno suave de extremidades y ciclo sutil de respiración
+        const returnSpeed = delta * 8;
+        this.parts.leftLeg.rotation.x = THREE.MathUtils.lerp(this.parts.leftLeg.rotation.x, 0, returnSpeed);
+        this.parts.rightLeg.rotation.x = THREE.MathUtils.lerp(this.parts.rightLeg.rotation.x, 0, returnSpeed);
+        this.parts.leftArm.rotation.x = THREE.MathUtils.lerp(this.parts.leftArm.rotation.x, 0, returnSpeed);
+        this.parts.rightArm.rotation.x = THREE.MathUtils.lerp(this.parts.rightArm.rotation.x, 0, returnSpeed);
+        this.parts.torso.rotation.x = THREE.MathUtils.lerp(this.parts.torso.rotation.x, 0, returnSpeed);
+        this.parts.torso.rotation.y = THREE.MathUtils.lerp(this.parts.torso.rotation.y, 0, returnSpeed);
+
+        // Respiración suave
+        const breathTime = performance.now() * 0.002;
+        this.parts.pelvis.position.y = 0.68 + Math.sin(breathTime) * 0.015;
+        this.parts.torso.scale.y = 1.0 + Math.sin(breathTime) * 0.015;
+      }
     }
 
     // Calcular posición de cámara en 3ra persona con esféricas

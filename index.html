@@ -141,11 +141,51 @@
         <button id="btn-spawn-crate" class="hud-btn" title="Demostrar Físicas de Cannon-es">
           📦 Caída Física
         </button>
+        <button id="btn-show-report" class="hud-btn" title="Comparativa Agronómica">
+          📊 Comparativa
+        </button>
         <button id="btn-show-help" class="hud-btn" title="Ver Ayuda">
           ❓ Ayuda
         </button>
       </div>
     </footer>
+
+    <!-- Modal de Comparativa Agronómica Educativa -->
+    <div id="report-modal" class="report-modal hidden">
+      <div class="report-card">
+        <div class="report-header">
+          <h2>📊 Comparativa de Enfoques Agrícolas</h2>
+          <button id="btn-close-report" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <p class="report-intro">Análisis agronómico y de gestión de recursos para la sustentación final:</p>
+        <div class="comparison-grid">
+          <div class="comparison-col subsistence">
+            <h3>🌾 Subsistencia</h3>
+            <div class="metric"><span class="m-label">Inversión inicial:</span> <span class="m-val">$500</span></div>
+            <div class="metric"><span class="m-label">Consumo hídrico:</span> <span class="m-val">120 L / riego</span></div>
+            <div class="metric"><span class="m-label">Salud del suelo:</span> <span class="m-val">60%</span></div>
+            <div class="metric"><span class="m-label">Rendimiento:</span> <span class="m-val">45 kg ($5/kg)</span></div>
+            <p class="m-desc">Enfoque tradicional de bajo costo de entrada. Alta evaporación y vulnerabilidad ante sequías.</p>
+          </div>
+          <div class="comparison-col precision">
+            <h3>💧 Precisión (IoT)</h3>
+            <div class="metric"><span class="m-label">Inversión inicial:</span> <span class="m-val">$1,400</span></div>
+            <div class="metric"><span class="m-label">Consumo hídrico:</span> <span class="m-val highlight">60 L (-50%)</span></div>
+            <div class="metric"><span class="m-label">Salud del suelo:</span> <span class="m-val">80%</span></div>
+            <div class="metric"><span class="m-label">Rendimiento:</span> <span class="m-val highlight">85 kg ($7/kg)</span></div>
+            <p class="m-desc">Sensores de telemetría y microriego. Ahorra 50% de agua con máxima eficiencia y productividad.</p>
+          </div>
+          <div class="comparison-col ecological">
+            <h3>🌿 Ecológica</h3>
+            <div class="metric"><span class="m-label">Inversión inicial:</span> <span class="m-val">$850</span></div>
+            <div class="metric"><span class="m-label">Consumo hídrico:</span> <span class="m-val">80 L / riego</span></div>
+            <div class="metric"><span class="m-label">Salud del suelo:</span> <span class="m-val highlight">95% (Regenerativo)</span></div>
+            <div class="metric"><span class="m-label">Rendimiento:</span> <span class="m-val">65 kg ($9/kg Premium)</span></div>
+            <p class="m-desc">Enriquecimiento orgánico con compost. Excelente retención de humedad y producto de alto valor.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

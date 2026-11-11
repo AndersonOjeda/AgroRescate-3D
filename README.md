@@ -94,10 +94,18 @@ AgroRescate 3D/
    - Iluminación hemisférica, ambiental y solar direccional con mapa de sombras optimizado.
    - Tonemapping `ACESFilmicToneMapping` y espacio de color lineal sRGB.
    - Límite de pixel ratio (`Math.min(window.devicePixelRatio, 2)`) para garantizar 60 FPS estables.
-2. **Navegación:**
+2. **Navegación, Modelo Estilizado y Animaciones Procedurales:**
    - Cámara orbital en tercera persona con interpolación suave (`lerp`).
-   - Avatar estilizado de agricultor con overol y sombrero campesino.
-   - Restricción perimetral de bordes para evitar atravesar el suelo o salir del mapa.
+   - **Avatar Orgánico Articulado:** Campesino estilizado con overol de mezclilla, tirantes con hebillas de latón, camisa de franela, rostro detallado con bigote, sombrero de paja de ala curva con cinta verde y cartuchera lateral de campo.
+   - **Animaciones Esqueléticas Procedurales:**
+     - Zancada dinámica con balanceo coordinado de piernas y brazos opuestos.
+     - Mayor amplitud, inclinación aerodinámica del torso y zancada rápida al correr con `Shift`.
+     - Balanceo vertical rítmico de pelvis al desplazarse.
+     - Animación suave de respiración e inactividad (*Idle*) al detenerse.
+   - **Audio de Pisadas Dinámico:** Detección de impacto de pisada contra el terreno con modulación tonal y volumen aleatorio.
+   - **Colisiones Sólidas y Wall Sliding:** Bloqueo físico en paredes de casas, granero, tanque, bomba, cercas y troncos de árboles con deslizamiento fluido.
+   - **Molino de Viento:** Estructura rural con aspas rotatorias continuas que aportan vida al entorno.
+   - **Modal de Comparativa Agronómica:** Panel interactivo en el HUD (`📊 Comparativa`) para exponer el análisis agronómico y de recursos en la sustentación.
 3. **Físicas (Cannon-es):**
    - `CANNON.World` con gravedad vertical de `-9.81 m/s²`.
    - Suelo estático con material de fricción.
@@ -141,7 +149,8 @@ npm test
 - **`tests/triggers.test.js`**: 2 pruebas pasadas (cálculo radial euclidiano y detección AABB dentro/fuera).
 - **`tests/physics.test.js`**: 2 pruebas pasadas (gravedad -9.81, caída libre y sincronización de matrices Cannon-Three).
 - **`tests/particleSystem.test.js`**: 2 pruebas pasadas (pooling de partículas con Float32Array y lluvia).
-- **`npm run build`**: Compilación de producción en Vite completada en menos de 400 ms con 0 errores.
+- **`tests/playerCollision.test.js`**: 6 pruebas pasadas (bloqueo en paredes de casa, granero, tanque, bomba y wall sliding).
+- **`npm run build`**: Compilación de producción en Vite completada en menos de 500 ms con 0 errores.
 - **Navegador en vivo (Chrome DevTools):** Ejecución a 60 FPS, 0 advertencias y 0 errores en la consola.
 
 ---

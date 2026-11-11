@@ -37,9 +37,13 @@ export class HUD {
     this.soundIcon = document.getElementById('sound-icon');
     this.btnToggleRain = document.getElementById('btn-toggle-rain');
     this.btnSpawnCrate = document.getElementById('btn-spawn-crate');
+    this.btnShowReport = document.getElementById('btn-show-report');
     this.btnShowHelp = document.getElementById('btn-show-help');
+    this.reportModal = document.getElementById('report-modal');
+    this.btnCloseReport = document.getElementById('btn-close-report');
 
     this._setupHelpModal();
+    this._setupReportModal();
   }
 
   /**
@@ -168,5 +172,25 @@ export class HUD {
         }
       });
     }
+  }
+
+  _setupReportModal() {
+    if (this.btnShowReport && this.reportModal) {
+      this.btnShowReport.addEventListener('click', () => {
+        this.reportModal.classList.remove('hidden');
+      });
+    }
+
+    if (this.btnCloseReport && this.reportModal) {
+      this.btnCloseReport.addEventListener('click', () => {
+        this.reportModal.classList.add('hidden');
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.reportModal && !this.reportModal.classList.contains('hidden')) {
+        this.reportModal.classList.add('hidden');
+      }
+    });
   }
 }

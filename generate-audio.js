@@ -82,10 +82,44 @@ const clickAudio = createWavBuffer({
   }
 });
 
+// 4. Pisada del agricultor sobre tierra y hierba (golpe sordo y crujido suave)
+const footstepAudio = createWavBuffer({
+  durationSec: 0.15,
+  generator: (t) => {
+    const thumpEnv = Math.exp(-t * 40);
+    const thump = Math.sin(2 * Math.PI * 90 * t) * thumpEnv * 0.6;
+    const rustleEnv = Math.exp(-t * 25);
+    const rustle = (Math.random() * 2 - 1) * rustleEnv * 0.25;
+    return thump + rustle;
+  }
+});
+
+// 5. Ambiente rural (brisa suave de campo en bucle)
+const ambientAudio = createWavBuffer({
+  durationSec: 4.0,
+  generator: (t) => {
+    // Ruido modulado por brisa suave
+    const breezeMod = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.3 * t);
+    const noise = (Math.random() * 2 - 1) * 0.08 * breezeMod;
+    // Tono armónico muy suave de pájaro distante a intervalos
+    let bird = 0;
+    if (t > 1.2 && t < 1.45) {
+      const bt = t - 1.2;
+      bird = Math.sin(2 * Math.PI * 2400 * bt) * Math.sin(bt * Math.PI / 0.25) * 0.05;
+    } else if (t > 2.8 && t < 3.05) {
+      const bt = t - 2.8;
+      bird = Math.sin(2 * Math.PI * 2800 * bt) * Math.sin(bt * Math.PI / 0.25) * 0.04;
+    }
+    return noise + bird;
+  }
+});
+
 const outDir = path.resolve('public', 'audio');
 fs.writeFileSync(path.join(outDir, 'pump.wav'), pumpAudio);
 fs.writeFileSync(path.join(outDir, 'water.wav'), pumpAudio);
 fs.writeFileSync(path.join(outDir, 'success.wav'), successAudio);
 fs.writeFileSync(path.join(outDir, 'click.wav'), clickAudio);
+fs.writeFileSync(path.join(outDir, 'footstep.wav'), footstepAudio);
+fs.writeFileSync(path.join(outDir, 'ambient.wav'), ambientAudio);
 
-console.log('Archivos de audio WAV generados exitosamente en public/audio');
+console.log('Archivos de audio WAV actualizados exitosamente en public/audio');

@@ -45,10 +45,19 @@ export class PhysicsWorld {
     // Lista de sincronización de cuerpos físicos con meshes de Three.js
     this.syncBodies = [];
 
-    // 2. Crear suelo físico estático a Y = 0
+    // 2. Crear suelo físico estático a Y = 0 y paredes de estructuras
     this._createStaticGround();
+    this._createStaticObstacles();
 
-    // 3. Crear cajas agrícolas dinámicas iniciales
+    // 3. Crear cuerpo cinemático del jugador para interactuar físicamente empujando cajas
+    this.playerBody = new CANNON.Body({
+      type: CANNON.Body.KINEMATIC,
+      shape: new CANNON.Sphere(0.65),
+      position: new CANNON.Vec3(0, 0.7, -2)
+    });
+    this.world.addBody(this.playerBody);
+
+    // 4. Crear cajas agrícolas dinámicas iniciales
     this.crates = [];
   }
 
@@ -63,6 +72,28 @@ export class PhysicsWorld {
     groundBody.position.set(0, 0, 0);
     this.world.addBody(groundBody);
     this.groundBody = groundBody;
+  }
+
+  _createStaticObstacles() {
+    // 1. Paredes de la Casa Rural en Cannon-es
+    const houseShape = new CANNON.Box(new CANNON.Vec3(4.2, 3.0, 3.4));
+    const houseBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
+      shape: houseShape,
+      position: new CANNON.Vec3(-16, 2.25, -14),
+      material: this.groundMaterial
+    });
+    this.world.addBody(houseBody);
+
+    // 2. Paredes del Granero en Cannon-es
+    const barnShape = new CANNON.Box(new CANNON.Vec3(4.7, 3.5, 3.9));
+    const barnBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
+      shape: barnShape,
+      position: new CANNON.Vec3(16, 3.0, -14),
+      material: this.groundMaterial
+    });
+    this.world.addBody(barnBody);
   }
 
   /**
@@ -150,6 +181,15 @@ export class PhysicsWorld {
       crate.body.angularVelocity.set(0, 0, 0);
       crate.body.quaternion.set(0, 0, 0, 1);
     });
+  }
+
+  /**
+   * Actualiza la posición del cuerpo cinemático del jugador para empujar objetos físicos
+   */
+  updatePlayerPosition(playerPos) {
+    if (this.playerBody && playerPos) {
+      this.playerBody.position.set(playerPos.x, playerPos.y + 0.7, playerPos.z);
+    }
   }
 
   /**
