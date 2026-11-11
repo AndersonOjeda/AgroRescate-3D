@@ -579,6 +579,139 @@
   padding-bottom: 3px;
 }
 
+/* Tarjeta de diálogo interactiva de Rudy, la gallina guía */
+.agro-guide-card {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  z-index: 34;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: 18px;
+  padding: 16px 18px;
+  color: #f8fafc;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.16);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agro-guide-card.hidden {
+  display: none;
+}
+
+.agro-guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agro-guide-speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.agro-guide-badge {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.agro-guide-title {
+  font-size: 1.04rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.agro-guide-body {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.agro-guide-tips {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.8rem;
+  line-height: 1.38;
+  color: #a7f3d0;
+}
+
+.agro-guide-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.agro-guide-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agro-guide-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.agro-guide-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.agro-guide-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.agro-guide-btn.primary {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: rgba(16, 185, 129, 0.7);
+  color: #ffffff;
+}
+
+.agro-guide-btn.voice-active {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+.agro-guide-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 @media (max-width: 860px) {
   .agro-hud-dock {
     top: 174px;
@@ -599,6 +732,11 @@
 
   .agro-demo-grid {
     grid-template-columns: 1fr;
+  }
+
+  .agro-guide-card {
+    bottom: 66px;
+    padding: 13px 14px;
   }
 }
 

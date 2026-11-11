@@ -397,6 +397,90 @@ export class AudioSystem {
   }
 
   /**
+   * Reproduce un cacareo breve y amigable cuando habla Rudy, la gallina guía.
+   */
+  playChickenCluck() {
+    if (this.isMuted) return;
+    this.unlockAudio();
+
+    const ctx = this.listener?.context;
+    if (!ctx || typeof ctx.createOscillator !== 'function' || typeof ctx.createGain !== 'function') {
+      return;
+    }
+
+    try {
+      const now = ctx.currentTime || 0;
+      const chirps = [
+        { offset: 0.0, startHz: 460, peakHz: 740, endHz: 340, dur: 0.09 },
+        { offset: 0.12, startHz: 510, peakHz: 820, endHz: 390, dur: 0.1 }
+      ];
+      for (const chirp of chirps) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        const t0 = now + chirp.offset;
+        osc.frequency.setValueAtTime(chirp.startHz, t0);
+        osc.frequency.exponentialRampToValueAtTime(chirp.peakHz, t0 + chirp.dur * 0.45);
+        osc.frequency.exponentialRampToValueAtTime(chirp.endHz, t0 + chirp.dur);
+
+        gain.gain.setValueAtTime(0.001, t0);
+        gain.gain.linearRampToValueAtTime(0.16, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + chirp.dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + chirp.dur + 0.01);
+      }
+    } catch {
+      // Ignorar en entornos de prueba sin nodos Web Audio completos
+    }
+  }
+
+  /**
+   * Lee en voz alta las instrucciones de la gallina guía usando Web Speech API si está disponible.
+   * @param {string} text
+   */
+  speakGuideText(text) {
+    this.stopGuideSpeech();
+    if (this.isMuted || !text) return false;
+    const synth = typeof globalThis !== 'undefined' ? globalThis.speechSynthesis : null;
+    const Utterance = typeof globalThis !== 'undefined' ? globalThis.SpeechSynthesisUtterance : null;
+    if (!synth || typeof synth.speak !== 'function' || typeof Utterance !== 'function') {
+      return false;
+    }
+
+    try {
+      const utter = new Utterance(text);
+      utter.lang = 'es-ES';
+      utter.rate = 1.04;
+      utter.pitch = 1.15;
+      utter.volume = 0.85;
+      const voices = typeof synth.getVoices === 'function' ? synth.getVoices() : [];
+      const esVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
+      if (esVoice) utter.voice = esVoice;
+      synth.speak(utter);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Detiene la locución de la gallina guía si está activa.
+   */
+  stopGuideSpeech() {
+    const synth = typeof globalThis !== 'undefined' ? globalThis.speechSynthesis : null;
+    if (synth && typeof synth.cancel === 'function') {
+      try {
+        synth.cancel();
+      } catch {
+        // Ignorar errores del sintetizador del navegador
+      }
+    }
+  }
+
+  /**
    * Inicia el sonido ambiente continuo de brisa rural
    */
   startAmbient() {
@@ -410,6 +494,7 @@ export class AudioSystem {
   toggleMute() {
     this.isMuted = !this.isMuted;
     if (this.isMuted) {
+      this.stopGuideSpeech();
       if (this.positionalWater.isPlaying) this.positionalWater.pause();
       if (this.globalSuccess.isPlaying) this.globalSuccess.stop();
       if (this.footstepAudio?.isPlaying) this.footstepAudio.stop();

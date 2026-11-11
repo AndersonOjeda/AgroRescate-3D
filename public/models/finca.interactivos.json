@@ -16,12 +16,12 @@
     ],
     "limites_xz": {
       "x": [
-        -20,
-        20
+        -19.4,
+        22.6
       ],
       "z": [
-        -20,
-        20
+        -22.0,
+        18.2
       ]
     }
   },
@@ -171,18 +171,18 @@
       "parcela": "parcela_ecologica"
     },
     "almacen": {
-      "nodo_glb": "almacen",
+      "nodo_glb": "Farm_House_Silo_01.001",
       "tipo": "almacenamiento",
       "posicion": [
         14.0,
         0.0,
         9.4
       ],
-      "radio_interaccion": 2.2,
+      "radio_interaccion": 4.2,
       "acceso_three": [
-        14,
-        0,
-        6.9
+        14.0,
+        0.0,
+        5.2
       ]
     },
     "bomba_agua": {

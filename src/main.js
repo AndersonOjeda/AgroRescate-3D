@@ -11,6 +11,7 @@ import { AudioSystem } from './systems/audioSystem.js';
 import { SkySystem } from './systems/skySystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader } from './world/farmLoader.js';
+import { GuideChicken } from './world/guideChicken.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
 
@@ -151,11 +152,35 @@ async function bootstrap() {
   const isGlb = farmEnv?.type === 'glb';
   if (isGlb && farmEnv.root) {
     // Ajustar límites y colisiones de obstáculos al escenario finca.glb (sin usar las cajas del modo procedural)
-    player.bounds = { minX: -19, maxX: 19, minZ: -19, maxZ: 19 };
     farmEnv.root.updateMatrixWorld(true);
+    const fenceBounds = new THREE.Box3();
+    farmEnv.root.traverse((child) => {
+      if (child.name?.startsWith('Farm_Fence')) {
+        fenceBounds.expandByObject(child);
+      }
+    });
+    if (!fenceBounds.isEmpty()) {
+      const margin = 0.7;
+      player.bounds = {
+        minX: fenceBounds.min.x + margin,
+        maxX: fenceBounds.max.x - margin,
+        minZ: fenceBounds.min.z + margin,
+        maxZ: fenceBounds.max.z - margin
+      };
+    } else {
+      player.bounds = { minX: -19.4, maxX: 22.6, minZ: -22.0, maxZ: 18.2 };
+    }
+
     const glbObstacleNames = [
       'casa_rural',
       'almacen',
+      'Farm_House_Barn_01',
+      'Farm_House_Silo_01.001',
+      'Farm_House_Silo_01',
+      'FAB converted model.001',
+      'panel_solar_base',
+      'cajon_herramientas',
+      'espantapajaros_poste',
       'bomba_agua',
       'tanque_agua',
       'compostera',
@@ -181,6 +206,13 @@ async function bootstrap() {
     }
     player.setObstacles(glbObstacles);
   }
+
+  // Gallina guía ("Rudy") en el patio central frente al inicio del jugador
+  const guideChicken = new GuideChicken(scene, {
+    position: { x: 2.0, y: 0, z: -4.2 }
+  });
+  player.addObstacle(guideChicken.getCollisionObstacle());
+
   const toVecObj = (arr, fallback) =>
     Array.isArray(arr) ? { x: arr[0], y: arr[1] ?? 0, z: arr[2] } : fallback;
 
@@ -189,8 +221,11 @@ async function bootstrap() {
         pump: toVecObj(interactivos?.bomba_agua?.posicion, { x: 6.5, y: 0, z: 15.6 }),
         sensor: toVecObj(interactivos?.sensor_humedad?.posicion, { x: -4, y: 0, z: -5 }),
         compost: toVecObj(interactivos?.compostera?.posicion, { x: -4.6, y: 0, z: 15.1 }),
-        warehouse: toVecObj(interactivos?.almacen?.posicion, { x: 14.0, y: 0, z: 9.4 }),
-        warehouseBounds: { min: [10.5, 0, 5.5], max: [17.5, 4.0, 13.0] },
+        warehouse: toVecObj(
+          interactivos?.almacen?.acceso_three || interactivos?.almacen?.posicion,
+          { x: 14.0, y: 0, z: 5.2 }
+        ),
+        warehouseBounds: { min: [10.5, 0, 3.8], max: [20.2, 4.0, 14.8] },
         plotRadius: 7.0,
         plotInteractDist: 7.2,
         emitterSpread: 3.4,
@@ -450,11 +485,72 @@ async function bootstrap() {
     id: 'interact_warehouse',
     name: 'Almacén de Cosecha y Cajas Físicas',
     position: { x: sceneCoords.warehouse.x, y: 0.8, z: sceneCoords.warehouse.z },
+    customDistance: isGlb ? 4.2 : null,
     actionText: 'Presiona E para inspeccionar inventario o soltar caja física',
     onInteract: () => {
       audioSystem.playClick();
       physicsWorld.dropDemoCrate(player.getPosition());
       hud.showToast('📦 ¡Caja física de Cannon-es arrojada al escenario! Observa el rebote y la gravedad.', 'info');
+    }
+  });
+
+  // F. Rudy — Gallina Guía (Instrucciones de cómo jugar)
+  let guideOpenedByProximity = false;
+
+  hud.onChickenGuideStepChange = (step, index, total, voiceEnabled) => {
+    guideChicken.setTalked(true);
+    guideChicken.setTalking(true);
+    audioSystem.playChickenCluck();
+    if (voiceEnabled && step?.spokenText) {
+      audioSystem.speakGuideText(step.spokenText);
+    } else {
+      audioSystem.stopGuideSpeech();
+    }
+    interactionSystem.updateActionText(
+      'interact_guide_chicken',
+      index + 1 >= total
+        ? 'Presiona E para finalizar con Rudy'
+        : `Presiona E para siguiente consejo (${index + 1}/${total})`
+    );
+  };
+
+  hud.onChickenVoiceToggle = (voiceEnabled, step) => {
+    if (voiceEnabled && hud.isChickenGuideOpen() && step?.spokenText) {
+      audioSystem.speakGuideText(step.spokenText);
+    } else {
+      audioSystem.stopGuideSpeech();
+    }
+  };
+
+  hud.onChickenGuideClose = (options = {}) => {
+    guideOpenedByProximity = false;
+    guideChicken.setTalking(false);
+    audioSystem.stopGuideSpeech();
+    interactionSystem.updateActionText(
+      'interact_guide_chicken',
+      'Presiona E para hablar con la gallina guía (Cómo jugar)'
+    );
+    if (options.relock && !player.isLocked && hud.startOverlay?.classList.contains('hidden')) {
+      player.requestLock();
+    }
+  };
+
+  interactionSystem.register({
+    id: 'interact_guide_chicken',
+    name: 'Rudy — Gallina Guía',
+    position: { x: guideChicken.position.x, y: 0.5, z: guideChicken.position.z },
+    customDistance: 4.0,
+    actionText: 'Presiona E para hablar con la gallina guía (Cómo jugar)',
+    onInteract: () => {
+      if (!hud.isChickenGuideOpen()) {
+        guideOpenedByProximity = true;
+        if (player.isLocked) {
+          player.unlock();
+        }
+        hud.openChickenGuide(0);
+      } else {
+        hud.nextChickenGuideStep({ closeAtEnd: true, relock: false });
+      }
     }
   });
 
@@ -612,10 +708,18 @@ async function bootstrap() {
     // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
     physicsWorld.step(delta);
 
-    // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino) y partículas
+    // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino), gallina guía y partículas
     skySystem.update(delta);
     if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
       farmEnv.environment.update(delta);
+    }
+    guideChicken.update(delta, pPos);
+    if (guideOpenedByProximity && hud.isChickenGuideOpen()) {
+      const dx = pPos.x - guideChicken.position.x;
+      const dz = pPos.z - guideChicken.position.z;
+      if (dx * dx + dz * dz > 42.25) {
+        hud.closeChickenGuide({ relock: false });
+      }
     }
     particleSystem.update(delta);
 
@@ -633,9 +737,9 @@ async function bootstrap() {
     renderer.render(scene, camera);
   });
 
-  // Esperar modelo del granjero antes de revelar la escena (si falla, conserva respaldo)
-  hud.updateLoadingProgress(95, 'Cargando personaje granjero...');
-  await player.ready;
+  // Esperar modelo del granjero y gallina guía antes de revelar la escena
+  hud.updateLoadingProgress(95, 'Cargando personaje granjero y gallina guía...');
+  await Promise.all([player.ready, guideChicken.ready]);
 
   // Finalizar carga y arrancar el bucle
   hud.updateLoadingProgress(100, '¡Finca lista!');
