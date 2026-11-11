@@ -44,7 +44,12 @@ export class HUD {
     this.lastState = null;
     this.currentZone = 'Patio Central';
     this.currentCoords = { x: 0, y: 0, z: 0 };
-    this.isCollapsed = Boolean(options.collapsed);
+    const isCompactViewport =
+      typeof window !== 'undefined' &&
+      typeof window.innerWidth === 'number' &&
+      window.innerWidth > 0 &&
+      window.innerWidth <= 860;
+    this.isCollapsed = options.collapsed !== undefined ? Boolean(options.collapsed) : isCompactViewport;
     this._lastDisplayedHarvestId = null;
 
     this.chickenGuideSteps = GUIDE_STEPS;
@@ -53,6 +58,7 @@ export class HUD {
     this.onChickenGuideStepChange = null;
     this.onChickenGuideClose = null;
     this.onChickenVoiceToggle = null;
+    this.onPromptTap = options.onPromptTap || null;
 
     if (!this.doc) return;
 
@@ -74,6 +80,13 @@ export class HUD {
     this.interactionPrompt = d.getElementById('interaction-prompt');
     this.promptAction = d.getElementById('prompt-action');
     this.promptTarget = d.getElementById('prompt-target');
+    if (this.interactionPrompt && typeof this.interactionPrompt.addEventListener === 'function') {
+      this.interactionPrompt.addEventListener('click', () => {
+        if (!this.interactionPrompt.classList.contains('hidden') && this.onPromptTap) {
+          this.onPromptTap();
+        }
+      });
+    }
 
     this.modeSelector = d.getElementById('mode-selector');
     this.hudDay = d.getElementById('hud-day');

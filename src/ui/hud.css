@@ -730,22 +730,25 @@
   gap: 8px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px), (pointer: coarse) {
   .agro-hud-dock {
-    top: 174px;
-    left: 12px;
-    width: calc(100vw - 24px);
+    top: 146px;
+    left: 10px;
+    width: calc(100vw - 20px);
+    max-width: 340px;
   }
 
   .agro-hud-panel {
-    max-height: calc(100vh - 300px);
+    max-height: calc(100dvh - 280px);
   }
 
   .agro-harvest-card {
-    right: 12px;
-    left: 12px;
+    right: 10px;
+    left: 10px;
     width: auto;
-    bottom: 72px;
+    bottom: 62px;
+    max-height: 55dvh;
+    overflow-y: auto;
   }
 
   .agro-demo-grid {
@@ -753,8 +756,28 @@
   }
 
   .agro-guide-card {
-    bottom: 66px;
-    padding: 13px 14px;
+    left: 10px;
+    right: 10px;
+    transform: none;
+    width: auto;
+    bottom: 64px;
+    padding: 12px 14px;
+    max-height: 60dvh;
+    overflow-y: auto;
+  }
+
+  .agro-guide-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-height: 520px) and (pointer: coarse) {
+  .agro-hud-dock {
+    top: 96px;
+  }
+
+  .agro-hud-panel {
+    max-height: calc(100dvh - 160px);
   }
 }
 

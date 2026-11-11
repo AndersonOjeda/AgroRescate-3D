@@ -33,7 +33,9 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  touch-action: none;
 }
 
 #webgl-canvas {
@@ -44,6 +46,7 @@ html, body {
   height: 100%;
   z-index: 1;
   display: block;
+  touch-action: none;
 }
 
 /* Pantalla de Carga */
@@ -200,6 +203,10 @@ html, body {
   font-size: 0.85rem;
 }
 
+.instruction-item-wide {
+  grid-column: 1 / -1;
+}
+
 kbd {
   background: #334155;
   border: 1px solid #475569;
@@ -266,7 +273,8 @@ kbd {
   padding: 8px 18px;
   border-radius: 40px;
   animation: pulse-border 1.8s infinite;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -1017,7 +1025,168 @@ kbd {
   accent-color: #3b82f6;
 }
 
-@media (max-width: 860px) {
+/* Controles Táctiles Móviles */
+body.is-touch-device .crosshair {
+  display: none;
+}
+
+.mobile-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+}
+
+.mobile-controls.hidden {
+  display: none;
+}
+
+.mobile-joystick {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(62px, calc(54px + env(safe-area-inset-bottom)));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-joystick-base {
+  position: relative;
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.46);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35), inset 0 0 18px rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  backdrop-filter: blur(8px);
+}
+
+.mobile-joystick-base.active {
+  border-color: rgba(16, 185, 129, 0.75);
+}
+
+.mobile-joystick-base.sprinting {
+  border-color: rgba(245, 158, 11, 0.9);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.38);
+}
+
+.mobile-joystick-knob {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #34d399, #059669);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.mobile-joystick-hint {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.03em;
+}
+
+.mobile-actions {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(62px, calc(54px + env(safe-area-inset-bottom)));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-quick-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-action-mini {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.38);
+  touch-action: manipulation;
+}
+
+.mobile-action-mini.active {
+  background: rgba(245, 158, 11, 0.35);
+  border-color: rgba(245, 158, 11, 0.9);
+}
+
+.mobile-interact-btn {
+  min-width: 82px;
+  height: 82px;
+  padding: 0 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.68);
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+  transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.mobile-interact-btn:active {
+  transform: scale(0.94);
+}
+
+.mobile-interact-btn.ready {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.9), rgba(5, 150, 105, 0.92));
+  border-color: #6ee7b7;
+  color: #ffffff;
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.55);
+}
+
+.mobile-interact-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.mobile-interact-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.start-card-wide,
+.report-card {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
   .mode-select-grid {
     grid-template-columns: 1fr;
   }
@@ -1026,5 +1195,141 @@ kbd {
   }
   .mission-hud {
     display: none;
+  }
+  .start-card-wide {
+    padding: 18px 16px;
+    max-height: 92dvh;
+    width: 95%;
+  }
+  .welcome-header h1 {
+    font-size: 1.45rem;
+  }
+  .instructions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .instruction-item {
+    padding: 6px 8px;
+    font-size: 0.74rem;
+    gap: 6px;
+  }
+  .report-card {
+    padding: 18px 16px;
+    width: 95%;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+  .report-header h2 {
+    font-size: 1.15rem;
+  }
+  .hud-top {
+    top: max(8px, env(safe-area-inset-top));
+    width: calc(100% - 16px);
+  }
+  .farm-status-panel {
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    gap: 6px 10px;
+  }
+  .stat-divider {
+    display: none;
+  }
+  .stat-value {
+    font-size: 0.88rem;
+  }
+  .progress-meter {
+    width: 52px;
+  }
+  .btn-advance,
+  #btn-pause-game {
+    padding: 5px 9px;
+    font-size: 0.74rem;
+  }
+  .hud-zone {
+    top: 112px;
+    left: 10px;
+    padding: 4px 10px;
+    font-size: 0.74rem;
+    max-width: calc(100vw - 20px);
+  }
+  .toast-container {
+    top: 112px;
+    right: 10px;
+    max-width: 240px;
+  }
+  .lil-gui.root {
+    top: 108px !important;
+    z-index: 55 !important;
+  }
+  .toast {
+    padding: 7px 11px;
+    font-size: 0.75rem;
+  }
+  .hud-bottom {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 10px;
+    right: 10px;
+    gap: 8px;
+    align-items: center;
+  }
+  .debug-panel {
+    padding: 5px 8px;
+    font-size: 0.64rem;
+    flex-shrink: 0;
+  }
+  .debug-row:first-child {
+    display: none;
+  }
+  .hud-controls-right {
+    overflow-x: auto;
+    max-width: 100%;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  .hud-controls-right::-webkit-scrollbar {
+    display: none;
+  }
+  .hud-btn {
+    padding: 6px 10px;
+    font-size: 0.73rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .interaction-prompt {
+    top: auto;
+    bottom: 196px;
+    max-width: calc(100vw - 24px);
+    padding: 7px 14px;
+  }
+}
+
+@media (max-height: 520px) and (pointer: coarse) {
+  .hud-zone {
+    top: 62px;
+  }
+  .toast-container {
+    top: 62px;
+  }
+  .mobile-joystick-base {
+    width: 96px;
+    height: 96px;
+  }
+  .mobile-joystick-knob {
+    width: 42px;
+    height: 42px;
+  }
+  .mobile-interact-btn {
+    min-width: 68px;
+    height: 68px;
+  }
+  .mobile-joystick,
+  .mobile-actions {
+    bottom: 50px;
+  }
+  .interaction-prompt {
+    bottom: 132px;
   }
 }

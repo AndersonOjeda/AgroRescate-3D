@@ -93,17 +93,23 @@ export class PlayerController {
     this.runSpeed = 11.0;
     this.isSprinting = false;
 
-    // Estado del teclado
+    // Estado del teclado y entrada táctil (móvil)
     this.keys = {
       forward: false,
       backward: false,
       left: false,
       right: false
     };
+    this.touchMove = { x: 0, y: 0, magnitude: 0 };
+    this.isTouchSprinting = false;
+    this._activeLookTouchId = null;
+    this._lastTouchLookX = 0;
+    this._lastTouchLookY = 0;
 
     // Control de puntero
     this.isLocked = false;
     this.mouseSensitivity = 0.0022;
+    this.touchLookSensitivity = 0.0052;
 
     // Vectores de reutilización para evitar instanciaciones en animate()
     this._moveDirection = new THREE.Vector3();
@@ -633,9 +639,88 @@ export class PlayerController {
       // Limitar pitch para que la cámara no baje del suelo ni dé la vuelta
       this.cameraPitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.cameraPitch));
     });
+
+    // Arrastre táctil en el canvas para rotar la cámara en celulares y tablets
+    if (this.domElement && typeof this.domElement.addEventListener === 'function') {
+      const findTouchById = (touchList, id) => {
+        if (!touchList) return null;
+        for (let i = 0; i < touchList.length; i++) {
+          if (touchList[i].identifier === id) return touchList[i];
+        }
+        return null;
+      };
+
+      this.domElement.addEventListener('touchstart', (e) => {
+        if (this.cameraMode !== 'third-person') return;
+        if (this._activeLookTouchId === null && e.changedTouches && e.changedTouches.length > 0) {
+          const t = e.changedTouches[0];
+          this._activeLookTouchId = t.identifier;
+          this._lastTouchLookX = t.clientX;
+          this._lastTouchLookY = t.clientY;
+        }
+      }, { passive: true });
+
+      this.domElement.addEventListener('touchmove', (e) => {
+        if (this.cameraMode !== 'third-person' || this._activeLookTouchId === null) return;
+        const t = findTouchById(e.touches, this._activeLookTouchId) ||
+          findTouchById(e.changedTouches, this._activeLookTouchId);
+        if (!t) return;
+
+        if (e.cancelable) e.preventDefault();
+        const dx = t.clientX - this._lastTouchLookX;
+        const dy = t.clientY - this._lastTouchLookY;
+        this._lastTouchLookX = t.clientX;
+        this._lastTouchLookY = t.clientY;
+
+        this.cameraYaw -= dx * this.touchLookSensitivity;
+        this.cameraPitch = Math.max(
+          this.minPitch,
+          Math.min(this.maxPitch, this.cameraPitch - dy * this.touchLookSensitivity)
+        );
+      }, { passive: false });
+
+      const endLookTouch = (e) => {
+        if (this._activeLookTouchId === null || !e.changedTouches) return;
+        if (findTouchById(e.changedTouches, this._activeLookTouchId)) {
+          this._activeLookTouchId = null;
+        }
+      };
+
+      this.domElement.addEventListener('touchend', endLookTouch, { passive: true });
+      this.domElement.addEventListener('touchcancel', endLookTouch, { passive: true });
+    }
+  }
+
+  /**
+   * Actualiza el vector analógico del joystick táctil móvil.
+   * @param {number} x - Desplazamiento lateral [-1, 1] (derecha positivo)
+   * @param {number} y - Desplazamiento frontal [-1, 1] (adelante positivo)
+   * @param {boolean} [sprinting=false]
+   */
+  setTouchMove(x, y, sprinting = false) {
+    const cx = Math.max(-1, Math.min(1, Number(x) || 0));
+    const cy = Math.max(-1, Math.min(1, Number(y) || 0));
+    this.touchMove.x = cx;
+    this.touchMove.y = cy;
+    this.touchMove.magnitude = Math.min(1, Math.hypot(cx, cy));
+    this.isTouchSprinting = Boolean(sprinting);
+  }
+
+  /**
+   * Activa o desactiva el modo correr para controles táctiles.
+   * @param {boolean} enabled
+   */
+  setTouchSprint(enabled) {
+    this.isTouchSprinting = Boolean(enabled);
   }
 
   requestLock() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const isCoarseOnly =
+        window.matchMedia('(pointer: coarse)').matches &&
+        !window.matchMedia('(pointer: fine)').matches;
+      if (isCoarseOnly) return;
+    }
     if (this.domElement && this.domElement.requestPointerLock) {
       try {
         const res = this.domElement.requestPointerLock();
@@ -821,7 +906,8 @@ export class PlayerController {
       return;
     }
 
-    const speed = this.isSprinting ? this.runSpeed : this.walkSpeed;
+    const sprinting = this.isSprinting || this.isTouchSprinting;
+    const baseSpeed = sprinting ? this.runSpeed : this.walkSpeed;
 
     // Calcular dirección frontal y lateral de la cámara en el plano XZ
     this._cameraForward.set(
@@ -838,12 +924,22 @@ export class PlayerController {
 
     this._moveDirection.set(0, 0, 0);
 
-    if (this.keys.forward) this._moveDirection.add(this._cameraForward);
-    if (this.keys.backward) this._moveDirection.sub(this._cameraForward);
-    if (this.keys.right) this._moveDirection.add(this._cameraRight);
-    if (this.keys.left) this._moveDirection.sub(this._cameraRight);
+    let hasKeyboardInput = false;
+    if (this.keys.forward) { this._moveDirection.add(this._cameraForward); hasKeyboardInput = true; }
+    if (this.keys.backward) { this._moveDirection.sub(this._cameraForward); hasKeyboardInput = true; }
+    if (this.keys.right) { this._moveDirection.add(this._cameraRight); hasKeyboardInput = true; }
+    if (this.keys.left) { this._moveDirection.sub(this._cameraRight); hasKeyboardInput = true; }
+
+    if (this.touchMove.magnitude > 0.05) {
+      this._moveDirection.addScaledVector(this._cameraForward, this.touchMove.y);
+      this._moveDirection.addScaledVector(this._cameraRight, this.touchMove.x);
+    }
 
     const isMoving = this._moveDirection.lengthSq() > 0.0001;
+    const analogScale = !hasKeyboardInput && this.touchMove.magnitude > 0.05
+      ? Math.max(0.35, this.touchMove.magnitude)
+      : 1;
+    const speed = baseSpeed * analogScale;
 
     if (isMoving) {
       this._moveDirection.normalize();
@@ -884,7 +980,7 @@ export class PlayerController {
 
     // Cadencia de pisadas para sonido y partículas de polvo tanto en GLB como en respaldo
     if (isMoving) {
-      const cycleSpeed = this.isSprinting ? 12.5 : 8.0;
+      const cycleSpeed = sprinting ? 12.5 : 8.0;
       this.walkCycle += delta * cycleSpeed;
       const sinVal = Math.sin(this.walkCycle);
       if ((this.prevCycleSin <= 0 && sinVal > 0) || (this.prevCycleSin >= 0 && sinVal < 0)) {
@@ -900,7 +996,7 @@ export class PlayerController {
     if (this.mixer) {
       if (this.animations && !this._isPlayingAction) {
         const targetAnim = isMoving
-          ? (this.isSprinting && this.animations.run ? 'run' : (this.animations.walk ? 'walk' : 'idle'))
+          ? (sprinting && this.animations.run ? 'run' : (this.animations.walk ? 'walk' : 'idle'))
           : 'idle';
         this._fadeToAnimation(targetAnim, 0.16);
       }
@@ -920,9 +1016,9 @@ export class PlayerController {
           this._isPlayingAction = false;
         }
       } else if (isMoving) {
-        const legAmplitude = this.isSprinting ? 0.85 : 0.50;
-        const armAmplitude = this.isSprinting ? 0.85 : 0.50;
-        const bobAmount = this.isSprinting ? 0.08 : 0.045;
+        const legAmplitude = sprinting ? 0.85 : 0.50;
+        const armAmplitude = sprinting ? 0.85 : 0.50;
+        const bobAmount = sprinting ? 0.08 : 0.045;
 
         const sinVal = Math.sin(this.walkCycle);
         const cosVal = Math.cos(this.walkCycle);
@@ -933,7 +1029,7 @@ export class PlayerController {
         this.parts.rightArm.rotation.x = sinVal * armAmplitude;
         this.parts.pelvis.position.y = 0.68 + Math.abs(cosVal) * bobAmount;
 
-        const targetTorsoLean = this.isSprinting ? 0.22 : 0.08;
+        const targetTorsoLean = sprinting ? 0.22 : 0.08;
         this.parts.torso.rotation.x = THREE.MathUtils.lerp(this.parts.torso.rotation.x, targetTorsoLean, delta * 10);
         this.parts.torso.rotation.y = sinVal * 0.06;
       } else {

@@ -16,6 +16,7 @@ import { GuideChicken } from './world/guideChicken.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
 import { DebugGUI } from './ui/debugGui.js';
+import { TouchControls } from './ui/touchControls.js';
 import { MissionManager } from './gameplay/missionManager.js';
 import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
@@ -56,12 +57,27 @@ async function bootstrap() {
   const triggerSystem = new TriggerSystem();
   const interactionSystem = new InteractionSystem();
 
-  // 6. Navegación del Jugador
+  // 6. Navegación del Jugador y Controles Táctiles (Celulares/Tablets)
   const player = new PlayerController(camera, canvas, scene);
   player.onFootstep = () => {
     audioSystem.playFootstep();
     particleSystem.emitFootstepDust(player.getPosition());
   };
+
+  const touchControls = new TouchControls({
+    player,
+    interactionSystem,
+    onToggleCamera: () => {
+      const mode = player.toggleCameraMode();
+      hud.showToast(mode === 'orbit' ? '🎥 Cámara orbital libre' : '🧑‍🌾 Cámara en tercera persona', 'info', 1800);
+    },
+    onDropCrate: () => {
+      audioSystem.playClick();
+      physicsWorld.dropDemoCrate(player.getPosition());
+      hud.showToast('📦 Caja física arrojada', 'info', 1800);
+    }
+  });
+  hud.onPromptTap = () => interactionSystem.triggerInteraction();
 
   // 7. Adaptador del Simulador Agrícola, Misiones y Resultados
   const farmAdapter = new FarmAdapter();
@@ -581,9 +597,10 @@ async function bootstrap() {
     }
   });
 
-  // Conectar cambio en el interactable con el prompt central del HUD
+  // Conectar cambio en el interactable con el prompt central del HUD y botón táctil móvil
   interactionSystem.onPromptChange = (item) => {
     hud.showInteractionPrompt(item);
+    touchControls.setInteractable(item);
   };
 
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
@@ -782,8 +799,11 @@ async function bootstrap() {
     });
   }
 
-  // Panel lil-gui (Semanas 2 y 4)
+  // Panel lil-gui (Semanas 2 y 4) — oculto inicialmente en móvil para no tapar el HUD superior
   const debugGui = new DebugGUI({ scene, sunLight, ambientLight, hemiLight, player, farmAdapter, physicsWorld, particleSystem, audioSystem, farmLoader, multimediaStation: null, hud });
+  if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+    debugGui.hide();
+  }
   if (hud.btnToggleGui) {
     hud.btnToggleGui.addEventListener('click', () => debugGui.toggle && debugGui.toggle());
   }
