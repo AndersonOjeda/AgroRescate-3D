@@ -55,6 +55,8 @@ export class PlayerController {
     this.activeAction = null;
     this.currentAnimName = null;
     this._isPlayingAction = false;
+    this._actionTimer = 0;
+    this._actionDuration = 0.75;
     this.rig = null;
 
     // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
@@ -295,8 +297,15 @@ export class PlayerController {
    * @returns {boolean}
    */
   playActionAnimation() {
+    this._actionTimer = this._actionDuration;
     const actionAnim = this.animations.action;
-    if (!actionAnim) return false;
+    if (!actionAnim) {
+      if (this.parts && this.parts.pelvis) {
+        this._isPlayingAction = true;
+        return true;
+      }
+      return false;
+    }
 
     const prevAction = this.activeAction;
     this._isPlayingAction = true;
@@ -801,6 +810,9 @@ export class PlayerController {
       if (this.orbitControls) {
         this.orbitControls.update();
       }
+      if (this.mixer) {
+        this.mixer.update(delta);
+      }
       if (this.parts && this.parts.pelvis) {
         const breathTime = performance.now() * 0.002;
         this.parts.pelvis.position.y = 0.68 + Math.sin(breathTime) * 0.015;
@@ -894,8 +906,20 @@ export class PlayerController {
       }
       this.mixer.update(delta);
     } else if (this.parts && this.parts.pelvis) {
-      // ANIMACIONES PROCEDURALES DEL RESPALDO ARTICULADO (Caminar, Correr e Inactivo)
-      if (isMoving) {
+      // ANIMACIONES PROCEDURALES DEL RESPALDO ARTICULADO (Agacharse, Caminar, Correr e Inactivo)
+      if (this._isPlayingAction && this._actionTimer > 0) {
+        this._actionTimer = Math.max(0, this._actionTimer - delta);
+        const phase = Math.sin((1 - this._actionTimer / this._actionDuration) * Math.PI);
+        this.parts.pelvis.position.y = 0.68 - 0.24 * phase;
+        this.parts.torso.rotation.x = 0.72 * phase;
+        this.parts.leftLeg.rotation.x = -0.55 * phase;
+        this.parts.rightLeg.rotation.x = -0.55 * phase;
+        this.parts.leftArm.rotation.x = -1.15 * phase;
+        this.parts.rightArm.rotation.x = -1.15 * phase;
+        if (this._actionTimer <= 0) {
+          this._isPlayingAction = false;
+        }
+      } else if (isMoving) {
         const legAmplitude = this.isSprinting ? 0.85 : 0.50;
         const armAmplitude = this.isSprinting ? 0.85 : 0.50;
         const bobAmount = this.isSprinting ? 0.08 : 0.045;

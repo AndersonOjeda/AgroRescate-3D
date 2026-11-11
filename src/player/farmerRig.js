@@ -470,73 +470,74 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
     ])
   ]);
 
-  // 4. ACTION (0.72s): inclinarse y extender manos hacia el cultivo (sembrar/regar/cosechar)
-  const actT = [0, 0.22, 0.45, 0.72];
-  const actionClip = new THREE.AnimationClip('action', 0.72, [
+  // 4. ACTION (0.75s): agacharse con flexión de rodillas y extender manos hacia el suelo
+  //    (preparar terreno / sembrar / regar / compostar / cosechar)
+  const actT = [0, 0.22, 0.52, 0.75];
+  const actionClip = new THREE.AnimationClip('action', 0.75, [
     makePosTrack('hips', actT, hipsRestPosition, [
       [0, 0, 0],
-      [0, -0.045 * height, 0],
-      [0, -0.03 * height, 0],
+      [0, -0.16 * height, 0],
+      [0, -0.14 * height, 0],
       [0, 0, 0]
     ]),
     makeQuatTrack('spine', actT, [
       [0.02, 0, 0],
-      [0.38, 0, 0],
-      [0.28, 0, 0],
+      [0.78, 0, 0],
+      [0.68, -0.08, 0],
       [0.02, 0, 0]
     ]),
     makeQuatTrack('head', actT, [
       [0.02, 0, 0],
+      [0.24, 0, 0],
       [0.18, 0, 0],
-      [0.12, 0, 0],
       [0.02, 0, 0]
     ]),
     makeQuatTrack('leftThigh', actT, [
       [-0.03, 0, 0.02],
-      [-0.24, 0, 0.04],
-      [-0.18, 0, 0.03],
+      [-0.72, 0, 0.06],
+      [-0.64, 0, 0.05],
       [-0.03, 0, 0.02]
     ]),
     makeQuatTrack('leftShin', actT, [
       [0.06, 0, 0],
-      [0.42, 0, 0],
-      [0.32, 0, 0],
+      [1.15, 0, 0],
+      [1.02, 0, 0],
       [0.06, 0, 0]
     ]),
     makeQuatTrack('rightThigh', actT, [
       [-0.03, 0, -0.02],
-      [-0.24, 0, -0.04],
-      [-0.18, 0, -0.03],
+      [-0.72, 0, -0.06],
+      [-0.64, 0, -0.05],
       [-0.03, 0, -0.02]
     ]),
     makeQuatTrack('rightShin', actT, [
       [0.06, 0, 0],
-      [0.42, 0, 0],
-      [0.32, 0, 0],
+      [1.15, 0, 0],
+      [1.02, 0, 0],
       [0.06, 0, 0]
     ]),
     makeQuatTrack('leftUpperArm', actT, [
       [-0.04, 0, -1.11],
-      [-0.86, 0, -0.82],
-      [-0.95, 0, -0.95],
+      [-1.25, 0, -0.82],
+      [-1.10, 0.15, -0.92],
       [-0.04, 0, -1.11]
     ]),
     makeQuatTrack('leftForeArm', actT, [
       [0, -0.32, 0],
-      [0, -0.65, 0],
-      [0, -0.45, 0],
+      [0, -0.78, 0],
+      [0, -0.52, 0],
       [0, -0.32, 0]
     ]),
     makeQuatTrack('rightUpperArm', actT, [
       [-0.04, 0, 1.11],
-      [-0.86, 0, 0.82],
-      [-0.95, 0, 0.95],
+      [-1.25, 0, 0.82],
+      [-1.10, -0.15, 0.92],
       [-0.04, 0, 1.11]
     ]),
     makeQuatTrack('rightForeArm', actT, [
       [0, 0.32, 0],
-      [0, 0.65, 0],
-      [0, 0.45, 0],
+      [0, 0.78, 0],
+      [0, 0.52, 0],
       [0, 0.32, 0]
     ])
   ]);

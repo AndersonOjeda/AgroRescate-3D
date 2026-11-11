@@ -664,6 +664,7 @@ async function bootstrap() {
   farmAdapter.on('soilPrepared', ({ result }) => {
     if (result?.success) {
       player.playActionAnimation();
+      particleSystem.emitFootstepDust(player.getPosition());
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'soilPrepared' });
       hud.renderMission(missionManager.getSnapshot());
@@ -699,6 +700,7 @@ async function bootstrap() {
   farmAdapter.on('compostApplied', ({ result }) => {
     if (result?.success) {
       player.playActionAnimation();
+      particleSystem.emitFootstepDust(player.getPosition());
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'special', kind: 'compost' });
       hud.renderMission(missionManager.getSnapshot());

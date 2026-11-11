@@ -116,8 +116,21 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
 
     expect(player.playActionAnimation()).toBe(true);
     expect(player.currentAnimName).toBe('action');
-    player.update(0.8); // Al terminar el clip de 0.72s regresa a idle
+    const hipsBone = player.rig.bones.find((b) => b.name === 'hips');
+    const spineBone = player.rig.bones.find((b) => b.name === 'spine');
+    const baseHipsY = hipsBone.position.y;
+    player.update(0.25); // Pico de agachamiento para trabajar la tierra
+    expect(hipsBone.position.y).toBeLessThan(baseHipsY - 0.12);
+    expect(spineBone.rotation.x).toBeGreaterThan(0.4);
+    player.update(0.6); // Al terminar el clip de 0.75s regresa a idle
     expect(player.currentAnimName).toBe('idle');
+
+    // También el avatar de respaldo se agacha en playActionAnimation
+    const fallbackPlayer = new PlayerController(camera, null, scene, { autoLoad: false });
+    expect(fallbackPlayer.playActionAnimation()).toBe(true);
+    fallbackPlayer.update(0.35);
+    expect(fallbackPlayer.parts.pelvis.position.y).toBeLessThan(0.55);
+    expect(fallbackPlayer.parts.torso.rotation.x).toBeGreaterThan(0.3);
 
     // Si falla la carga de otro GLB, conserva el avatar actual sin romper la escena
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
