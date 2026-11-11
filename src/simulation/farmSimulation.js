@@ -90,6 +90,9 @@ export class FarmSimulation {
 
     this.plots = {};
     for (const tpl of PLOT_TEMPLATES) {
+      const plotCfg = canonicalMode === SIMULATION_MODES.INTEGRATED
+        ? (MODE_CONFIGS[tpl.modeAffinity] || config)
+        : config;
       const plot = {
         id: tpl.id,
         name: tpl.name,
@@ -101,7 +104,7 @@ export class FarmSimulation {
         daysGrown: 0,
         daysToMature: tpl.daysToMature,
         moisture: tpl.initialMoisture,
-        fertility: config.initialSoilQuality,
+        fertility: plotCfg.initialSoilQuality,
         health: 90,
         visualState: 0,
         stage: CROP_STAGES.UNPLANTED,
@@ -119,7 +122,18 @@ export class FarmSimulation {
       this.plots[tpl.id] = plot;
     }
 
+    if (canonicalMode === SIMULATION_MODES.INTEGRATED) {
+      this._recomputeFarmSoilQuality();
+    }
+
     return this.getState();
+  }
+
+  _getPlotModeConfig(plot) {
+    if (this.mode === SIMULATION_MODES.INTEGRATED && plot?.modeAffinity) {
+      return MODE_CONFIGS[plot.modeAffinity] || this.modeConfig;
+    }
+    return this.modeConfig;
   }
 
   /**
@@ -158,7 +172,8 @@ export class FarmSimulation {
       return { success: false, message: `Primero prepara el terreno de ${target.name}` };
     }
 
-    const seedCost = this.modeConfig.seedCost;
+    const plotCfg = this._getPlotModeConfig(target);
+    const seedCost = plotCfg.seedCost;
     if (this.budget < seedCost) {
       return {
         success: false,
@@ -175,7 +190,7 @@ export class FarmSimulation {
     target.waterAppliedL = 0;
     target.isWithered = false;
 
-    const { projectedKg } = calculateProjectedYield(target, this.modeConfig);
+    const { projectedKg } = calculateProjectedYield(target, plotCfg);
     target.yieldKg = projectedKg;
     syncPlotStageAndVisual(target);
 
@@ -210,7 +225,7 @@ export class FarmSimulation {
       } else if (healthGain > 0 && plot.moisture <= 85) {
         plot.health = Math.min(100, plot.health + healthGain);
       }
-      const { projectedKg } = calculateProjectedYield(plot, this.modeConfig);
+      const { projectedKg } = calculateProjectedYield(plot, this._getPlotModeConfig(plot));
       plot.yieldKg = projectedKg;
     }
 
@@ -226,7 +241,9 @@ export class FarmSimulation {
     if (!this.modeConfig.supportsAutoIrrigation || !this.autoIrrigationEnabled || this.waterReserve < 1) {
       return [];
     }
-    return getPlotsNeedingAutoIrrigation(this.plots, this.autoIrrigationThreshold).map((p) => p.id);
+    return getPlotsNeedingAutoIrrigation(this.plots, this.autoIrrigationThreshold)
+      .filter((p) => this._getPlotModeConfig(p).supportsAutoIrrigation)
+      .map((p) => p.id);
   }
 
   /**
@@ -312,12 +329,13 @@ export class FarmSimulation {
       };
     }
 
+    const stepCfg = plotId ? this._getPlotModeConfig(this.plots[plotId]) : this.modeConfig;
     const safeDelta = Math.max(0, Number(deltaSeconds) || 0);
     const safeCycle = Math.max(0.5, Number(cycleSeconds) || 5);
     const fraction = Math.min(1, safeDelta / safeCycle);
 
-    this._continuousMoistureAcc += this.modeConfig.moistureGainPerIrrigation * fraction;
-    this._continuousWaterAcc += this.modeConfig.waterPerIrrigation * fraction;
+    this._continuousMoistureAcc += stepCfg.moistureGainPerIrrigation * fraction;
+    this._continuousWaterAcc += stepCfg.waterPerIrrigation * fraction;
     this._continuousHealthAcc += 2 * fraction;
 
     const desiredMoisture = Math.floor(this._continuousMoistureAcc);
@@ -352,12 +370,12 @@ export class FarmSimulation {
 
     this._continuousCostWaterAcc += waterCostL;
     let cashCost = 0;
-    while (this._continuousCostWaterAcc >= this.modeConfig.waterPerIrrigation) {
-      this._continuousCostWaterAcc -= this.modeConfig.waterPerIrrigation;
-      if (this.budget >= this.modeConfig.irrigationCost) {
-        this.budget -= this.modeConfig.irrigationCost;
-        this.economy.irrigationExpenses += this.modeConfig.irrigationCost;
-        cashCost += this.modeConfig.irrigationCost;
+    while (this._continuousCostWaterAcc >= stepCfg.waterPerIrrigation) {
+      this._continuousCostWaterAcc -= stepCfg.waterPerIrrigation;
+      if (this.budget >= stepCfg.irrigationCost) {
+        this.budget -= stepCfg.irrigationCost;
+        this.economy.irrigationExpenses += stepCfg.irrigationCost;
+        cashCost += stepCfg.irrigationCost;
       }
     }
 
@@ -409,7 +427,8 @@ export class FarmSimulation {
       return { success: false, message: 'Parcela no encontrada' };
     }
 
-    const waterCostL = this.modeConfig.waterPerIrrigation;
+    const targetCfg = plotId ? this._getPlotModeConfig(this.plots[plotId]) : this.modeConfig;
+    const waterCostL = targetCfg.waterPerIrrigation;
     if (this.waterReserve < waterCostL) {
       return {
         success: false,
@@ -422,10 +441,10 @@ export class FarmSimulation {
       this.activePlotId = plotId;
     }
 
-    let cashCost = this.modeConfig.irrigationCost;
+    let cashCost = targetCfg.irrigationCost;
     let emergencyManualNote = '';
     if (this.budget < cashCost) {
-      if (this.mode === SIMULATION_MODES.SUBSISTENCE) {
+      if (this.mode === SIMULATION_MODES.SUBSISTENCE || targetCfg.id === SIMULATION_MODES.SUBSISTENCE) {
         cashCost = 0;
         emergencyManualNote = ' (riego manual sin costo operativo)';
       } else {
@@ -442,10 +461,10 @@ export class FarmSimulation {
     this.economy.irrigationExpenses += cashCost;
 
     const perPlotWater = Math.round(waterCostL / targetPlots.length);
-    const moistureGain = this.modeConfig.moistureGainPerIrrigation;
 
     for (const p of targetPlots) {
-      this._applyPlotMoistureEffects(p, moistureGain, perPlotWater, 2);
+      const pCfg = this._getPlotModeConfig(p);
+      this._applyPlotMoistureEffects(p, pCfg.moistureGainPerIrrigation, perPlotWater, 2);
     }
 
     const targetLabel = plotId ? this.plots[plotId].name : 'la finca';
@@ -579,22 +598,24 @@ export class FarmSimulation {
     let autoIrrigatedPlotIds = [];
 
     for (const plot of Object.values(this.plots)) {
-      const evapRate = calculateDailyEvaporation(this.modeConfig, plot);
-      advancePlotDay(plot, this.modeConfig, evapRate);
+      const plotCfg = this._getPlotModeConfig(plot);
+      const evapRate = calculateDailyEvaporation(plotCfg, plot);
+      advancePlotDay(plot, plotCfg, evapRate);
     }
 
-    // Riego automático en modalidad Precisión cuando la humedad baja del umbral
+    // Riego automático en modalidad Precisión / Integral (solo lotes con sensor IoT) cuando la humedad baja del umbral
     if (this.modeConfig.supportsAutoIrrigation && this.autoIrrigationEnabled) {
       const needing = getPlotsNeedingAutoIrrigation(
         this.plots,
         this.autoIrrigationThreshold
-      );
+      ).filter((p) => this._getPlotModeConfig(p).supportsAutoIrrigation);
 
       if (needing.length > 0) {
-        const waterNeeded = this.modeConfig.waterPerIrrigation;
+        const iotCfg = this._getPlotModeConfig(needing[0]);
+        const waterNeeded = iotCfg.waterPerIrrigation;
         if (this.waterReserve >= waterNeeded) {
-          const opCost = this.budget >= this.modeConfig.irrigationCost
-            ? this.modeConfig.irrigationCost
+          const opCost = this.budget >= iotCfg.irrigationCost
+            ? iotCfg.irrigationCost
             : 0;
           this.waterReserve -= waterNeeded;
           this.waterConsumed += waterNeeded;
@@ -604,13 +625,14 @@ export class FarmSimulation {
 
           const perPlotL = Math.round(waterNeeded / needing.length);
           for (const plot of needing) {
-            plot.moisture = Math.min(100, plot.moisture + this.modeConfig.moistureGainPerIrrigation);
+            const pCfg = this._getPlotModeConfig(plot);
+            plot.moisture = Math.min(100, plot.moisture + pCfg.moistureGainPerIrrigation);
             plot.waterAppliedL += perPlotL;
             if (plot.isWithered && plot.moisture >= 15) {
               plot.isWithered = false;
               plot.health = Math.max(35, Math.min(100, plot.health + 12));
             }
-            const { projectedKg } = calculateProjectedYield(plot, this.modeConfig);
+            const { projectedKg } = calculateProjectedYield(plot, pCfg);
             plot.yieldKg = projectedKg;
             syncPlotStageAndVisual(plot);
           }
@@ -714,9 +736,10 @@ export class FarmSimulation {
       };
     }
 
+    const harvestCfg = this._getPlotModeConfig(target);
     const { projectedKg, effectivePricePerKg } = calculateProjectedYield(
       target,
-      this.modeConfig
+      harvestCfg
     );
     const earnings = Math.round(projectedKg * effectivePricePerKg);
 
@@ -728,7 +751,7 @@ export class FarmSimulation {
     const report = buildHarvestReport({
       harvestId: this.harvestSequence,
       plot: target,
-      modeConfig: this.modeConfig,
+      modeConfig: harvestCfg,
       harvestKg: projectedKg,
       earnings,
       effectivePricePerKg,
@@ -742,9 +765,9 @@ export class FarmSimulation {
 
     // Desgaste post-cosecha de fertilidad según conservación del suelo
     const postHarvestDrain =
-      this.mode === SIMULATION_MODES.ECOLOGICAL && target.composted
+      harvestCfg.id === SIMULATION_MODES.ECOLOGICAL && target.composted
         ? 0
-        : this.modeConfig.harvestFertilityDrain;
+        : harvestCfg.harvestFertilityDrain;
     target.fertility = Math.max(10, target.fertility - postHarvestDrain);
 
     // Resetear cama de cultivo lista para un nuevo ciclo
@@ -780,7 +803,8 @@ export class FarmSimulation {
       return { success: false, message: 'Parcela no encontrada' };
     }
 
-    const cost = this.modeConfig.compostCost;
+    const targetCfg = plotId ? this._getPlotModeConfig(this.plots[plotId]) : this.modeConfig;
+    const cost = targetCfg.compostCost;
     if (this.budget < cost) {
       return {
         success: false,
@@ -797,9 +821,10 @@ export class FarmSimulation {
       : Object.values(this.plots);
 
     for (const plot of targets) {
-      applyCompostEffectsToPlot(plot, this.modeConfig);
+      const pCfg = this._getPlotModeConfig(plot);
+      applyCompostEffectsToPlot(plot, pCfg);
       if (plot.isPlanted) {
-        const { projectedKg } = calculateProjectedYield(plot, this.modeConfig);
+        const { projectedKg } = calculateProjectedYield(plot, pCfg);
         plot.yieldKg = projectedKg;
       }
       syncPlotStageAndVisual(plot);
@@ -868,17 +893,19 @@ export class FarmSimulation {
       this.autoIrrigationThreshold
     );
 
+    const activeCfg = this._getPlotModeConfig(activePlot);
     const availableActions = {
       canPrepare: !activePlot.isPlanted && !activePlot.isPrepared,
-      canPlant: !activePlot.isPlanted && this.budget >= this.modeConfig.seedCost && (!this.requirePreparation || activePlot.isPrepared),
+      canPlant: !activePlot.isPlanted && this.budget >= activeCfg.seedCost && (!this.requirePreparation || activePlot.isPrepared),
       canIrrigate:
-        this.waterReserve >= this.waterConsumptionPerIrrigation &&
-        (this.budget >= this.modeConfig.irrigationCost ||
-          this.mode === SIMULATION_MODES.SUBSISTENCE),
+        this.waterReserve >= activeCfg.waterPerIrrigation &&
+        (this.budget >= activeCfg.irrigationCost ||
+          this.mode === SIMULATION_MODES.SUBSISTENCE ||
+          activeCfg.id === SIMULATION_MODES.SUBSISTENCE),
       canHarvest:
         activePlot.isPlanted &&
         (activePlot.daysGrown >= activePlot.daysToMature || activePlot.isWithered),
-      canCompost: this.budget >= this.modeConfig.compostCost,
+      canCompost: this.budget >= activeCfg.compostCost,
       canRefillWater:
         this.waterReserve < this.maxWater && this.budget >= this.modeConfig.waterRefillCost,
       canToggleAutoIrrigation: Boolean(this.modeConfig.supportsAutoIrrigation)
@@ -890,23 +917,25 @@ export class FarmSimulation {
       modeShortName: this.modeConfig.shortName,
       modeBadge: this.modeConfig.badge,
       modeDescription: this.modeConfig.description,
+      activePlotMode: activeCfg.id,
+      activePlotModeName: activeCfg.shortName,
       day: this.day,
       activePlotId: this.activePlotId,
       budget: this.budget,
       waterReserve: this.waterReserve,
       maxWater: this.maxWater,
       waterConsumed: this.waterConsumed,
-      waterConsumptionPerIrrigation: this.waterConsumptionPerIrrigation,
+      waterConsumptionPerIrrigation: activeCfg.waterPerIrrigation,
       soilQuality: this.soilQuality,
       fertility: this.soilQuality,
       moisture: activePlot.moisture,
       averageMoisture,
       cropHealth,
       harvestedTotalKg: this.harvestedTotalKg,
-      seedCost: this.modeConfig.seedCost,
-      irrigationCost: this.modeConfig.irrigationCost,
-      compostCost: this.modeConfig.compostCost,
-      evaporationRate: calculateDailyEvaporation(this.modeConfig, activePlot),
+      seedCost: activeCfg.seedCost,
+      irrigationCost: activeCfg.irrigationCost,
+      compostCost: activeCfg.compostCost,
+      evaporationRate: calculateDailyEvaporation(activeCfg, activePlot),
       autoIrrigationEnabled: this.autoIrrigationEnabled,
       autoIrrigationThreshold: this.autoIrrigationThreshold,
       requirePreparation: Boolean(this.requirePreparation),

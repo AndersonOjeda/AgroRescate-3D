@@ -35,7 +35,8 @@ export function formatCOP(value, { withCurrency = false, showPlus = false } = {}
 export const SIMULATION_MODES = Object.freeze({
   SUBSISTENCE: 'subsistence',
   PRECISION: 'precision',
-  ECOLOGICAL: 'ecological'
+  ECOLOGICAL: 'ecological',
+  INTEGRATED: 'integrated'
 });
 
 export const CROP_STAGES = Object.freeze({
@@ -143,6 +144,35 @@ export const MODE_CONFIGS = Object.freeze({
     organicPriceMultiplier: 1.25,
     compostMoistureBonus: 4,
     compostFertilityGain: 15
+  },
+  [SIMULATION_MODES.INTEGRATED]: {
+    id: SIMULATION_MODES.INTEGRATED,
+    name: 'Finca Integral (3 Modelos en 1)',
+    shortName: '3 en 1 Integral',
+    badge: '3 Lotes · 3 Modelos en Vivo',
+    description:
+      'Opera las 3 parcelas en paralelo con su modelo real: P1 Subsistencia (manual), P2 Precisión IoT (sensor automático) y P3 Ecológica (compostaje).',
+    primaryPlotId: 'plot_2',
+    initialBudget: 450000,
+    initialWater: 1200,
+    maxWater: 1500,
+    initialSoilQuality: 78,
+    waterPerIrrigation: 80,
+    moistureGainPerIrrigation: 35,
+    evaporationRate: 16,
+    dailyFertilityDrain: 2,
+    harvestFertilityDrain: 3,
+    seedCost: 32000,
+    irrigationCost: 1000,
+    compostCost: 0,
+    waterRefillLiters: 300,
+    waterRefillCost: 1500,
+    supportsSensor: true,
+    supportsAutoIrrigation: true,
+    autoIrrigationThreshold: 45,
+    organicPriceMultiplier: 1.25,
+    compostMoistureBonus: 4,
+    compostFertilityGain: 15
   }
 });
 
@@ -189,7 +219,13 @@ const MODE_ALIASES = Object.freeze({
   precisión: SIMULATION_MODES.PRECISION,
   ecological: SIMULATION_MODES.ECOLOGICAL,
   ecologica: SIMULATION_MODES.ECOLOGICAL,
-  ecológica: SIMULATION_MODES.ECOLOGICAL
+  ecológica: SIMULATION_MODES.ECOLOGICAL,
+  integrated: SIMULATION_MODES.INTEGRATED,
+  integral: SIMULATION_MODES.INTEGRATED,
+  mixto: SIMULATION_MODES.INTEGRATED,
+  mixta: SIMULATION_MODES.INTEGRATED,
+  todos: SIMULATION_MODES.INTEGRATED,
+  '3en1': SIMULATION_MODES.INTEGRATED
 });
 
 /**

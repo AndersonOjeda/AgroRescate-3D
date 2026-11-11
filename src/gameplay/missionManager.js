@@ -17,10 +17,16 @@
 export const MODE_SPECIAL_ACTION = {
   subsistence: { kind: 'manualIrrigation', label: 'Riega a mano 2 veces con el balde (recurso limitado)' },
   precision: { kind: 'sensor', label: 'Consulta el sensor IoT o ajusta el umbral de riego automático' },
-  ecological: { kind: 'compost', label: 'Aplica compost orgánico desde la compostera' }
+  ecological: { kind: 'compost', label: 'Aplica compost orgánico desde la compostera' },
+  integrated: { kind: 'integrated', label: 'Ajusta el umbral IoT (P2) o aplica compost orgánico (P3)' }
 };
 
-const PRIMARY_PLOT = { subsistence: 'plot_1', precision: 'plot_2', ecological: 'plot_3' };
+const PRIMARY_PLOT = {
+  subsistence: 'plot_1',
+  precision: 'plot_2',
+  ecological: 'plot_3',
+  integrated: 'plot_2'
+};
 
 export function buildMissions(mode) {
   const special = MODE_SPECIAL_ACTION[mode] || MODE_SPECIAL_ACTION.subsistence;
@@ -108,6 +114,9 @@ export class MissionManager {
     if (!event || !event.type) return false;
     switch (event.type) {
       case 'enteredPlot':
+        if (this.mode === 'integrated') {
+          return event.plotId ? this._complete('reachPlot') : false;
+        }
         return event.plotId === this.primaryPlotId ? this._complete('reachPlot') : false;
       case 'soilPrepared': {
         const c1 = this._complete('reachPlot');
@@ -128,10 +137,18 @@ export class MissionManager {
         const expected = MODE_SPECIAL_ACTION[this.mode]?.kind;
         const ok =
           event.kind === expected ||
-          (this.mode === 'precision' && ['sensor', 'threshold', 'autoIrrigation'].includes(event.kind));
+          (this.mode === 'precision' && ['sensor', 'threshold', 'autoIrrigation'].includes(event.kind)) ||
+          (this.mode === 'integrated' && ['compost', 'sensor', 'threshold', 'autoIrrigation'].includes(event.kind));
         return ok ? this._complete('special') : false;
       }
       case 'dayAdvanced': {
+        if (this.mode === 'integrated') {
+          const anyMature = Object.values(event.state?.plots || {}).some(
+            (pl) => pl && pl.isPlanted && pl.daysGrown >= pl.daysToMature && !pl.isWithered
+          );
+          if (anyMature) return this._complete('mature');
+          return false;
+        }
         const plot = event.state?.plots?.[this.primaryPlotId];
         if (plot && plot.isPlanted && plot.daysGrown >= plot.daysToMature && !plot.isWithered) {
           return this._complete('mature');

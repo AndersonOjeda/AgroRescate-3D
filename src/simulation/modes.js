@@ -75,6 +75,10 @@ export function computeSensorTelemetry(
   for (const [plotId, plot] of Object.entries(plots)) {
     const status = classifyMoistureStatus(plot.moisture);
     const deficitPct = Math.max(0, targetMoisture - plot.moisture);
+    const plotHasIoT =
+      modeConfig.id === SIMULATION_MODES.INTEGRATED
+        ? plot.modeAffinity === SIMULATION_MODES.PRECISION
+        : Boolean(modeConfig.supportsAutoIrrigation);
     readings[plotId] = {
       plotId,
       moisture: plot.moisture,
@@ -84,7 +88,7 @@ export function computeSensorTelemetry(
       statusLabel: status.label,
       optimalRange: '45% – 85%',
       deficitPct,
-      needsIrrigation: plot.isPlanted && plot.moisture < thresholdMoisture,
+      needsIrrigation: plotHasIoT && plot.isPlanted && plot.moisture < thresholdMoisture,
       recommendation: status.recommendation
     };
   }

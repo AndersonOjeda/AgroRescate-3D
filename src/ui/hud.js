@@ -26,7 +26,8 @@ const LIFECYCLE_STEPS = [
 const MODE_LABELS = {
   [SIMULATION_MODES.SUBSISTENCE]: 'Subsistencia',
   [SIMULATION_MODES.PRECISION]: 'Precisión IoT',
-  [SIMULATION_MODES.ECOLOGICAL]: 'Ecológica'
+  [SIMULATION_MODES.ECOLOGICAL]: 'Ecológica',
+  [SIMULATION_MODES.INTEGRATED]: '3 en 1 Integral'
 };
 
 /**
@@ -506,7 +507,8 @@ export class HUD {
     for (const modeId of [
       SIMULATION_MODES.SUBSISTENCE,
       SIMULATION_MODES.PRECISION,
-      SIMULATION_MODES.ECOLOGICAL
+      SIMULATION_MODES.ECOLOGICAL,
+      SIMULATION_MODES.INTEGRATED
     ]) {
       const btn = d.createElement('button');
       btn.type = 'button';
@@ -1256,7 +1258,42 @@ export class HUD {
     const refs = this.panelRefs;
     const reading = state.sensor?.readings?.[activePlot.id];
 
-    if (state.mode === SIMULATION_MODES.PRECISION) {
+    const effectiveMode = state.mode === SIMULATION_MODES.INTEGRATED
+      ? (activePlot.modeAffinity || SIMULATION_MODES.SUBSISTENCE)
+      : state.mode;
+
+    if (state.mode === SIMULATION_MODES.INTEGRATED) {
+      refs.autoBtn.style.display = 'inline-block';
+      refs.autoBtn.textContent = state.autoIrrigationEnabled
+        ? 'IoT P2: ON'
+        : 'IoT P2: OFF';
+      refs.autoBtn.classList.toggle('off', !state.autoIrrigationEnabled);
+      if (refs.thresholdRow) {
+        refs.thresholdRow.style.display = effectiveMode === SIMULATION_MODES.PRECISION ? 'flex' : 'none';
+        const t = state.autoIrrigationThreshold ?? 45;
+        refs.thresholdSlider.value = String(t);
+        refs.thresholdVal.textContent = `${t}%`;
+      }
+      if (effectiveMode === SIMULATION_MODES.PRECISION) {
+        refs.modeBoxTitle.textContent = '📡 Lote P2 · Precisión IoT (En 3 en 1)';
+        const statusText = reading
+          ? `${reading.statusLabel} (${reading.moisture}%). ${reading.recommendation}`
+          : 'Sensor IoT activo en P2.';
+        const autoLog = state.sensor?.lastAutoAction ? ` · ${state.sensor.lastAutoAction}` : '';
+        refs.modeBoxText.textContent = `${statusText}${autoLog}`;
+      } else if (effectiveMode === SIMULATION_MODES.ECOLOGICAL) {
+        refs.modeBoxTitle.textContent = '♻️ Lote P3 · Ecológica (En 3 en 1)';
+        const evap = state.evaporationRate ?? 11;
+        const compostState = activePlot.composted
+          ? `Cobertura orgánica activa (evap. ${evap}%/día, prima +25%).`
+          : `Sin compost aún (evap. ${evap}%/día). En P3 el compost es gratis.`;
+        refs.modeBoxText.textContent = `${compostState} Aplicaciones: ${state.compostApplications ?? 0}.`;
+      } else {
+        refs.modeBoxTitle.textContent = '🪣 Lote P1 · Subsistencia (En 3 en 1)';
+        refs.modeBoxText.textContent =
+          `Riego manual tradicional (${state.waterConsumptionPerIrrigation} L/riego) y evap. ${state.evaporationRate ?? 20}%/día. Reserva global: ${state.waterReserve} L.`;
+      }
+    } else if (state.mode === SIMULATION_MODES.PRECISION) {
       refs.modeBoxTitle.textContent = '📡 Sensor Virtual IoT';
       refs.autoBtn.style.display = 'inline-block';
       refs.autoBtn.textContent = state.autoIrrigationEnabled

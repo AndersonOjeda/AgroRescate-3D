@@ -112,6 +112,12 @@
   border-color: rgba(16, 185, 129, 0.45);
 }
 
+.agro-hud-mode-badge.mode-integrated {
+  background: rgba(168, 85, 247, 0.22);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.45);
+}
+
 .agro-hud-demo-btn {
   background: rgba(16, 185, 129, 0.16);
   border: 1px solid rgba(16, 185, 129, 0.4);
@@ -132,7 +138,7 @@
 
 .agro-hud-mode-pills {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 5px;
 }
 

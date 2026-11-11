@@ -741,8 +741,8 @@ kbd {
 
 .mode-select-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  gap: 12px;
   margin-bottom: 18px;
 }
 
@@ -766,6 +766,7 @@ kbd {
 .mode-card.subsistence { border-top: 4px solid #f59e0b; }
 .mode-card.precision { border-top: 4px solid #3b82f6; }
 .mode-card.ecological { border-top: 4px solid #10b981; }
+.mode-card.integrated { border-top: 4px solid #a855f7; }
 
 .mode-card.active {
   border-color: #34d399;

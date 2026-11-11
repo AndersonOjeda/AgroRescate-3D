@@ -118,4 +118,41 @@ describe('Ciclo Completo, Misiones y Resultados', () => {
     expect(last.stoppedReason).toBe('target_reached');
     expect(sim.getPlotsNeedingRealtimeAutoIrrigation()).toEqual([]);
   });
+
+  it('permite operar la modalidad Finca Integral (3 en 1) con reglas reales independientes por lote sin restringir lotes en modos individuales', () => {
+    // 1. En un modo individual, las 3 parcelas siguen siendo accesibles sin bloqueo
+    const singleSim = new FarmSimulation('subsistence', { registerAsActive: false });
+    expect(singleSim.plant('plot_2').success).toBe(true);
+    expect(singleSim.plant('plot_3').success).toBe(true);
+
+    // 2. En modo Integral (3 en 1), cada parcela conserva su fertilidad, costos y automatización propios
+    const sim = new FarmSimulation('integrated', { registerAsActive: false });
+    const start = sim.getState();
+    expect(start.mode).toBe('integrated');
+    expect(start.plots.plot_1.fertility).toBe(60);
+    expect(start.plots.plot_2.fertility).toBe(80);
+    expect(start.plots.plot_3.fertility).toBe(95);
+
+    // Sembrar los 3 lotes cobra $22.000 + $45.000 + $32.000 = $99.000 COP
+    sim.plant('plot_1');
+    sim.plant('plot_2');
+    sim.plant('plot_3');
+    expect(sim.getState().economy.seedExpenses).toBe(99000);
+
+    // Compost en P3 es gratis, mientras en P1 cuesta $18.000
+    expect(sim.applyCompost('plot_3').success).toBe(true);
+    expect(sim.getState().economy.compostExpenses).toBe(0);
+    expect(sim.applyCompost('plot_1').success).toBe(true);
+    expect(sim.getState().economy.compostExpenses).toBe(18000);
+
+    // Si los 3 lotes bajan a 30% de humedad, solo P2 (Precisión IoT) dispara riego automático
+    sim.plots.plot_1.moisture = 30;
+    sim.plots.plot_2.moisture = 30;
+    sim.plots.plot_3.moisture = 30;
+    expect(sim.getPlotsNeedingRealtimeAutoIrrigation()).toEqual(['plot_2']);
+
+    const dayRes = sim.advanceDay();
+    expect(dayRes.autoTriggered).toBe(true);
+    expect(dayRes.autoIrrigatedPlotIds).toEqual(['plot_2']);
+  });
 });

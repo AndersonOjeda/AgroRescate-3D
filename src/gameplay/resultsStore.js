@@ -6,7 +6,8 @@
 const MODE_LABELS = {
   subsistence: 'Subsistencia',
   precision: 'Precisión',
-  ecological: 'Ecológica'
+  ecological: 'Ecológica',
+  integrated: '3 en 1 Integral'
 };
 
 const EDUCATIONAL_NOTES = {
@@ -15,7 +16,9 @@ const EDUCATIONAL_NOTES = {
   precision:
     'La agricultura de precisión usa datos (aquí, un sensor virtual) para decidir cuándo regar. Regar solo bajo el umbral reduce el desperdicio de agua, aunque la tecnología implica costos.',
   ecological:
-    'La agricultura ecológica busca conservar la salud del suelo. El compost mejora la fertilidad y la retención de humedad en este modelo educativo, reduciendo el desgaste del suelo tras la cosecha.'
+    'La agricultura ecológica busca conservar la salud del suelo. El compost mejora la fertilidad y la retención de humedad en este modelo educativo, reduciendo el desgaste del suelo tras la cosecha.',
+  integrated:
+    'El modo Finca Integral (3 en 1) permite gestionar las tres parcelas simultáneamente con sus reglas reales: riego manual tradicional en P1, sensor IoT automatizado en P2 y compostaje regenerativo en P3.'
 };
 
 /**
