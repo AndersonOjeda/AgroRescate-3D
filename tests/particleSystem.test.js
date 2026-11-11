@@ -37,4 +37,34 @@ describe('ParticleSystem — Riego por Aspersión y Pooling', () => {
     expect(particles.isRaining).toBe(true);
     expect(particles.rainPoints.visible).toBe(true);
   });
+
+  it('debe permitir reubicar emisores a coordenadas GLB y regar parcelas selectivamente', () => {
+    const scene = new THREE.Scene();
+    const particles = new ParticleSystem(scene);
+    const initialBufferRef = particles.sprinklerGeometry.attributes.position.array;
+
+    particles.setEmitters(
+      [
+        { x: 10, y: 1.4, z: -10 },
+        { x: -10, y: 1.4, z: -10 },
+        { x: -10, y: 1.4, z: 10 }
+      ],
+      3.4
+    );
+
+    expect(particles.emitters[0].x).toBe(10);
+    expect(particles.emitters[0].z).toBe(-10);
+    expect(particles.emitters[1].x).toBe(-10);
+    expect(particles.emitters[2].z).toBe(10);
+
+    // Activar solo el emisor 1 (Parcela 2)
+    particles.setSpraying(true, [1]);
+    particles.update(0.016);
+
+    expect(particles.activeEmitters).toEqual([false, true, false]);
+    // Emisor 0 permanece oculto bajo el suelo (-100) y emisor 1 activo arriba (> 0)
+    expect(particles.sprinklerPositions[1]).toBe(-100);
+    expect(particles.sprinklerPositions[particles.particlesPerSprinkler * 3 + 1]).toBeGreaterThan(0);
+    expect(particles.sprinklerGeometry.attributes.position.array).toBe(initialBufferRef);
+  });
 });

@@ -21,6 +21,8 @@ export class ParticleSystem {
       new THREE.Vector3(0, 1.3, 14),   // Parcela 2
       new THREE.Vector3(12, 1.3, 8)    // Parcela 3
     ];
+    this.activeEmitters = [true, true, true];
+    this.emitterSpreadRadius = 0;
 
     // Buffers pre-asignados
     this.sprinklerPositions = new Float32Array(this.totalSprinklerParticles * 3);
@@ -39,9 +41,9 @@ export class ParticleSystem {
 
     this.sprinklerMaterial = new THREE.PointsMaterial({
       color: 0x67e8f9,
-      size: 0.16,
+      size: 0.22,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
@@ -125,15 +127,17 @@ export class ParticleSystem {
 
   _resetSprinklerParticle(idx, emitter) {
     const p3 = idx * 3;
-    // Posición inicial en el emisor
-    this.sprinklerPositions[p3] = emitter.x;
+    // Posición inicial distribuida sobre la parcela del emisor
+    const offsetAngle = Math.random() * Math.PI * 2;
+    const offsetDist = this.emitterSpreadRadius > 0 ? Math.random() * this.emitterSpreadRadius : 0;
+    this.sprinklerPositions[p3] = emitter.x + Math.cos(offsetAngle) * offsetDist;
     this.sprinklerPositions[p3 + 1] = emitter.y;
-    this.sprinklerPositions[p3 + 2] = emitter.z;
+    this.sprinklerPositions[p3 + 2] = emitter.z + Math.sin(offsetAngle) * offsetDist;
 
     // Velocidad con ángulo radial y elevación parabólica
     const angle = Math.random() * Math.PI * 2;
-    const speed = 2.5 + Math.random() * 3.5;
-    const upwardSpeed = 2.0 + Math.random() * 3.0;
+    const speed = 2.5 + Math.random() * 4.0;
+    const upwardSpeed = 2.6 + Math.random() * 3.2;
 
     this.sprinklerVelocities[p3] = Math.cos(angle) * speed;
     this.sprinklerVelocities[p3 + 1] = upwardSpeed;
@@ -143,9 +147,17 @@ export class ParticleSystem {
     this.sprinklerMaxLifetimes[idx] = 1.0 + Math.random() * 0.8;
   }
 
-  _hideSprinklerParticles() {
-    for (let i = 0; i < this.totalSprinklerParticles; i++) {
-      this.sprinklerPositions[i * 3 + 1] = -100; // Debajo del suelo
+  _hideSprinklerParticles(emitterIndex = null) {
+    if (emitterIndex === null) {
+      for (let i = 0; i < this.totalSprinklerParticles; i++) {
+        this.sprinklerPositions[i * 3 + 1] = -100; // Debajo del suelo
+      }
+    } else {
+      const startIdx = emitterIndex * this.particlesPerSprinkler;
+      const endIdx = startIdx + this.particlesPerSprinkler;
+      for (let i = startIdx; i < endIdx; i++) {
+        this.sprinklerPositions[i * 3 + 1] = -100;
+      }
     }
     this.sprinklerGeometry.attributes.position.needsUpdate = true;
   }
@@ -161,12 +173,59 @@ export class ParticleSystem {
   }
 
   /**
-   * Activa o desactiva el riego por aspersión
+   * Actualiza dinámicamente las coordenadas de los 3 aspersores (por ejemplo al cargar finca.glb)
+   * sin reasignar los buffers Float32Array.
+   * @param {Array<{ x: number, y?: number, z: number }>} coordsList
+   * @param {number} [spreadRadius=0]
    */
-  setSpraying(active) {
+  setEmitters(coordsList, spreadRadius = 0) {
+    if (!Array.isArray(coordsList)) return;
+    this.emitterSpreadRadius = Math.max(0, Number(spreadRadius) || 0);
+    for (let s = 0; s < this.sprinklerCount; s++) {
+      const cfg = coordsList[s];
+      if (!cfg) continue;
+      this.emitters[s].set(cfg.x, cfg.y ?? 1.3, cfg.z);
+    }
+    this._initSprinklerParticles();
+    if (!this.isSpraying) {
+      this._hideSprinklerParticles();
+    } else {
+      this.sprinklerGeometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Activa o desactiva el riego por aspersión (opcionalmente filtrando emisores por índice)
+   * @param {boolean} active
+   * @param {number[]|null} [emitterIndices]
+   */
+  setSpraying(active, emitterIndices = null) {
     this.isSpraying = active;
     if (!active) {
+      this.activeEmitters.fill(false);
       this._hideSprinklerParticles();
+      return;
+    }
+
+    if (Array.isArray(emitterIndices) && emitterIndices.length > 0) {
+      for (let s = 0; s < this.sprinklerCount; s++) {
+        const enabled = emitterIndices.includes(s);
+        this.activeEmitters[s] = enabled;
+        if (!enabled) {
+          this._hideSprinklerParticles(s);
+        } else {
+          const startIdx = s * this.particlesPerSprinkler;
+          const endIdx = startIdx + this.particlesPerSprinkler;
+          for (let i = startIdx; i < endIdx; i++) {
+            this._resetSprinklerParticle(i, this.emitters[s]);
+          }
+        }
+      }
+      this.sprinklerGeometry.attributes.position.needsUpdate = true;
+    } else {
+      this.activeEmitters.fill(true);
+      this._initSprinklerParticles();
+      this.sprinklerGeometry.attributes.position.needsUpdate = true;
     }
   }
 
@@ -224,6 +283,7 @@ export class ParticleSystem {
       const posArray = posAttr.array;
 
       for (let s = 0; s < this.sprinklerCount; s++) {
+        if (!this.activeEmitters[s]) continue;
         const emitter = this.emitters[s];
         const startIdx = s * this.particlesPerSprinkler;
         const endIdx = startIdx + this.particlesPerSprinkler;

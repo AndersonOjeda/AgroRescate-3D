@@ -36,13 +36,25 @@ export class AudioSystem {
     this.footstepAudio = new THREE.Audio(this.listener);
     this.footstepAudio.setVolume(0.35);
 
-    // Audio de Ambiente Rural (brisa y campo)
+    // Audio de Ambiente Rural sutil (brisa y campo)
     this.ambientAudio = new THREE.Audio(this.listener);
     this.ambientAudio.setLoop(true);
-    this.ambientAudio.setVolume(0.28);
+    this.ambientAudio.setVolume(0.08);
+
+    // Música ambiental de fondo en bucle (/audio/bgm.mp3 vía streaming HTMLAudioElement con respaldo sintético)
+    this.isMusicEnabled = true;
+    this.musicPath = '/audio/bgm.mp3';
+    this.musicVolume = 0.45;
+    this.musicElement = null;
+    this._musicFailed = false;
+    this.ambientMusic = new THREE.Audio(this.listener);
+    this.ambientMusic.setLoop(true);
+    this.ambientMusic.setVolume(this.musicVolume);
 
     this.loadedBuffers = {};
+    this._musicLoadPromise = null;
     this._loadAudioAssets();
+    this._setupMusicElement();
   }
 
   /**
@@ -115,6 +127,179 @@ export class AudioSystem {
   }
 
   /**
+   * Carga la música de fondo (/audio/bgm.mp3) o genera respaldo sintético si no está disponible.
+   */
+  async _initAmbientMusic() {
+    if (this._musicLoadPromise) return this._musicLoadPromise;
+
+    this._musicLoadPromise = (async () => {
+      let buffer = null;
+      if (this.audioLoader && this.musicPath) {
+        try {
+          buffer = await this._loadBuffer(this.musicPath);
+        } catch (err) {
+          console.warn(`[AudioSystem] No se pudo cargar ${this.musicPath}, usando respaldo sintético:`, err?.message || err);
+        }
+      }
+
+      if (!buffer) {
+        buffer = this._createAmbientMusicBuffer();
+      }
+
+      if (buffer) {
+        this.loadedBuffers.music = buffer;
+        this.ambientMusic.setBuffer(buffer);
+        if (this.isAudioUnlocked && !this.isMuted && this.isMusicEnabled && !this.ambientMusic.isPlaying) {
+          this.ambientMusic.play();
+        }
+      }
+
+      return buffer;
+    })();
+
+    return this._musicLoadPromise;
+  }
+
+  /**
+   * Genera un bucle estéreo de 16 segundos con acordes cálidos y notas suaves de arpa.
+   */
+  _createAmbientMusicBuffer() {
+    const ctx = this.listener?.context;
+    if (!ctx || typeof ctx.createBuffer !== 'function') return null;
+
+    const sampleRate = ctx.sampleRate || 44100;
+    const loopDuration = 16;
+    const barDuration = 4;
+    const totalSamples = Math.floor(sampleRate * loopDuration);
+    const buffer = ctx.createBuffer(2, totalSamples, sampleRate);
+    const left = buffer.getChannelData(0);
+    const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+
+    // Progresión apacible: Cmaj9 -> Am9 -> Fmaj9 -> G6
+    const progression = [
+      { pad: [130.81, 196.0, 293.66, 329.63], melody: [523.25, 659.25, 587.33, 440.0, 659.25] },
+      { pad: [110.0, 164.81, 246.94, 261.63], melody: [440.0, 523.25, 659.25, 587.33, 523.25] },
+      { pad: [87.31, 130.81, 196.0, 220.0], melody: [523.25, 440.0, 587.33, 523.25, 392.0] },
+      { pad: [98.0, 146.83, 220.0, 246.94], melody: [392.0, 493.88, 587.33, 659.25, 587.33] }
+    ];
+    const noteStarts = [0.2, 0.95, 1.7, 2.45, 3.15];
+
+    for (let i = 0; i < totalSamples; i++) {
+      const t = i / sampleRate;
+      const barIndex = Math.min(3, Math.floor(t / barDuration));
+      const barT = t - barIndex * barDuration;
+      const chord = progression[barIndex];
+
+      // Envolvente suave por compás (cero en los bordes para bucle sin chasquidos)
+      const padEnv = Math.pow(Math.sin((Math.PI * barT) / barDuration), 0.75);
+      let padSample = 0;
+      for (let k = 0; k < chord.pad.length; k++) {
+        const freq = chord.pad[k];
+        const voice = Math.sin(2 * Math.PI * freq * barT) + 0.18 * Math.sin(2 * Math.PI * freq * 2 * barT);
+        padSample += voice * 0.042;
+      }
+      padSample *= padEnv;
+
+      // Arpegio tipo kalimba/arpa con ligera apertura estéreo
+      let arpLeft = 0;
+      let arpRight = 0;
+      for (let n = 0; n < noteStarts.length; n++) {
+        const dt = barT - noteStarts[n];
+        if (dt >= 0 && dt < 0.85) {
+          const attack = Math.min(1, dt / 0.025);
+          const tailFade = Math.min(1, (0.85 - dt) / 0.08);
+          const env = attack * tailFade * Math.exp(-dt * 3.6);
+          const freq = chord.melody[n];
+          const tone = (Math.sin(2 * Math.PI * freq * dt) + 0.25 * Math.sin(2 * Math.PI * freq * 2 * dt)) * env * 0.075;
+          const pan = n % 2 === 0 ? 0.38 : 0.62;
+          arpLeft += tone * (1 - pan * 0.5);
+          arpRight += tone * (0.5 + pan * 0.5);
+        }
+      }
+
+      // Brisa de fondo casi imperceptible modulada suavemente
+      const breezeL = Math.sin(2 * Math.PI * 0.125 * t) * 0.008;
+      const breezeR = Math.cos(2 * Math.PI * 0.125 * t) * 0.008;
+
+      left[i] = Math.max(-0.5, Math.min(0.5, padSample + arpLeft + breezeL));
+      right[i] = Math.max(-0.5, Math.min(0.5, padSample + arpRight + breezeR));
+    }
+
+    return buffer;
+  }
+
+  /**
+   * Inicializa la música de fondo en streaming con HTMLAudioElement para inicio instantáneo.
+   * Si el navegador no la soporta o falla al cargar, usa AudioLoader + respaldo sintético.
+   */
+  _setupMusicElement() {
+    if (typeof globalThis.Audio === 'function') {
+      try {
+        const audioEl = new globalThis.Audio(this.musicPath);
+        audioEl.loop = true;
+        audioEl.preload = 'auto';
+        audioEl.volume = this.musicVolume;
+        audioEl.addEventListener?.('error', () => {
+          this._musicFailed = true;
+          console.warn(`[AudioSystem] Error al cargar ${this.musicPath} en <audio>, activando respaldo.`);
+          this._initAmbientMusic();
+        });
+        this.musicElement = audioEl;
+        return;
+      } catch (err) {
+        console.warn(`[AudioSystem] No se pudo crear Audio(${this.musicPath}):`, err?.message || err);
+      }
+    }
+    this._initAmbientMusic();
+  }
+
+  /**
+   * Indica si la música de fondo está reproduciéndose actualmente.
+   */
+  isMusicPlaying() {
+    if (this.musicElement && !this._musicFailed) {
+      return !this.musicElement.paused;
+    }
+    return Boolean(this.ambientMusic?.isPlaying);
+  }
+
+  /**
+   * Inicia la música de fondo (/audio/bgm.mp3) si no está silenciada.
+   */
+  startAmbientMusic() {
+    if (this.isMuted || !this.isMusicEnabled) return false;
+
+    if (this.musicElement && !this._musicFailed) {
+      this.musicElement.loop = true;
+      this.musicElement.volume = this.musicVolume;
+      if (!this.musicElement.paused) return true;
+      try {
+        const playResult = this.musicElement.play();
+        if (playResult && typeof playResult.catch === 'function') {
+          playResult.catch((err) => {
+            console.warn('[AudioSystem] Reproducción de música pendiente de interacción:', err?.message || err);
+          });
+        }
+        return true;
+      } catch (err) {
+        console.warn('[AudioSystem] Error reproduciendo música de fondo:', err);
+        return false;
+      }
+    }
+
+    if (!this.listener?.context) return false;
+    if (!this.ambientMusic.buffer) {
+      this._initAmbientMusic();
+      return false;
+    }
+    if (!this.ambientMusic.isPlaying) {
+      this.ambientMusic.play();
+      return true;
+    }
+    return Boolean(this.ambientMusic.isPlaying);
+  }
+
+  /**
    * Vincula el audio posicional al mesh de la bomba de agua o aspersor
    */
   attachPositionalWater(targetMesh) {
@@ -124,9 +309,14 @@ export class AudioSystem {
   }
 
   /**
-   * Reanuda el contexto de audio tras la primera interacción del usuario (requisito de navegadores)
+   * Reanuda el contexto de audio y dispara la música en el mismo gesto del usuario
    */
   async unlockAudio() {
+    // Disparar <audio> síncronamente dentro de la interacción del usuario antes del await
+    if (!this.isMuted && this.isMusicEnabled) {
+      this.startAmbientMusic();
+    }
+
     const ctx = this.listener.context;
     if (ctx && ctx.state === 'suspended') {
       try {
@@ -137,6 +327,10 @@ export class AudioSystem {
       }
     } else {
       this.isAudioUnlocked = true;
+    }
+
+    if (this.isAudioUnlocked && !this.isMuted && this.isMusicEnabled && !this.isMusicPlaying()) {
+      this.startAmbientMusic();
     }
     return this.isAudioUnlocked;
   }
@@ -191,13 +385,12 @@ export class AudioSystem {
    * Reproduce el sonido de una pisada del jugador con modulación sutil de tono
    */
   playFootstep() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.isAudioUnlocked) return;
     if (this.footstepAudio && this.footstepAudio.buffer) {
       if (this.footstepAudio.isPlaying) {
         this.footstepAudio.stop();
       }
-      // Modulación sutil de volumen y tono para realismo
-      this.footstepAudio.setVolume(0.28 + Math.random() * 0.12);
+      this.footstepAudio.setVolume(0.26 + Math.random() * 0.12);
       this.footstepAudio.playbackRate = 0.95 + Math.random() * 0.15;
       this.footstepAudio.play();
     }
@@ -219,9 +412,16 @@ export class AudioSystem {
     if (this.isMuted) {
       if (this.positionalWater.isPlaying) this.positionalWater.pause();
       if (this.globalSuccess.isPlaying) this.globalSuccess.stop();
-      if (this.ambientAudio.isPlaying) this.ambientAudio.pause();
+      if (this.footstepAudio?.isPlaying) this.footstepAudio.stop();
+      if (this.ambientAudio?.isPlaying) this.ambientAudio.pause();
+      if (this.musicElement && !this.musicElement.paused) this.musicElement.pause();
+      if (this.ambientMusic.isPlaying) this.ambientMusic.pause();
     } else {
-      if (this.ambientAudio.buffer) this.ambientAudio.play();
+      this.unlockAudio();
+      this.startAmbientMusic();
+      if (this.ambientAudio?.buffer && !this.ambientAudio.isPlaying) {
+        this.ambientAudio.play();
+      }
     }
     return !this.isMuted;
   }
