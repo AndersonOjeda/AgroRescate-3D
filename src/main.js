@@ -10,82 +10,113 @@ import { ParticleSystem } from './systems/particleSystem.js';
 import { AudioSystem } from './systems/audioSystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader } from './world/farmLoader.js';
+import { MultimediaStation } from './world/multimediaStation.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
+import { DebugGUI } from './ui/debugGui.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
+ * Integra todos los módulos y laboratorios de las 12 semanas de Programación de Entornos Multimedia
  */
 async function bootstrap() {
-  console.log('🌾 Iniciando AgroRescate 3D...');
+  console.log('🌾 Iniciando AgroRescate 3D — Universidad Cooperativa de Colombia...');
 
-  // 1. Elementos Base de Three.js
+  // 1. Elementos Base de Three.js (Semanas 1 y 4)
   const canvas = document.getElementById('webgl-canvas');
-  const { scene } = createScene();
+  const sceneElements = createScene();
+  const scene = sceneElements.scene;
   const camera = createCamera();
   const { renderer, handleResize } = createRenderer(canvas);
   const gameLoop = new GameLoop();
 
   window.addEventListener('resize', () => handleResize(camera));
 
-  // 2. HUD e Interfaces
+  // 2. HUD e Interfaces (Semana 9 y 10)
   const hud = new HUD();
   hud.updateLoadingProgress(10, 'Inicializando motor 3D y sistemas...');
 
-  // 3. Físicas con Cannon-es
+  // 3. Físicas con Cannon-es (Semanas 5, 6 y 10)
   const physicsWorld = new PhysicsWorld(scene);
 
-  // Crear cajas agrícolas físicas iniciales en el almacén
-  physicsWorld.createCrate({ id: 'crate_1', x: 13, y: 1.0, z: -6, mass: 5, color: 0xd97706 });
-  physicsWorld.createCrate({ id: 'crate_2', x: 13, y: 2.0, z: -6, mass: 5, color: 0xb45309 });
-  physicsWorld.createCrate({ id: 'crate_3', x: 14, y: 1.0, z: -6, mass: 5, color: 0xd97706 });
-
-  // 4. Sistemas de Partículas y Audio
+  // 4. Sistemas de Partículas (Semanas 4, 9, 10) y Audio Espacial (Semanas 3, 9, 10)
   const particleSystem = new ParticleSystem(scene);
   const audioSystem = new AudioSystem(camera);
 
-  // 5. Triggers e Interacciones
+  // 5. Triggers e Interacciones (Semanas 6 y 9)
   const triggerSystem = new TriggerSystem();
   const interactionSystem = new InteractionSystem();
 
-  // 6. Navegación del Jugador y Efectos de Audio de Pisadas
+  // 6. Navegación del Jugador y Controles de Cámara (Semanas 1, 6, 7, 10)
   const player = new PlayerController(camera, canvas, scene);
   player.onFootstep = () => {
     audioSystem.playFootstep();
   };
 
-  // 7. Adaptador del Simulador Agrícola
+  // 7. Adaptador del Simulador Agrícola (Compañero 3)
   const farmAdapter = new FarmAdapter();
 
-  // 8. Carga del Escenario de la Finca (GLB o Procedural Fallback)
+  // 8. Carga del Escenario de la Finca (Semanas 7, 8 y 10)
   const farmLoader = new FarmLoader(scene);
   const farmEnv = await farmLoader.loadFarm((percent, msg) => {
     hud.updateLoadingProgress(percent, msg);
   });
 
-  // Vincular las parcelas visuales con el adaptador agrícola
-  if (farmEnv && farmEnv.cropPlots) {
-    for (const [plotId, plotInstance] of Object.entries(farmEnv.cropPlots)) {
-      farmAdapter.registerCropPlotVisual(plotId, plotInstance);
-    }
+  const coords = farmEnv.coordinates;
+
+  // Sincronizar obstáculos y límites físicos dinámicamente con el entorno cargado (GLB / Procedural)
+  if (farmEnv.obstacles) {
+    player.setObstacles(farmEnv.obstacles, farmEnv.bounds);
+    physicsWorld.setObstacles(farmEnv.obstacles);
   }
+
+  // Ubicar al jugador en el punto de spawn configurado
+  player.setPosition(coords.spawn.x, coords.spawn.y, coords.spawn.z);
+
+  // Crear cajas agrícolas físicas de Cannon-es en el almacén
+  physicsWorld.createCrate({ id: 'crate_1', x: coords.almacenPos.x - 1, y: 1.0, z: coords.almacenPos.z, mass: 5, color: 0xd97706 });
+  physicsWorld.createCrate({ id: 'crate_2', x: coords.almacenPos.x - 1, y: 2.0, z: coords.almacenPos.z, mass: 5, color: 0xb45309 });
+  physicsWorld.createCrate({ id: 'crate_3', x: coords.almacenPos.x, y: 1.0, z: coords.almacenPos.z, mass: 5, color: 0xd97706 });
+
+  // Configurar orígenes de aspersores según las parcelas del escenario activo
+  particleSystem.setEmitters([
+    new THREE.Vector3(coords.plots[0].x, 1.3, coords.plots[0].z),
+    new THREE.Vector3(coords.plots[1].x, 1.3, coords.plots[1].z),
+    new THREE.Vector3(coords.plots[2].x, 1.3, coords.plots[2].z)
+  ]);
+
+  // Vincular las parcelas visuales con el adaptador agrícola
+  const bindCropPlots = (env) => {
+    if (env && env.cropPlots) {
+      for (const [plotId, plotInstance] of Object.entries(env.cropPlots)) {
+        farmAdapter.registerCropPlotVisual(plotId, plotInstance);
+      }
+    }
+  };
+  bindCropPlots(farmEnv);
 
   // Vincular audio posicional al mesh de la bomba de agua
   if (farmEnv && farmEnv.waterPumpMesh) {
     audioSystem.attachPositionalWater(farmEnv.waterPumpMesh);
   }
 
+  // 9. Estación Multimedia Interactiva (Semana 3) y Portal Neón (Semana 9)
+  const multimediaStation = new MultimediaStation(
+    scene,
+    new THREE.Vector3(coords.spawn.x + 2.5, 0, coords.spawn.z - 3.5)
+  );
+
   // Sincronizar estado inicial del simulador con el HUD y los modelos 3D
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
 
-  // 9. CONFIGURACIÓN DE TRIGGERS
+  // 10. CONFIGURACIÓN DE TRIGGERS (Semana 9 & 10)
   // A. Trigger Radial: Alrededor de la Bomba de Agua (Vector3.distanceTo)
   triggerSystem.addRadialTrigger({
     id: 'radial_water_pump',
     name: 'Zona: Bomba y Tanque de Agua',
-    center: { x: -3, y: 0, z: -3 },
+    center: { x: coords.bomba.x, y: 0, z: coords.bomba.z },
     radius: 4.8,
     onEnter: () => {
       hud.setZone('Bomba y Tanque de Agua');
@@ -100,8 +131,8 @@ async function bootstrap() {
   triggerSystem.addAABBTrigger({
     id: 'aabb_warehouse',
     name: 'Zona: Almacén y Centro de Cosecha',
-    min: [8.5, 0, -11.5],
-    max: [15.5, 4.0, -4.5],
+    min: coords.almacenAABB.min,
+    max: coords.almacenAABB.max,
     onEnter: () => {
       hud.setZone('Almacén de Cosecha');
       hud.showToast('📦 Has entrado al área de almacenamiento de cosecha', 'success', 3000);
@@ -112,18 +143,12 @@ async function bootstrap() {
   });
 
   // C. Triggers Radiales para cada Parcela
-  const plotsData = [
-    { id: 'plot_1', name: 'Parcela 1 — Subsistencia', x: -12, z: 8 },
-    { id: 'plot_2', name: 'Parcela 2 — Precisión', x: 0, z: 14 },
-    { id: 'plot_3', name: 'Parcela 3 — Ecológica', x: 12, z: 8 }
-  ];
-
-  plotsData.forEach(p => {
+  coords.plots.forEach(p => {
     triggerSystem.addRadialTrigger({
       id: `trigger_${p.id}`,
       name: `Zona: ${p.name}`,
       center: { x: p.x, y: 0, z: p.z },
-      radius: 4.5,
+      radius: 5.5,
       onEnter: () => {
         hud.setZone(p.name);
       },
@@ -133,12 +158,12 @@ async function bootstrap() {
     });
   });
 
-  // 10. CONFIGURACIÓN DE INTERACCIONES CENTRALIZADAS [TECLA E]
+  // 11. CONFIGURACIÓN DE INTERACCIONES CENTRALIZADAS [TECLA E]
   // A. Bomba de Agua: Activar / Desactivar Riego
   interactionSystem.register({
     id: 'interact_pump',
     name: 'Bomba de Agua Hidráulica',
-    position: { x: -3, y: 0.5, z: -3 },
+    position: { x: coords.bomba.x, y: 0.5, z: coords.bomba.z },
     actionText: 'Presiona E para activar sistema de riego',
     onInteract: async () => {
       audioSystem.playClick();
@@ -163,7 +188,7 @@ async function bootstrap() {
 
   // B. Parcelas Agrícolas: Sembrar / Cosechar según estado
   const setupPlotInteractions = (state) => {
-    plotsData.forEach(p => {
+    coords.plots.forEach(p => {
       const plotState = state.plots[p.id];
       let actionText = 'Presiona E para sembrar';
       if (plotState) {
@@ -183,14 +208,13 @@ async function bootstrap() {
         name: p.name,
         position: { x: p.x, y: 0.5, z: p.z },
         actionText: actionText,
-        customDistance: 4.2,
+        customDistance: 5.2,
         onInteract: async () => {
           audioSystem.playClick();
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
 
           if (!curPlot.isPlanted) {
-            // Sembrar
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -199,7 +223,6 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (curPlot.daysGrown >= curPlot.daysToMature || curPlot.visualState === 4) {
-            // Cosechar o limpiar
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -221,7 +244,7 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_sensor',
     name: 'Sensor IoT de Humedad de Suelo',
-    position: { x: 0, y: 1.0, z: 10.5 },
+    position: { x: coords.sensor.x, y: coords.sensor.y, z: coords.sensor.z },
     actionText: 'Presiona E para consultar telemetría del sensor',
     onInteract: async () => {
       audioSystem.playClick();
@@ -235,7 +258,7 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_compost',
     name: 'Compostera Orgánica',
-    position: { x: 14, y: 0.5, z: 1 },
+    position: { x: coords.compostera.x, y: coords.compostera.y, z: coords.compostera.z },
     actionText: 'Presiona E para aplicar abono orgánico',
     onInteract: async () => {
       audioSystem.playClick();
@@ -251,12 +274,25 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_warehouse',
     name: 'Almacén de Cosecha y Cajas Físicas',
-    position: { x: 12, y: 0.8, z: -7 },
-    actionText: 'Presiona E para inspeccionar inventario o soltar caja física',
+    position: { x: coords.almacenPos.x, y: coords.almacenPos.y, z: coords.almacenPos.z },
+    actionText: 'Presiona E para soltar caja física (Cannon-es)',
     onInteract: () => {
       audioSystem.playClick();
       physicsWorld.dropDemoCrate(player.getPosition());
       hud.showToast('📦 ¡Caja física de Cannon-es arrojada al escenario! Observa el rebote y la gravedad.', 'info');
+    }
+  });
+
+  // F. Estación Multimedia Interactiva (Semana 3)
+  interactionSystem.register({
+    id: 'interact_multimedia',
+    name: 'Estación Multimedia de Telemetría (Semana 3)',
+    position: { x: coords.spawn.x + 2.5, y: 1.5, z: coords.spawn.z - 3.5 },
+    actionText: 'Presiona E para pausar/reanudar pantalla multimedia',
+    onInteract: () => {
+      audioSystem.playClick();
+      const isPlaying = multimediaStation.togglePlay();
+      hud.showToast(isPlaying ? '📺 Pantalla multimedia reanudada' : '⏸️ Pantalla multimedia pausada', 'info');
     }
   });
 
@@ -269,8 +305,7 @@ async function bootstrap() {
   farmAdapter.on('stateChange', ({ state }) => {
     hud.updateFarmState(state);
 
-    // Actualizar los textos de acción de las parcelas
-    plotsData.forEach(p => {
+    coords.plots.forEach(p => {
       const plotState = state.plots[p.id];
       if (plotState) {
         let actionText = '';
@@ -288,7 +323,36 @@ async function bootstrap() {
     });
   });
 
-  // 11. BINDINGS DE BOTONES DEL HUD
+  // Cambio de entorno dinámico (GLB <-> Procedural)
+  farmLoader.onEnvironmentChange = (newEnv) => {
+    if (newEnv.obstacles) {
+      player.setObstacles(newEnv.obstacles, newEnv.bounds);
+      physicsWorld.setObstacles(newEnv.obstacles);
+    }
+    bindCropPlots(newEnv);
+    if (newEnv.waterPumpMesh) {
+      audioSystem.attachPositionalWater(newEnv.waterPumpMesh);
+    }
+    farmAdapter.syncVisuals(initialState);
+  };
+
+  // 12. PANEL DE CONTROL lil-gui (Semanas 2 y 4)
+  const debugGui = new DebugGUI({
+    scene,
+    sunLight: sceneElements.sunLight,
+    ambientLight: sceneElements.ambientLight,
+    hemiLight: sceneElements.hemiLight,
+    player,
+    farmAdapter,
+    physicsWorld,
+    particleSystem,
+    audioSystem,
+    farmLoader,
+    multimediaStation,
+    hud
+  });
+
+  // 13. BINDINGS DE BOTONES DEL HUD
   // Botón Comenzar
   if (hud.btnStartGame) {
     hud.btnStartGame.addEventListener('click', () => {
@@ -349,7 +413,24 @@ async function bootstrap() {
     });
   }
 
-  // Tecla F para soltar caja física en cualquier momento
+  // Botón Alternar Modo de Cámara (3ra Persona / OrbitControls)
+  if (hud.btnToggleCam) {
+    hud.btnToggleCam.addEventListener('click', () => {
+      audioSystem.playClick();
+      const mode = player.toggleCameraMode();
+      hud.showToast(mode === 'orbit' ? '🛸 Cámara: Órbita Libre (Mouse Drag/Zoom)' : '🏃 Cámara: Tercera Persona (WASD)', 'info');
+    });
+  }
+
+  // Botón Alternar Panel lil-gui
+  if (hud.btnToggleGui) {
+    hud.btnToggleGui.addEventListener('click', () => {
+      audioSystem.playClick();
+      debugGui.toggle();
+    });
+  }
+
+  // Teclas Rápidas de Navegación y Atajos
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') {
       physicsWorld.dropDemoCrate(player.getPosition());
@@ -360,41 +441,51 @@ async function bootstrap() {
     }
   });
 
-  // Desbloquear audio tras el primer click o tecla
+  // Desbloquear audio tras el primer click o tecla (Políticas de Autoplay)
   window.addEventListener('click', () => audioSystem.unlockAudio(), { once: true });
   window.addEventListener('keydown', () => audioSystem.unlockAudio(), { once: true });
 
-  // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
+  // 14. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK) — 60 FPS
   gameLoop.addUpdateCallback((delta, fps) => {
-    // A. Actualizar jugador y cámara en tercera persona
+    // A. Actualizar jugador y cámara
     player.update(delta);
     const pPos = player.getPosition();
 
-    // Actualizar colisionador cinemático del jugador en Cannon-es para empujar objetos
+    // Actualizar colisionador cinemático del jugador en Cannon-es
     physicsWorld.updatePlayerPosition(pPos);
 
-    // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
+    // B. Paso de física fija de Cannon-es y sincronización de matrices
     physicsWorld.step(delta);
 
-    // C. Actualizar sistemas de partículas (aspersores y lluvia) sin asignaciones dinámicas
+    // C. Actualizar sistemas de partículas (aspersores, lluvia y polvo) sin asignaciones dinámicas
     particleSystem.update(delta);
 
-    // Actualizar animaciones ambientales (molino de viento, etc.)
+    // D. Actualizar estación multimedia animada y portal neón (Semanas 3 y 9)
+    multimediaStation.update(delta);
+
+    // Detección de Teletransporte por Bounding Box (Semana 9)
+    if (multimediaStation.checkTeleport(pPos)) {
+      audioSystem.playSuccess();
+      hud.showToast('🌀 ¡Portal Cuántico activado! Teletransportando al centro de la finca...', 'success', 3500);
+      player.setPosition(coords.spawn.x, coords.spawn.y, coords.spawn.z);
+    }
+
+    // Actualizar animaciones ambientales
     if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
       farmEnv.environment.update(delta);
     }
 
-    // D. Detección de proximidad para interacción [E]
+    // E. Detección de proximidad para interacción [E]
     interactionSystem.update(pPos);
 
-    // E. Detección de zonas espaciales por triggers (Radial y AABB)
+    // F. Detección de zonas espaciales por triggers (Radial y AABB)
     triggerSystem.update(pPos);
 
-    // F. Actualizar datos en el HUD
+    // G. Actualizar datos en el HUD
     hud.updateCoordinates(pPos.x, pPos.y, pPos.z);
     hud.updateFps(fps);
 
-    // G. Renderizar escena
+    // H. Renderizar escena
     renderer.render(scene, camera);
   });
 
@@ -402,6 +493,7 @@ async function bootstrap() {
   hud.updateLoadingProgress(100, '¡Finca lista!');
   setTimeout(() => {
     hud.hideLoadingScreen();
+    window.__agro = { player, farmLoader, physicsWorld, farmAdapter };
     gameLoop.start();
     console.log('✅ AgroRescate 3D inicializado y ejecutándose a 60 FPS.');
   }, 400);

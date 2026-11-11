@@ -113,6 +113,19 @@ export class ParticleSystem {
     this.scene.add(this.dustPoints);
   }
 
+  /**
+   * Actualiza dinámicamente las coordenadas de los aspersores (según el escenario activo)
+   */
+  setEmitters(newEmitters) {
+    if (Array.isArray(newEmitters) && newEmitters.length > 0) {
+      this.emitters = newEmitters.map(e => e instanceof THREE.Vector3 ? e : new THREE.Vector3(e.x, e.y || 1.3, e.z));
+      this.sprinklerCount = this.emitters.length;
+      if (this.isSpraying) {
+        this._initSprinklerParticles();
+      }
+    }
+  }
+
   _initSprinklerParticles() {
     for (let s = 0; s < this.sprinklerCount; s++) {
       const emitter = this.emitters[s];

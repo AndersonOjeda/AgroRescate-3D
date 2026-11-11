@@ -44,6 +44,7 @@ export class PhysicsWorld {
 
     // Lista de sincronización de cuerpos físicos con meshes de Three.js
     this.syncBodies = [];
+    this.staticObstacleBodies = [];
 
     // 2. Crear suelo físico estático a Y = 0 y paredes de estructuras
     this._createStaticGround();
@@ -84,6 +85,7 @@ export class PhysicsWorld {
       material: this.groundMaterial
     });
     this.world.addBody(houseBody);
+    this.staticObstacleBodies.push(houseBody);
 
     // 2. Paredes del Granero en Cannon-es
     const barnShape = new CANNON.Box(new CANNON.Vec3(4.7, 3.5, 3.9));
@@ -94,6 +96,56 @@ export class PhysicsWorld {
       material: this.groundMaterial
     });
     this.world.addBody(barnBody);
+    this.staticObstacleBodies.push(barnBody);
+  }
+
+  /**
+   * Configura dinámicamente los cuerpos estáticos de colisión física según el escenario activo
+   * @param {Array} obstacles - Lista de obstáculos ({ type, minX, maxX, minZ, maxZ, x, z, r, height })
+   */
+  setObstacles(obstacles) {
+    if (!Array.isArray(obstacles)) return;
+
+    // Eliminar cuerpos físicos estáticos anteriores
+    if (this.staticObstacleBodies && this.staticObstacleBodies.length > 0) {
+      for (const body of this.staticObstacleBodies) {
+        this.world.removeBody(body);
+      }
+      this.staticObstacleBodies = [];
+    }
+
+    // Instanciar colisionadores físicos en Cannon-es
+    for (let i = 0; i < obstacles.length; i++) {
+      const obs = obstacles[i];
+      if (obs.type === 'box') {
+        const halfX = Math.max(0.2, (obs.maxX - obs.minX) / 2);
+        const halfZ = Math.max(0.2, (obs.maxZ - obs.minZ) / 2);
+        const halfY = (obs.height || 3.5) / 2;
+        const centerX = (obs.minX + obs.maxX) / 2;
+        const centerZ = (obs.minZ + obs.maxZ) / 2;
+
+        const shape = new CANNON.Box(new CANNON.Vec3(halfX, halfY, halfZ));
+        const body = new CANNON.Body({
+          type: CANNON.Body.STATIC,
+          shape: shape,
+          position: new CANNON.Vec3(centerX, halfY, centerZ),
+          material: this.groundMaterial
+        });
+        this.world.addBody(body);
+        this.staticObstacleBodies.push(body);
+      } else if (obs.type === 'circle') {
+        const halfY = (obs.height || 3.5) / 2;
+        const shape = new CANNON.Box(new CANNON.Vec3(obs.r, halfY, obs.r));
+        const body = new CANNON.Body({
+          type: CANNON.Body.STATIC,
+          shape: shape,
+          position: new CANNON.Vec3(obs.x, halfY, obs.z),
+          material: this.groundMaterial
+        });
+        this.world.addBody(body);
+        this.staticObstacleBodies.push(body);
+      }
+    }
   }
 
   /**

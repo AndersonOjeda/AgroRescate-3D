@@ -33,6 +33,8 @@ export class HUD {
     this.debugFps = document.getElementById('debug-fps');
     this.debugPhysics = document.getElementById('debug-physics');
 
+    this.btnToggleCam = document.getElementById('btn-toggle-cam');
+    this.btnToggleGui = document.getElementById('btn-toggle-gui');
     this.btnToggleSound = document.getElementById('btn-toggle-sound');
     this.soundIcon = document.getElementById('sound-icon');
     this.btnToggleRain = document.getElementById('btn-toggle-rain');

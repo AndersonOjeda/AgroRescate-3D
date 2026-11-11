@@ -43,9 +43,10 @@ AgroRescate 3D/
 │   ├── world/
 │   │   ├── cropPlot.js      # 5 estados visuales del cultivo (vacío, brote, crecimiento, madura, marchita)
 │   │   ├── environment.js   # Escenario procedural completo (casa, granero, tanque, parcelas, árboles, cercas)
-│   │   └── farmLoader.js    # Cargador de finca.glb con fallback automático al entorno procedural
+│   │   ├── farmLoader.js    # Cargador de finca.glb con soporte dual y fallback automático
+│   │   └── multimediaStation.js # Pantalla multimedia interactiva (Semana 3) y Portal Neón (Semana 9)
 │   ├── player/
-│   │   └── playerController.js # Navegación en 3ra persona con avatar low-poly, colisiones y Pointer Lock
+│   │   └── playerController.js # Navegación dual (3ra persona y OrbitControls), colisiones y avatar campesino
 │   ├── physics/
 │   │   └── physicsWorld.js  # Mundo físico Cannon-es, gravedad -9.81, suelo y cajas con masa y rebote
 │   ├── systems/
@@ -58,15 +59,18 @@ AgroRescate 3D/
 │   ├── simulation/
 │   │   └── farmSimulation.js # Módulo agronómico contractual (3 modos, agua, suelo, días, cosecha)
 │   ├── ui/
-│   │   └── hud.js           # Heads-Up Display: telemetría, alertas toast, estado y depuración
+│   │   ├── hud.js           # Heads-Up Display: telemetría, alertas toast, estado y depuración
+│   │   └── debugGui.js      # Panel de inspección y control académico en vivo con lil-gui (Semanas 2 y 4)
 │   ├── styles/
 │   │   └── main.css         # Interfaz moderna Glassmorphism adaptativa
 │   └── main.js              # Orquestador del ciclo de vida de la aplicación
 ├── tests/
-│   ├── farmAdapter.test.js  # Pruebas del contrato agrícola y los 3 modos
-│   ├── triggers.test.js     # Pruebas de detección radial y AABB
-│   ├── physics.test.js      # Pruebas de gravedad y sincronización Cannon-Three
-│   └── particleSystem.test.js # Pruebas de pooling y memoria de partículas
+│   ├── farmAdapter.test.js  # Pruebas del contrato agrícola y los 3 modos (7 tests)
+│   ├── triggers.test.js     # Pruebas de detección radial y AABB (2 tests)
+│   ├── physics.test.js      # Pruebas de gravedad, cajas Cannon-Three y static obstacles (2 tests)
+│   ├── particleSystem.test.js # Pruebas de pooling y memoria de partículas (2 tests)
+│   ├── playerCollision.test.js # Pruebas de colisiones, wall sliding y modelos Blender GLB (9 tests)
+│   └── multimediaAndCamera.test.js # Pruebas de pantalla multimedia, portal y cámara dual (5 tests)
 ├── index.html
 ├── package.json
 └── README.md
@@ -81,7 +85,8 @@ AgroRescate 3D/
 | **W, A, S, D** | Desplazamiento del agricultor en el plano XZ |
 | **Shift** | Correr / Aumentar velocidad de movimiento |
 | **Mouse** | Rotar cámara orbital en tercera persona (Pointer Lock) |
-| **E** | **Interactuar** con el objeto más cercano (Bomba, Parcela, Sensor, Compostera, Almacén) |
+| **C** | **Alternar Modo de Cámara:** Tercera persona vs. Órbita Libre (`OrbitControls`) |
+| **E** | **Interactuar** con el objeto más cercano (Bomba, Parcela, Sensor, Compostera, Almacén, Pantalla) |
 | **F** | **Demostración física:** Arrojar una nueva caja dinámica con Cannon-es |
 | **R** | Alternar lluvia ambiental y partículas atmosféricas |
 | **ESC** | Liberar el cursor del navegador |
@@ -144,14 +149,15 @@ El proyecto cuenta con una suite completa de pruebas automatizadas con Vitest:
 npm test
 ```
 
-### Resultados de Verificación:
+### Resultados de Verificación (27/27 Pruebas Pasadas):
 - **`tests/farmAdapter.test.js`**: 7 pruebas pasadas (inicialización, modos de cultivo, siembra, riego, maduración, cosecha, eventos).
 - **`tests/triggers.test.js`**: 2 pruebas pasadas (cálculo radial euclidiano y detección AABB dentro/fuera).
 - **`tests/physics.test.js`**: 2 pruebas pasadas (gravedad -9.81, caída libre y sincronización de matrices Cannon-Three).
 - **`tests/particleSystem.test.js`**: 2 pruebas pasadas (pooling de partículas con Float32Array y lluvia).
-- **`tests/playerCollision.test.js`**: 6 pruebas pasadas (bloqueo en paredes de casa, granero, tanque, bomba y wall sliding).
-- **`npm run build`**: Compilación de producción en Vite completada en menos de 500 ms con 0 errores.
-- **Navegador en vivo (Chrome DevTools):** Ejecución a 60 FPS, 0 advertencias y 0 errores en la consola.
+- **`tests/playerCollision.test.js`**: 9 pruebas pasadas (bloqueo en paredes de casa, granero, tanque, bomba, wall sliding, colisiones precisas contra el modelo GLB de Blender `finca.glb` y actualización física de Cannon-es).
+- **`tests/multimediaAndCamera.test.js`**: 5 pruebas pasadas (pantalla multimedia con VideoTexture/Canvas, portal de teletransporte con AABB y cooldown de 3.5s, etapas de crecimiento en GLB y control dual de cámara 3ra persona / OrbitControls).
+- **`npm run build`**: Compilación de producción en Vite completada en 2.2 s con 0 errores.
+- **Navegador en vivo (Chrome DevTools):** Ejecución a 60 FPS estables, colisiones sólidas verificadas y 0 errores en consola.
 
 ---
 

@@ -1,14 +1,33 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 /**
  * Controlador del Jugador en Tercera Persona con avatar low-poly,
- * rotación suave de cámara, colisiones con límites y soporte de Pointer Lock.
+ * rotación suave de cámara, colisiones con límites, soporte de Pointer Lock
+ * y modo alternativo de Cámara Orbital (OrbitControls) para inspección aérea.
  */
 export class PlayerController {
   constructor(camera, domElement, scene) {
     this.camera = camera;
     this.domElement = domElement;
     this.scene = scene;
+
+    // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
+    this.cameraMode = 'third-person';
+
+    // Controles orbitales de Three.js (Semanas 1, 7, 8, 10)
+    if (this.domElement && typeof HTMLElement !== 'undefined' && this.domElement instanceof HTMLElement) {
+      this.orbitControls = new OrbitControls(this.camera, this.domElement);
+      this.orbitControls.enableDamping = true;
+      this.orbitControls.dampingFactor = 0.05;
+      this.orbitControls.maxPolarAngle = Math.PI / 2 - 0.05; // Evita cruzar el piso
+      this.orbitControls.minDistance = 3;
+      this.orbitControls.maxDistance = 75;
+      this.orbitControls.target.set(0, 1.2, 0);
+      this.orbitControls.enabled = false;
+    } else {
+      this.orbitControls = null;
+    }
 
     // Posición y orientación del jugador
     this.position = new THREE.Vector3(0, 0, -2);
@@ -398,6 +417,9 @@ export class PlayerController {
         case 'ShiftRight':
           this.isSprinting = true;
           break;
+        case 'KeyC':
+          this.toggleCameraMode();
+          break;
       }
     });
 
@@ -455,13 +477,112 @@ export class PlayerController {
   }
 
   unlock() {
-    if (document.exitPointerLock) {
+    if (typeof document !== 'undefined' && document.exitPointerLock) {
       document.exitPointerLock();
     }
   }
 
+  /**
+   * Cambia el modo de cámara entre 'third-person' y 'orbit' (OrbitControls)
+   */
+  setCameraMode(mode) {
+    if (mode !== 'third-person' && mode !== 'orbit') return;
+    this.cameraMode = mode;
+
+    if (mode === 'orbit') {
+      this.unlock();
+      if (this.orbitControls) {
+        this.orbitControls.enabled = true;
+        this.orbitControls.target.set(this.position.x, 1.2, this.position.z);
+        this.orbitControls.update();
+      }
+    } else {
+      if (this.orbitControls) {
+        this.orbitControls.enabled = false;
+      }
+    }
+
+    if (this.onCameraModeChange) {
+      this.onCameraModeChange(this.cameraMode);
+    }
+  }
+
+  toggleCameraMode() {
+    const nextMode = this.cameraMode === 'third-person' ? 'orbit' : 'third-person';
+    this.setCameraMode(nextMode);
+    return nextMode;
+  }
+
   addObstacle(obstacle) {
     this.obstacles.push(obstacle);
+  }
+
+  /**
+   * Configura dinámicamente la lista de obstáculos y límites según el escenario activo
+   */
+  setObstacles(obstacles, bounds) {
+    if (Array.isArray(obstacles) && obstacles.length > 0) {
+      this.obstacles = obstacles;
+    }
+    if (bounds) {
+      this.bounds = bounds;
+    }
+    this._resolvePenetration();
+  }
+
+  /**
+   * Empuja al jugador hacia afuera de cualquier pared si se encuentra penetrando una superficie
+   */
+  _resolvePenetration() {
+    // 1. Límites del mapa (evita salir del terreno)
+    if (this.position.x < this.bounds.minX + this.radius) this.position.x = this.bounds.minX + this.radius;
+    if (this.position.x > this.bounds.maxX - this.radius) this.position.x = this.bounds.maxX - this.radius;
+    if (this.position.z < this.bounds.minZ + this.radius) this.position.z = this.bounds.minZ + this.radius;
+    if (this.position.z > this.bounds.maxZ - this.radius) this.position.z = this.bounds.maxZ - this.radius;
+
+    // 2. Obstáculos sólidos (cajas y paredes)
+    for (let i = 0; i < this.obstacles.length; i++) {
+      const obs = this.obstacles[i];
+      if (obs.type === 'box') {
+        const minX = obs.minX - this.radius;
+        const maxX = obs.maxX + this.radius;
+        const minZ = obs.minZ - this.radius;
+        const maxZ = obs.maxZ + this.radius;
+
+        if (
+          this.position.x > minX &&
+          this.position.x < maxX &&
+          this.position.z > minZ &&
+          this.position.z < maxZ
+        ) {
+          const distLeft = Math.abs(this.position.x - minX);
+          const distRight = Math.abs(maxX - this.position.x);
+          const distTop = Math.abs(this.position.z - minZ);
+          const distBottom = Math.abs(maxZ - this.position.z);
+
+          const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+          if (minDist === distLeft) this.position.x = minX - 0.02;
+          else if (minDist === distRight) this.position.x = maxX + 0.02;
+          else if (minDist === distTop) this.position.z = minZ - 0.02;
+          else this.position.z = maxZ + 0.02;
+        }
+      } else if (obs.type === 'circle') {
+        const dx = this.position.x - obs.x;
+        const dz = this.position.z - obs.z;
+        const distSq = dx * dx + dz * dz;
+        const minDist = this.radius + obs.r;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq);
+          if (dist > 0.0001) {
+            const pushDist = minDist + 0.02;
+            this.position.x = obs.x + (dx / dist) * pushDist;
+            this.position.z = obs.z + (dz / dist) * pushDist;
+          } else {
+            this.position.x += minDist + 0.02;
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -508,6 +629,19 @@ export class PlayerController {
    * Actualización por cuadro con delta time
    */
   update(delta) {
+    // Si estamos en modo OrbitControls, la cámara es libre y el avatar permanece en reposo
+    if (this.cameraMode === 'orbit') {
+      if (this.orbitControls) {
+        this.orbitControls.update();
+      }
+      if (this.parts && this.parts.pelvis) {
+        const breathTime = performance.now() * 0.002;
+        this.parts.pelvis.position.y = 0.68 + Math.sin(breathTime) * 0.015;
+        this.parts.torso.scale.y = 1.0 + Math.sin(breathTime) * 0.015;
+      }
+      return;
+    }
+
     const speed = this.isSprinting ? this.runSpeed : this.walkSpeed;
 
     // Calcular dirección frontal y lateral de la cámara en el plano XZ
@@ -549,6 +683,9 @@ export class PlayerController {
       if (!this.isColliding(this.position.x, targetZ)) {
         this.position.z = targetZ;
       }
+
+      // Verificación estricta de límites y paredes
+      this._resolvePenetration();
 
       // Suelo plano a nivel Y = 0 (los pies en Y=0)
       this.position.y = 0;
