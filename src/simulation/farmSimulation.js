@@ -197,8 +197,9 @@ export class FarmSimulation {
     return planted.length > 0 ? planted : Object.values(this.plots);
   }
 
-  _applyPlotMoistureEffects(plot, moistureGain, waterL, healthGain = 0) {
-    plot.moisture = Math.min(100, plot.moisture + moistureGain);
+  _applyPlotMoistureEffects(plot, moistureGain, waterL, healthGain = 0, maxMoisture = 100) {
+    const cap = Math.min(100, Math.max(0, Number(maxMoisture) || 100));
+    plot.moisture = Math.max(plot.moisture, Math.min(cap, plot.moisture + moistureGain));
     plot.waterAppliedL += waterL;
 
     if (plot.isPlanted) {
@@ -213,6 +214,35 @@ export class FarmSimulation {
     }
 
     syncPlotStageAndVisual(plot);
+  }
+
+  /**
+   * Devuelve los IDs de parcelas sembradas que están bajo el umbral IoT en tiempo real.
+   * Solo aplica cuando la modalidad soporta riego automático y está activado.
+   * @returns {string[]}
+   */
+  getPlotsNeedingRealtimeAutoIrrigation() {
+    if (!this.modeConfig.supportsAutoIrrigation || !this.autoIrrigationEnabled || this.waterReserve < 1) {
+      return [];
+    }
+    return getPlotsNeedingAutoIrrigation(this.plots, this.autoIrrigationThreshold).map((p) => p.id);
+  }
+
+  /**
+   * Registra una activación automática IoT en tiempo real en bitácora y telemetría.
+   * @param {string[]} plotIds
+   * @param {number} totalMoistureGain
+   * @param {number} totalWaterUsedL
+   */
+  recordAutoIrrigationSession(plotIds, totalMoistureGain, totalWaterUsedL) {
+    if (!Array.isArray(plotIds) || plotIds.length === 0 || (totalWaterUsedL <= 0 && totalMoistureGain <= 0)) {
+      return null;
+    }
+    this.autoIrrigationsTriggered += 1;
+    const names = plotIds.join(', ');
+    this.lastAutoAction = `Riego automático IoT activado en ${names} (+${totalMoistureGain}% humedad, -${totalWaterUsedL} L)`;
+    this._recordEvent(`Día ${this.day}: ${this.lastAutoAction}`);
+    return this.lastAutoAction;
   }
 
   /**
@@ -250,26 +280,23 @@ export class FarmSimulation {
    * @param {number} [deltaSeconds=0.5]
    * @param {string|null} [plotId=null]
    * @param {number} [cycleSeconds=5] Duración en segundos equivalente a un ciclo completo
+   * @param {number} [maxMoisture=100] Humedad objetivo máxima para detener el pulso
    */
-  irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5) {
+  irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5, maxMoisture = 100) {
     if (plotId && !this.plots[plotId]) {
       return { success: false, applied: false, message: 'Parcela no encontrada' };
     }
 
+    const capMoisture = Math.min(100, Math.max(1, Number(maxMoisture) || 100));
     const allTargets = this._resolveIrrigationTargets(plotId);
-    if (!plotId) {
-      // No sobreescribir activePlotId innecesariamente si ya hay una activa válida
-    } else {
-      this.activePlotId = plotId;
-    }
 
-    const needingWater = allTargets.filter((p) => p.moisture < 100);
+    const needingWater = allTargets.filter((p) => p.moisture < capMoisture);
     if (needingWater.length === 0) {
       return {
         success: false,
         applied: false,
-        stoppedReason: 'all_full',
-        message: '💧 Humedad al 100% — Riego detenido automáticamente',
+        stoppedReason: capMoisture >= 100 ? 'all_full' : 'target_reached',
+        message: `💧 Humedad objetivo (${capMoisture}%) alcanzada — Riego detenido`,
         irrigatedPlotIds: []
       };
     }
@@ -335,13 +362,13 @@ export class FarmSimulation {
 
     const perPlotWater = waterCostL > 0 ? Math.max(1, Math.round(waterCostL / needingWater.length)) : 0;
     for (const p of needingWater) {
-      this._applyPlotMoistureEffects(p, effectiveMoisture, perPlotWater, healthStep);
+      this._applyPlotMoistureEffects(p, effectiveMoisture, perPlotWater, healthStep, capMoisture);
     }
 
-    const stillNeedsWater = allTargets.some((p) => p.moisture < 100);
+    const stillNeedsWater = allTargets.some((p) => p.moisture < capMoisture);
     let stoppedReason = null;
     if (!stillNeedsWater) {
-      stoppedReason = 'all_full';
+      stoppedReason = capMoisture >= 100 ? 'all_full' : 'target_reached';
     } else if (this.waterReserve < 1) {
       stoppedReason = 'empty_tank';
     }
@@ -836,7 +863,8 @@ export class FarmSimulation {
       this.plots,
       this.modeConfig,
       this.autoIrrigationEnabled,
-      this.lastAutoAction
+      this.lastAutoAction,
+      this.autoIrrigationThreshold
     );
 
     const availableActions = {

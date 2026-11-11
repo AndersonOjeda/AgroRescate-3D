@@ -63,10 +63,14 @@ export function computeSensorTelemetry(
   plots,
   modeConfig,
   autoIrrigationEnabled,
-  lastAutoAction = null
+  lastAutoAction = null,
+  configuredThreshold = null
 ) {
   const readings = {};
   const targetMoisture = 65;
+  const thresholdMoisture = Number.isFinite(configuredThreshold)
+    ? configuredThreshold
+    : (modeConfig.autoIrrigationThreshold || 45);
 
   for (const [plotId, plot] of Object.entries(plots)) {
     const status = classifyMoistureStatus(plot.moisture);
@@ -80,7 +84,7 @@ export function computeSensorTelemetry(
       statusLabel: status.label,
       optimalRange: '45% – 85%',
       deficitPct,
-      needsIrrigation: plot.isPlanted && plot.moisture < (modeConfig.autoIrrigationThreshold || 45),
+      needsIrrigation: plot.isPlanted && plot.moisture < thresholdMoisture,
       recommendation: status.recommendation
     };
   }
@@ -91,7 +95,7 @@ export function computeSensorTelemetry(
       ? 'Sensor IoT Activo (Lectura continua)'
       : 'Sensor IoT Inactivo en esta modalidad',
     autoIrrigationEnabled: Boolean(modeConfig.supportsAutoIrrigation && autoIrrigationEnabled),
-    thresholdMoisture: modeConfig.autoIrrigationThreshold || 45,
+    thresholdMoisture,
     lastAutoAction,
     readings
   };

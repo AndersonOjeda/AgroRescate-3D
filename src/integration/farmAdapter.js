@@ -115,12 +115,12 @@ export class FarmAdapter {
   /**
    * Ejecuta un pulso progresivo de riego continuo mientras la bomba esté encendida.
    */
-  async irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5) {
+  async irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5, maxMoisture = 100) {
     if (typeof this.simulation.irrigateContinuousStep !== 'function') {
       return { success: false, applied: false };
     }
     const result = await Promise.resolve(
-      this.simulation.irrigateContinuousStep(deltaSeconds, plotId, cycleSeconds)
+      this.simulation.irrigateContinuousStep(deltaSeconds, plotId, cycleSeconds, maxMoisture)
     );
     if (result?.applied) {
       const state = result.state || (await this.getState());
@@ -128,6 +128,31 @@ export class FarmAdapter {
       this.emit('stateChange', { state, action: 'irrigateContinuous', result });
     }
     return result;
+  }
+
+  /**
+   * Devuelve los IDs de parcelas que requieren riego automático IoT en tiempo real.
+   */
+  getPlotsNeedingRealtimeAutoIrrigation() {
+    if (typeof this.simulation.getPlotsNeedingRealtimeAutoIrrigation === 'function') {
+      return this.simulation.getPlotsNeedingRealtimeAutoIrrigation();
+    }
+    return [];
+  }
+
+  /**
+   * Registra un evento de sesión automática IoT completada y actualiza estado/UI.
+   */
+  async recordAutoIrrigationSession(plotIds, totalMoistureGain, totalWaterUsedL) {
+    if (typeof this.simulation.recordAutoIrrigationSession !== 'function') {
+      return null;
+    }
+    const msg = this.simulation.recordAutoIrrigationSession(plotIds, totalMoistureGain, totalWaterUsedL);
+    if (msg) {
+      const state = await this.getState();
+      this.emit('stateChange', { state, action: 'autoIrrigationSession', result: { message: msg } });
+    }
+    return msg;
   }
 
   /**

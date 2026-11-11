@@ -372,6 +372,13 @@ async function bootstrap() {
   let pumpSessionMoistureGain = 0;
   let pumpSessionWaterUsedL = 0;
   let pumpSessionMissionCounted = false;
+  let autoIoTActivePlotId = null;
+  let autoIoTTickAcc = 0;
+  let autoIoTCheckAcc = 0;
+  let autoIoTStepPending = false;
+  let autoIoTMoistureGain = 0;
+  let autoIoTWaterUsedL = 0;
+  let autoIoTTargetMoisture = 65;
 
   const mapPlotIdsToEmitters = (plotIds) => {
     if (!Array.isArray(plotIds) || plotIds.length === 0) return null;
@@ -379,6 +386,67 @@ async function bootstrap() {
       .map((id) => PLOT_EMITTER_INDEX[id])
       .filter((idx) => Number.isInteger(idx));
     return indices.length > 0 ? indices : null;
+  };
+
+  const stopAutoIoTIrrigation = async (toastMessage = null, toastType = 'info') => {
+    const finishedPlotId = autoIoTActivePlotId;
+    const gain = autoIoTMoistureGain;
+    const waterL = autoIoTWaterUsedL;
+
+    autoIoTActivePlotId = null;
+    autoIoTTickAcc = 0;
+    autoIoTMoistureGain = 0;
+    autoIoTWaterUsedL = 0;
+
+    if (!isPumpSprayingManually && !irrigationBurstTimer) {
+      particleSystem.setSpraying(false);
+      audioSystem.setWaterSound(false);
+    }
+
+    if (finishedPlotId && (waterL > 0 || gain > 0)) {
+      const summary = await farmAdapter.recordAutoIrrigationSession([finishedPlotId], gain, waterL);
+      if (summary) {
+        modals.recordDecision(summary);
+      }
+      missionManager.handleEvent({ type: 'irrigated' });
+      hud.renderMission(missionManager.getSnapshot());
+    }
+
+    if (toastMessage) {
+      hud.showToast(toastMessage, toastType);
+    }
+  };
+
+  const checkAndStartAutoIoT = async () => {
+    if (isPumpSprayingManually || autoIoTActivePlotId || autoIoTStepPending) return;
+    const needingIds = farmAdapter.getPlotsNeedingRealtimeAutoIrrigation();
+    if (!needingIds || needingIds.length === 0) return;
+
+    const st = await farmAdapter.getState();
+    if (!st.autoIrrigationEnabled || st.waterReserve < 1) return;
+
+    const pid = needingIds[0];
+    const plot = st.plots?.[pid];
+    if (!plot || !plot.isPlanted || plot.moisture >= st.autoIrrigationThreshold) return;
+
+    if (irrigationBurstTimer) {
+      clearTimeout(irrigationBurstTimer);
+      irrigationBurstTimer = null;
+    }
+
+    autoIoTActivePlotId = pid;
+    autoIoTTickAcc = 0;
+    autoIoTMoistureGain = 0;
+    autoIoTWaterUsedL = 0;
+    autoIoTTargetMoisture = Math.min(85, st.autoIrrigationThreshold + 15);
+
+    particleSystem.setSpraying(true, mapPlotIdsToEmitters([pid]));
+    audioSystem.setWaterSound(true);
+    hud.showToast(
+      `📡 Sensor IoT: humedad baja en ${plot.name} (${plot.moisture}% < ${st.autoIrrigationThreshold}%) — activando micro-riego`,
+      'info',
+      2800
+    );
   };
 
   const stopContinuousPump = (toastMessage = null, toastType = 'info') => {
@@ -447,6 +515,10 @@ async function bootstrap() {
       if (isPumpSprayingManually) {
         stopContinuousPump(null, 'info');
         return;
+      }
+
+      if (autoIoTActivePlotId) {
+        await stopAutoIoTIrrigation();
       }
 
       const check = farmAdapter.canStartContinuousIrrigation();
@@ -711,6 +783,7 @@ async function bootstrap() {
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'planted' });
       hud.renderMission(missionManager.getSnapshot());
+      checkAndStartAutoIoT();
     }
   });
 
@@ -746,6 +819,21 @@ async function bootstrap() {
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'special', kind: 'threshold' });
       hud.renderMission(missionManager.getSnapshot());
+      if (autoIoTActivePlotId) {
+        autoIoTTargetMoisture = Math.min(85, result.threshold + 15);
+      } else {
+        checkAndStartAutoIoT();
+      }
+    }
+  });
+
+  farmAdapter.on('autoIrrigationChanged', ({ result }) => {
+    if (result?.success) {
+      if (!result.autoIrrigationEnabled && autoIoTActivePlotId) {
+        stopAutoIoTIrrigation('Riego automático IoT desactivado', 'info');
+      } else if (result.autoIrrigationEnabled) {
+        checkAndStartAutoIoT();
+      }
     }
   });
 
@@ -774,10 +862,11 @@ async function bootstrap() {
       missionManager.getSnapshot(),
       ready ? 'Estado cosecha: ¡Lista para cosechar!' : undefined
     );
-    if (result?.autoTriggered && !isPumpSprayingManually) {
+    if (result?.autoTriggered && result.autoIrrigatedPlotIds?.length > 0 && !isPumpSprayingManually && !autoIoTActivePlotId) {
       triggerIrrigationSprayBurst(3200, mapPlotIdsToEmitters(result.autoIrrigatedPlotIds));
       audioSystem.playSuccess();
     }
+    checkAndStartAutoIoT();
   });
 
   // 11. BINDINGS DE BOTONES DEL HUD
@@ -788,6 +877,9 @@ async function bootstrap() {
       audioSystem.playClick();
       if (isPumpSprayingManually) {
         stopContinuousPump();
+      }
+      if (autoIoTActivePlotId) {
+        await stopAutoIoTIrrigation();
       }
       await farmAdapter.initializeFarm(mode);
       missionManager.reset(mode);
@@ -947,6 +1039,37 @@ async function bootstrap() {
             .finally(() => {
               pumpStepPending = false;
             });
+        }
+      } else if (!isPumpSprayingManually && autoIoTActivePlotId && !autoIoTStepPending) {
+        autoIoTTickAcc += delta;
+        if (autoIoTTickAcc >= PUMP_TICK_SECONDS) {
+          const stepSeconds = Math.min(2.0, autoIoTTickAcc);
+          autoIoTTickAcc = 0;
+          autoIoTStepPending = true;
+          farmAdapter
+            .irrigateContinuousStep(stepSeconds, autoIoTActivePlotId, 5, autoIoTTargetMoisture)
+            .then((stepRes) => {
+              if (!autoIoTActivePlotId || !stepRes) return;
+              if (stepRes.applied) {
+                autoIoTMoistureGain += stepRes.moistureGain || 0;
+                autoIoTWaterUsedL += stepRes.waterUsedL || 0;
+              }
+              if (stepRes.stoppedReason === 'empty_tank') {
+                stopAutoIoTIrrigation('⚠️ Alerta IoT: tanque sin agua, riego automático detenido', 'warning');
+              } else if (stepRes.stoppedReason === 'target_reached' || stepRes.stoppedReason === 'all_full') {
+                stopAutoIoTIrrigation('📡 Sensor IoT: humedad óptima restablecida automáticamente', 'success');
+                autoIoTCheckAcc = PUMP_TICK_SECONDS;
+              }
+            })
+            .finally(() => {
+              autoIoTStepPending = false;
+            });
+        }
+      } else if (!isPumpSprayingManually && !autoIoTActivePlotId && !autoIoTStepPending) {
+        autoIoTCheckAcc += delta;
+        if (autoIoTCheckAcc >= 1.0) {
+          autoIoTCheckAcc = 0;
+          checkAndStartAutoIoT();
         }
       }
       multimediaStation.update(delta);

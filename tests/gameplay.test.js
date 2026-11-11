@@ -95,4 +95,27 @@ describe('Ciclo Completo, Misiones y Resultados', () => {
     expect(comp[0].harvestKg).toBeGreaterThan(0);
     expect(comp[1].compostApplications).toBe(1);
   });
+
+  it('detecta niveles bajos en tiempo real según el umbral configurado en Precisión IoT y detiene al alcanzar objetivo', () => {
+    const sim = new FarmSimulation('precision', { registerAsActive: false });
+    sim.plant('plot_2'); // plot_2 inicia en 75% de humedad
+    expect(sim.getPlotsNeedingRealtimeAutoIrrigation()).toEqual([]);
+
+    // Al subir el umbral a 80%, el sensor debe detectar inmediatamente que plot_2 (75%) necesita riego
+    sim.setAutoIrrigationThreshold(80);
+    const state = sim.getState();
+    expect(state.sensor.thresholdMoisture).toBe(80);
+    expect(state.sensor.readings.plot_2.needsIrrigation).toBe(true);
+    expect(sim.getPlotsNeedingRealtimeAutoIrrigation()).toEqual(['plot_2']);
+
+    // Riego automático progresivo hasta el objetivo óptimo (85%)
+    let last = null;
+    for (let i = 0; i < 12; i++) {
+      last = sim.irrigateContinuousStep(0.5, 'plot_2', 5, 85);
+      if (last.stoppedReason) break;
+    }
+    expect(sim.getState().plots.plot_2.moisture).toBe(85);
+    expect(last.stoppedReason).toBe('target_reached');
+    expect(sim.getPlotsNeedingRealtimeAutoIrrigation()).toEqual([]);
+  });
 });
