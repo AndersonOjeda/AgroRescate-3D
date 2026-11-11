@@ -1,0 +1,604 @@
+/* ============================================================================
+   AgroRescate 3D — Panel HUD Agrícola y Telemetría Educativa
+   Clases prefijadas con .agro-hud-* para convivir sin colisiones con main.css
+   ============================================================================ */
+
+.agro-hud-dock {
+  position: absolute;
+  top: 132px;
+  left: 24px;
+  z-index: 22;
+  width: 348px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  font-family: var(--font-sans, 'Outfit', system-ui, sans-serif);
+}
+
+.agro-hud-toggle {
+  pointer-events: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(12px);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.agro-hud-toggle:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.agro-hud-panel {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 11px 12px;
+  color: #f8fafc;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.48);
+  max-height: calc(100vh - 245px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agro-hud-panel.collapsed {
+  display: none;
+}
+
+.agro-hud-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.agro-hud-panel::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}
+
+.agro-hud-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agro-hud-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+}
+
+.agro-hud-mode-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.agro-hud-mode-badge.mode-subsistence {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.agro-hud-mode-badge.mode-precision {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.agro-hud-mode-badge.mode-ecological {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.agro-hud-demo-btn {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.agro-hud-demo-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  color: #ffffff;
+}
+
+.agro-hud-mode-pills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.agro-hud-mode-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agro-hud-mode-pill:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.agro-hud-mode-pill.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #e0f2fe;
+}
+
+.agro-hud-plot-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.agro-hud-plot-tab {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 5px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.agro-hud-plot-tab.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #d1fae5;
+}
+
+.agro-hud-crop-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agro-hud-crop-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.agro-hud-crop-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.agro-hud-crop-stage {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+}
+
+.agro-hud-crop-stage.withered {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+}
+
+.agro-hud-crop-stage.mature {
+  background: rgba(16, 185, 129, 0.24);
+  color: #6ee7b7;
+}
+
+.agro-hud-stepper {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.agro-hud-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.agro-hud-step-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease;
+}
+
+.agro-hud-step.done .agro-hud-step-bar {
+  background: #10b981;
+}
+
+.agro-hud-step.current .agro-hud-step-bar {
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.65);
+}
+
+.agro-hud-step-label {
+  font-size: 0.58rem;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.agro-hud-step.current .agro-hud-step-label,
+.agro-hud-step.done .agro-hud-step-label {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.agro-hud-crop-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  font-family: var(--font-mono, monospace);
+}
+
+.agro-hud-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.agro-hud-metric-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agro-hud-metric-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.agro-hud-metric-label {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.agro-hud-metric-val {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.agro-hud-bar-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.agro-hud-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.agro-hud-bar-fill.moisture { background: #38bdf8; }
+.agro-hud-bar-fill.fertility { background: #10b981; }
+.agro-hud-bar-fill.health { background: #22c55e; }
+.agro-hud-bar-fill.warn { background: #f59e0b; }
+.agro-hud-bar-fill.danger { background: #ef4444; }
+
+.agro-hud-econ-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.agro-hud-stat-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  padding: 6px 8px;
+}
+
+.agro-hud-stat-k {
+  font-size: 0.64rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agro-hud-stat-v {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: #f8fafc;
+}
+
+.agro-hud-mode-box {
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 11px;
+  padding: 9px 10px;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agro-hud-mode-box-title {
+  font-weight: 700;
+  color: #93c5fd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agro-hud-switch-btn {
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agro-hud-switch-btn.off {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #cbd5e1;
+}
+
+.agro-hud-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.agro-hud-action-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 7px 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.agro-hud-action-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(16, 185, 129, 0.6);
+  transform: translateY(-1px);
+}
+
+.agro-hud-action-btn.primary {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #d1fae5;
+}
+
+.agro-hud-action-btn.full-span {
+  grid-column: span 2;
+}
+
+.agro-hud-action-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.agro-hud-three-box {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agro-hud-three-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+}
+
+.agro-hud-disclaimer {
+  font-size: 0.64rem;
+  color: #64748b;
+  line-height: 1.25;
+}
+
+/* Tarjeta flotante de reporte educativo de cosecha */
+.agro-harvest-card {
+  position: absolute;
+  right: 24px;
+  bottom: 78px;
+  z-index: 26;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: 16px;
+  padding: 14px;
+  color: #f8fafc;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agro-harvest-card.hidden {
+  display: none;
+}
+
+.agro-harvest-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agro-harvest-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #6ee7b7;
+}
+
+.agro-close-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.agro-harvest-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  font-size: 0.74rem;
+}
+
+.agro-harvest-feedback {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.73rem;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Modal de Demostración Comparativa de los 3 Modos */
+.agro-demo-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: auto;
+}
+
+.agro-demo-modal.hidden {
+  display: none;
+}
+
+.agro-demo-dialog {
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 20px;
+  width: 100%;
+  max-width: 820px;
+  max-height: 88vh;
+  overflow-y: auto;
+  color: #f8fafc;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agro-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.agro-demo-col {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.78rem;
+}
+
+.agro-demo-col h3 {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.agro-demo-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-bottom: 3px;
+}
+
+@media (max-width: 860px) {
+  .agro-hud-dock {
+    top: 174px;
+    left: 12px;
+    width: calc(100vw - 24px);
+  }
+
+  .agro-hud-panel {
+    max-height: calc(100vh - 300px);
+  }
+
+  .agro-harvest-card {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: 72px;
+  }
+
+  .agro-demo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

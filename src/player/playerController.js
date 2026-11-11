@@ -1,16 +1,61 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { applyProceduralFarmerRig } from './farmerRig.js';
 
 /**
- * Controlador del Jugador en Tercera Persona con avatar low-poly,
- * rotación suave de cámara, colisiones con límites, soporte de Pointer Lock
+ * Escala, centra en XZ, apoya en Y=0 y activa sombras en un modelo GLB de personaje.
+ * @param {THREE.Object3D} model
+ * @param {number} [targetHeight=2.1]
+ * @returns {THREE.Object3D}
+ */
+export function prepareFarmerGlbModel(model, targetHeight = 2.1) {
+  model.updateMatrixWorld(true);
+  const rawBox = new THREE.Box3().setFromObject(model);
+  const rawSize = rawBox.getSize(new THREE.Vector3());
+
+  if (rawSize.y > 0.0001) {
+    const scale = targetHeight / rawSize.y;
+    model.scale.setScalar(scale);
+  }
+
+  model.updateMatrixWorld(true);
+  const scaledBox = new THREE.Box3().setFromObject(model);
+  const center = scaledBox.getCenter(new THREE.Vector3());
+
+  model.position.x -= center.x;
+  model.position.z -= center.z;
+  model.position.y -= scaledBox.min.y;
+
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  return model;
+}
+
+/**
+ * Controlador del Jugador en Tercera Persona con soporte de modelo GLB animado,
+ * colisiones sólidas, deslizamiento por paredes, sonido/polvo de pisadas, Pointer Lock
  * y modo alternativo de Cámara Orbital (OrbitControls) para inspección aérea.
  */
 export class PlayerController {
-  constructor(camera, domElement, scene) {
+  constructor(camera, domElement, scene, options = {}) {
     this.camera = camera;
     this.domElement = domElement;
     this.scene = scene;
+    this.modelPath = options.modelPath ?? '/models/granjero.glb';
+    this.targetHeight = options.targetHeight ?? 2.1;
+    this.gltfLoader = options.gltfLoader ?? null;
+    this.mixer = null;
+    this.animations = {};
+    this.activeAction = null;
+    this.currentAnimName = null;
+    this._isPlayingAction = false;
+    this.rig = null;
 
     // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
     this.cameraMode = 'third-person';
@@ -150,12 +195,123 @@ export class PlayerController {
     this.onFootstep = null;
     this.parts = {};
 
-    // Crear avatar visual del agricultor
-    this.mesh = this._createFarmerAvatar();
+    // Contenedor principal del jugador (arranca con avatar estilizado articulado y reemplaza con GLB)
+    this.mesh = new THREE.Group();
+    this.mesh.name = 'player_farmer';
+    this.avatarVisual = this._createFarmerAvatar();
+    this.mesh.add(this.avatarVisual);
     this.scene.add(this.mesh);
     this.mesh.position.copy(this.position);
 
+    const canAutoLoadGlb = options.autoLoad !== undefined
+      ? Boolean(options.autoLoad)
+      : (typeof window !== 'undefined' || Boolean(options.gltfLoader));
+
+    this.ready = canAutoLoadGlb
+      ? this.loadGlbAvatar(this.modelPath)
+      : Promise.resolve(false);
+
     this._setupInputListeners();
+  }
+
+  /**
+   * Carga de forma asíncrona el modelo 3D del granjero en formato GLB y aplica rigging/animaciones.
+   * @param {string} [modelUrl]
+   * @returns {Promise<boolean>}
+   */
+  async loadGlbAvatar(modelUrl = this.modelPath) {
+    try {
+      const loader = this.gltfLoader || (this.gltfLoader = new GLTFLoader());
+      const gltf = await loader.loadAsync(modelUrl);
+      if (!gltf || !gltf.scene) return false;
+
+      const model = prepareFarmerGlbModel(gltf.scene, this.targetHeight);
+      model.name = 'farmer_glb_model';
+
+      if (this.avatarVisual) {
+        this.mesh.remove(this.avatarVisual);
+      }
+      this.parts = {};
+      this.avatarVisual = model;
+      this.mesh.add(model);
+
+      if (Array.isArray(gltf.animations) && gltf.animations.length > 0) {
+        this.mixer = new THREE.AnimationMixer(model);
+        this.animations = {};
+        gltf.animations.forEach((clip, idx) => {
+          const key = (clip.name || `clip_${idx}`).toLowerCase();
+          this.animations[key] = this.mixer.clipAction(clip);
+        });
+        this.activeAction = this.animations.idle || this.mixer.clipAction(gltf.animations[0]);
+        this.currentAnimName = this.animations.idle ? 'idle' : 'clip_0';
+        this.activeAction.play();
+      } else {
+        const rig = applyProceduralFarmerRig(model);
+        if (rig) {
+          this.rig = rig;
+          this.mixer = rig.mixer;
+          this.animations = rig.actions;
+          this.currentAnimName = 'idle';
+          this.activeAction = rig.actions.idle;
+          this.activeAction.play();
+          this.mixer.update(0);
+
+          this.mixer.addEventListener('finished', (event) => {
+            if (event.action === this.animations.action) {
+              this._isPlayingAction = false;
+              this._fadeToAnimation('idle', 0.2);
+            }
+          });
+        }
+      }
+
+      return true;
+    } catch (err) {
+      console.warn(`[PlayerController] No se pudo cargar ${modelUrl}, se mantiene avatar de respaldo:`, err?.message || err);
+      return false;
+    }
+  }
+
+  _fadeToAnimation(name, duration = 0.16) {
+    const nextAction = this.animations[name];
+    if (!nextAction || this.currentAnimName === name) return;
+
+    const prevAction = this.activeAction;
+    this.currentAnimName = name;
+    this.activeAction = nextAction;
+
+    nextAction.enabled = true;
+    nextAction.reset();
+    nextAction.setEffectiveTimeScale(1);
+    nextAction.setEffectiveWeight(1);
+    nextAction.play();
+    if (prevAction && prevAction !== nextAction) {
+      prevAction.crossFadeTo(nextAction, duration, false);
+    }
+  }
+
+  /**
+   * Reproduce la animación breve de trabajo agrícola (sembrar/regar/cosechar).
+   * @returns {boolean}
+   */
+  playActionAnimation() {
+    const actionAnim = this.animations.action;
+    if (!actionAnim) return false;
+
+    const prevAction = this.activeAction;
+    this._isPlayingAction = true;
+    this.currentAnimName = 'action';
+    this.activeAction = actionAnim;
+
+    actionAnim.enabled = true;
+    actionAnim.reset();
+    actionAnim.setEffectiveTimeScale(1);
+    actionAnim.setEffectiveWeight(1);
+    actionAnim.play();
+    if (prevAction && prevAction !== actionAnim) {
+      prevAction.crossFadeTo(actionAnim, 0.12, false);
+    }
+    return true;
   }
 
   /**
@@ -164,7 +320,7 @@ export class PlayerController {
    */
   _createFarmerAvatar() {
     const root = new THREE.Group();
-    root.name = 'player_farmer';
+    root.name = 'player_farmer_fallback';
 
     // Materiales con acabado suave y estilizado
     const skinMat = new THREE.MeshLambertMaterial({ color: 0xfad6bf }); // Piel suave
@@ -517,6 +673,10 @@ export class PlayerController {
     this.obstacles.push(obstacle);
   }
 
+  setObstacles(obstacles) {
+    this.obstacles = Array.isArray(obstacles) ? obstacles : [];
+  }
+
   /**
    * Configura dinámicamente la lista de obstáculos y límites según el escenario activo
    */
@@ -703,42 +863,49 @@ export class PlayerController {
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = this.rotationY;
 
-    // ANIMACIONES PROCEDURALES DEL ESQUELETO (Caminar, Correr e Inactivo)
-    if (this.parts && this.parts.pelvis) {
+    // Cadencia de pisadas para sonido y partículas de polvo tanto en GLB como en respaldo
+    if (isMoving) {
+      const cycleSpeed = this.isSprinting ? 12.5 : 8.0;
+      this.walkCycle += delta * cycleSpeed;
+      const sinVal = Math.sin(this.walkCycle);
+      if ((this.prevCycleSin <= 0 && sinVal > 0) || (this.prevCycleSin >= 0 && sinVal < 0)) {
+        if (this.onFootstep) this.onFootstep();
+      }
+      this.prevCycleSin = sinVal;
+    }
+
+    if (isMoving && this._isPlayingAction) {
+      this._isPlayingAction = false;
+    }
+
+    if (this.mixer) {
+      if (this.animations && !this._isPlayingAction) {
+        const targetAnim = isMoving
+          ? (this.isSprinting && this.animations.run ? 'run' : (this.animations.walk ? 'walk' : 'idle'))
+          : 'idle';
+        this._fadeToAnimation(targetAnim, 0.16);
+      }
+      this.mixer.update(delta);
+    } else if (this.parts && this.parts.pelvis) {
+      // ANIMACIONES PROCEDURALES DEL RESPALDO ARTICULADO (Caminar, Correr e Inactivo)
       if (isMoving) {
-        // Frecuencia y amplitud de zancada según si camina o corre
-        const cycleSpeed = this.isSprinting ? 12.5 : 8.0;
         const legAmplitude = this.isSprinting ? 0.85 : 0.50;
         const armAmplitude = this.isSprinting ? 0.85 : 0.50;
         const bobAmount = this.isSprinting ? 0.08 : 0.045;
 
-        this.walkCycle += delta * cycleSpeed;
         const sinVal = Math.sin(this.walkCycle);
         const cosVal = Math.cos(this.walkCycle);
 
-        // Balanceo opuesto de piernas
         this.parts.leftLeg.rotation.x = sinVal * legAmplitude;
         this.parts.rightLeg.rotation.x = -sinVal * legAmplitude;
-
-        // Balanceo cruzado de brazos
         this.parts.leftArm.rotation.x = -sinVal * armAmplitude;
         this.parts.rightArm.rotation.x = sinVal * armAmplitude;
-
-        // Rebote vertical rítmico de la pelvis
         this.parts.pelvis.position.y = 0.68 + Math.abs(cosVal) * bobAmount;
 
-        // Inclinación aerodinámica hacia adelante al correr
         const targetTorsoLean = this.isSprinting ? 0.22 : 0.08;
         this.parts.torso.rotation.x = THREE.MathUtils.lerp(this.parts.torso.rotation.x, targetTorsoLean, delta * 10);
         this.parts.torso.rotation.y = sinVal * 0.06;
-
-        // Detección de impacto de pisada para audio
-        if ((this.prevCycleSin <= 0 && sinVal > 0) || (this.prevCycleSin >= 0 && sinVal < 0)) {
-          if (this.onFootstep) this.onFootstep();
-        }
-        this.prevCycleSin = sinVal;
       } else {
-        // ESTADO INACTIVO (IDLE): Retorno suave de extremidades y ciclo sutil de respiración
         const returnSpeed = delta * 8;
         this.parts.leftLeg.rotation.x = THREE.MathUtils.lerp(this.parts.leftLeg.rotation.x, 0, returnSpeed);
         this.parts.rightLeg.rotation.x = THREE.MathUtils.lerp(this.parts.rightLeg.rotation.x, 0, returnSpeed);
@@ -747,7 +914,6 @@ export class PlayerController {
         this.parts.torso.rotation.x = THREE.MathUtils.lerp(this.parts.torso.rotation.x, 0, returnSpeed);
         this.parts.torso.rotation.y = THREE.MathUtils.lerp(this.parts.torso.rotation.y, 0, returnSpeed);
 
-        // Respiración suave
         const breathTime = performance.now() * 0.002;
         this.parts.pelvis.position.y = 0.68 + Math.sin(breathTime) * 0.015;
         this.parts.torso.scale.y = 1.0 + Math.sin(breathTime) * 0.015;

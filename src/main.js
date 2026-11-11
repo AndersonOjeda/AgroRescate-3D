@@ -8,6 +8,7 @@ import { PhysicsWorld } from './physics/physicsWorld.js';
 import { TriggerSystem } from './systems/triggerSystem.js';
 import { ParticleSystem } from './systems/particleSystem.js';
 import { AudioSystem } from './systems/audioSystem.js';
+import { SkySystem } from './systems/skySystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader } from './world/farmLoader.js';
 import { MultimediaStation } from './world/multimediaStation.js';
@@ -17,93 +18,227 @@ import { DebugGUI } from './ui/debugGui.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
- * Integra todos los módulos y laboratorios de las 12 semanas de Programación de Entornos Multimedia
  */
 async function bootstrap() {
-  console.log('🌾 Iniciando AgroRescate 3D — Universidad Cooperativa de Colombia...');
+  console.log('🌾 Iniciando AgroRescate 3D...');
 
-  // 1. Elementos Base de Three.js (Semanas 1 y 4)
+  // 1. Elementos Base de Three.js
   const canvas = document.getElementById('webgl-canvas');
-  const sceneElements = createScene();
-  const scene = sceneElements.scene;
+  const { scene, sunLight, hemiLight, ambientLight } = createScene();
   const camera = createCamera();
   const { renderer, handleResize } = createRenderer(canvas);
   const gameLoop = new GameLoop();
 
   window.addEventListener('resize', () => handleResize(camera));
 
-  // 2. HUD e Interfaces (Semana 9 y 10)
+  // 2. HUD e Interfaces
   const hud = new HUD();
   hud.updateLoadingProgress(10, 'Inicializando motor 3D y sistemas...');
 
-  // 3. Físicas con Cannon-es (Semanas 5, 6 y 10)
+  // 3. Físicas con Cannon-es
   const physicsWorld = new PhysicsWorld(scene);
 
-  // 4. Sistemas de Partículas (Semanas 4, 9, 10) y Audio Espacial (Semanas 3, 9, 10)
+  // Crear cajas agrícolas físicas iniciales en el almacén
+  physicsWorld.createCrate({ id: 'crate_1', x: 13, y: 1.0, z: -6, mass: 5, color: 0xd97706 });
+  physicsWorld.createCrate({ id: 'crate_2', x: 13, y: 2.0, z: -6, mass: 5, color: 0xb45309 });
+  physicsWorld.createCrate({ id: 'crate_3', x: 14, y: 1.0, z: -6, mass: 5, color: 0xd97706 });
+
+  // 4. Sistemas de Cielo, Partículas y Audio
+  const skySystem = new SkySystem({ scene, sunLight, hemiLight, ambientLight });
   const particleSystem = new ParticleSystem(scene);
   const audioSystem = new AudioSystem(camera);
 
-  // 5. Triggers e Interacciones (Semanas 6 y 9)
+  // 5. Triggers e Interacciones
   const triggerSystem = new TriggerSystem();
   const interactionSystem = new InteractionSystem();
 
-  // 6. Navegación del Jugador y Controles de Cámara (Semanas 1, 6, 7, 10)
+  // 6. Navegación del Jugador
   const player = new PlayerController(camera, canvas, scene);
   player.onFootstep = () => {
     audioSystem.playFootstep();
+    particleSystem.emitFootstepDust(player.getPosition());
   };
 
-  // 7. Adaptador del Simulador Agrícola (Compañero 3)
+  // 7. Adaptador del Simulador Agrícola
   const farmAdapter = new FarmAdapter();
+  hud.connectAdapter(farmAdapter);
 
-  // 8. Carga del Escenario de la Finca (Semanas 7, 8 y 10)
+  // 8. Carga del Escenario de la Finca (GLB o Procedural Fallback)
   const farmLoader = new FarmLoader(scene);
   const farmEnv = await farmLoader.loadFarm((percent, msg) => {
     hud.updateLoadingProgress(percent, msg);
   });
 
-  const coords = farmEnv.coordinates;
+  // Vincular las parcelas visuales con el adaptador agrícola (procedural o nodos de etapa en finca.glb)
+  if (farmEnv && farmEnv.cropPlots) {
+    for (const [plotId, plotInstance] of Object.entries(farmEnv.cropPlots)) {
+      farmAdapter.registerCropPlotVisual(plotId, plotInstance);
+    }
+  } else if (farmEnv?.type === 'glb' && farmEnv.root) {
+    const createGlbPlotVisual = (zonePrefix) => {
+      const stages = [1, 2, 3]
+        .map((n) => farmEnv.root.getObjectByName(`cultivo_${zonePrefix}_etapa_${n}`))
+        .filter(Boolean);
+      if (stages.length === 0) return null;
 
-  // Sincronizar obstáculos y límites físicos dinámicamente con el entorno cargado (GLB / Procedural)
-  if (farmEnv.obstacles) {
+      // Clonar materiales propios para poder tintar en marchito sin afectar árboles/pasto
+      const stageMeshes = [];
+      stages.forEach((stageObj) => {
+        stageObj.traverse((node) => {
+          if (node.isMesh && node.material) {
+            node.material = node.material.clone();
+            const originalColor = node.material.color ? node.material.color.clone() : null;
+            stageMeshes.push({ node, originalColor, stageObj });
+          }
+        });
+      });
+
+      return {
+        setVisualState(visualState) {
+          const [s1, s2, s3] = stages;
+          if (s1) s1.visible = visualState >= 1;
+          if (s2) s2.visible = visualState >= 2;
+          if (s3) s3.visible = visualState === 3;
+
+          const isWithered = visualState === 4;
+          stageMeshes.forEach(({ node, originalColor }) => {
+            if (node.material?.color && originalColor) {
+              if (isWithered) {
+                node.material.color.setHex(0x785338);
+              } else {
+                node.material.color.copy(originalColor);
+              }
+            }
+          });
+          stages.forEach((st) => {
+            if (st) st.scale.y = isWithered ? 0.65 : 1.0;
+          });
+        }
+      };
+    };
+
+    const glbPlotMap = {
+      plot_1: 'subsistencia',
+      plot_2: 'precision',
+      plot_3: 'ecologica'
+    };
+    for (const [plotId, zonePrefix] of Object.entries(glbPlotMap)) {
+      const visual = createGlbPlotVisual(zonePrefix);
+      if (visual) {
+        farmAdapter.registerCropPlotVisual(plotId, visual);
+      }
+    }
+  }
+
+  // Vincular audio posicional al mesh de la bomba de agua
+  const glbPumpMesh = farmEnv?.namedObjects?.get('bomba_agua');
+  if (farmEnv && (farmEnv.waterPumpMesh || glbPumpMesh)) {
+    audioSystem.attachPositionalWater(farmEnv.waterPumpMesh || glbPumpMesh);
+  }
+
+  // Cargar coordenadas interactivas reales del modelo GLB si está activo
+  let interactivos = null;
+  if (farmEnv?.type === 'glb') {
+    try {
+      const resp = await fetch('/models/finca.interactivos.json');
+      if (resp.ok) {
+        const json = await resp.json();
+        interactivos = json?.interactivos || null;
+      }
+    } catch (err) {
+      console.warn('[Main] No se pudo cargar finca.interactivos.json:', err.message);
+    }
+  }
+
+  const isGlb = farmEnv?.type === 'glb';
+  if (isGlb && farmEnv.root) {
+    // Ajustar límites y colisiones de obstáculos al escenario finca.glb (sin usar las cajas del modo procedural)
+    player.bounds = { minX: -19, maxX: 19, minZ: -19, maxZ: 19 };
+    farmEnv.root.updateMatrixWorld(true);
+    const glbObstacleNames = [
+      'casa_rural',
+      'almacen',
+      'bomba_agua',
+      'tanque_agua',
+      'compostera',
+      'fardo_paja',
+      'fardo_paja.001',
+      'fardo_paja.002'
+    ];
+    const glbObstacles = [];
+    for (const obsName of glbObstacleNames) {
+      const node = farmEnv.namedObjects?.get(obsName) || farmEnv.root.getObjectByName(obsName);
+      if (!node) continue;
+      const box = new THREE.Box3().setFromObject(node);
+      if (!box.isEmpty()) {
+        glbObstacles.push({
+          id: obsName,
+          type: 'box',
+          minX: box.min.x,
+          maxX: box.max.x,
+          minZ: box.min.z,
+          maxZ: box.max.z
+        });
+      }
+    }
+    // Unir cajas medidas del GLB con los obstáculos declarados (árboles, tanque, panel, etc.)
+    player.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])], farmEnv.bounds);
+    physicsWorld.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])]);
+  } else if (farmEnv?.obstacles) {
     player.setObstacles(farmEnv.obstacles, farmEnv.bounds);
     physicsWorld.setObstacles(farmEnv.obstacles);
   }
+  const toVecObj = (arr, fallback) =>
+    Array.isArray(arr) ? { x: arr[0], y: arr[1] ?? 0, z: arr[2] } : fallback;
 
-  // Ubicar al jugador en el punto de spawn configurado
-  player.setPosition(coords.spawn.x, coords.spawn.y, coords.spawn.z);
-
-  // Crear cajas agrícolas físicas de Cannon-es en el almacén
-  physicsWorld.createCrate({ id: 'crate_1', x: coords.almacenPos.x - 1, y: 1.0, z: coords.almacenPos.z, mass: 5, color: 0xd97706 });
-  physicsWorld.createCrate({ id: 'crate_2', x: coords.almacenPos.x - 1, y: 2.0, z: coords.almacenPos.z, mass: 5, color: 0xb45309 });
-  physicsWorld.createCrate({ id: 'crate_3', x: coords.almacenPos.x, y: 1.0, z: coords.almacenPos.z, mass: 5, color: 0xd97706 });
-
-  // Configurar orígenes de aspersores según las parcelas del escenario activo
-  particleSystem.setEmitters([
-    new THREE.Vector3(coords.plots[0].x, 1.3, coords.plots[0].z),
-    new THREE.Vector3(coords.plots[1].x, 1.3, coords.plots[1].z),
-    new THREE.Vector3(coords.plots[2].x, 1.3, coords.plots[2].z)
-  ]);
-
-  // Vincular las parcelas visuales con el adaptador agrícola
-  const bindCropPlots = (env) => {
-    if (env && env.cropPlots) {
-      for (const [plotId, plotInstance] of Object.entries(env.cropPlots)) {
-        farmAdapter.registerCropPlotVisual(plotId, plotInstance);
+  const sceneCoords = isGlb
+    ? {
+        pump: toVecObj(interactivos?.bomba_agua?.posicion, { x: 6.5, y: 0, z: 15.6 }),
+        sensor: toVecObj(interactivos?.sensor_humedad?.posicion, { x: -4, y: 0, z: -5 }),
+        compost: toVecObj(interactivos?.compostera?.posicion, { x: -4.6, y: 0, z: 15.1 }),
+        warehouse: toVecObj(interactivos?.almacen?.posicion, { x: 14.0, y: 0, z: 9.4 }),
+        warehouseBounds: { min: [10.5, 0, 5.5], max: [17.5, 4.0, 13.0] },
+        plotRadius: 7.0,
+        plotInteractDist: 7.2,
+        emitterSpread: 3.4,
+        plots: [
+          {
+            id: 'plot_1',
+            name: 'Parcela 1 — Subsistencia',
+            ...toVecObj(interactivos?.parcela_subsistencia?.posicion, { x: 10, y: 0, z: -10 })
+          },
+          {
+            id: 'plot_2',
+            name: 'Parcela 2 — Precisión',
+            ...toVecObj(interactivos?.parcela_precision?.posicion, { x: -10, y: 0, z: -10 })
+          },
+          {
+            id: 'plot_3',
+            name: 'Parcela 3 — Ecológica',
+            ...toVecObj(interactivos?.parcela_ecologica?.posicion, { x: -10, y: 0, z: 10 })
+          }
+        ]
       }
-    }
-  };
-  bindCropPlots(farmEnv);
+    : {
+        pump: { x: -3, y: 0, z: -3 },
+        sensor: { x: 0, y: 0, z: 10.5 },
+        compost: { x: 14, y: 0, z: 1 },
+        warehouse: { x: 12, y: 0, z: -7 },
+        warehouseBounds: { min: [8.5, 0, -11.5], max: [15.5, 4.0, -4.5] },
+        plotRadius: 4.5,
+        plotInteractDist: 4.2,
+        emitterSpread: 1.5,
+        plots: [
+          { id: 'plot_1', name: 'Parcela 1 — Subsistencia', x: -12, y: 0, z: 8 },
+          { id: 'plot_2', name: 'Parcela 2 — Precisión', x: 0, y: 0, z: 14 },
+          { id: 'plot_3', name: 'Parcela 3 — Ecológica', x: 12, y: 0, z: 8 }
+        ]
+      };
 
-  // Vincular audio posicional al mesh de la bomba de agua
-  if (farmEnv && farmEnv.waterPumpMesh) {
-    audioSystem.attachPositionalWater(farmEnv.waterPumpMesh);
-  }
-
-  // 9. Estación Multimedia Interactiva (Semana 3) y Portal Neón (Semana 9)
-  const multimediaStation = new MultimediaStation(
-    scene,
-    new THREE.Vector3(coords.spawn.x + 2.5, 0, coords.spawn.z - 3.5)
+  // Alinear emisores de partículas de riego con las coordenadas reales de las parcelas
+  particleSystem.setEmitters(
+    sceneCoords.plots.map((p) => ({ x: p.x, y: 1.4, z: p.z })),
+    sceneCoords.emitterSpread
   );
 
   // Sincronizar estado inicial del simulador con el HUD y los modelos 3D
@@ -111,13 +246,13 @@ async function bootstrap() {
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
 
-  // 10. CONFIGURACIÓN DE TRIGGERS (Semana 9 & 10)
+  // 9. CONFIGURACIÓN DE TRIGGERS
   // A. Trigger Radial: Alrededor de la Bomba de Agua (Vector3.distanceTo)
   triggerSystem.addRadialTrigger({
     id: 'radial_water_pump',
     name: 'Zona: Bomba y Tanque de Agua',
-    center: { x: coords.bomba.x, y: 0, z: coords.bomba.z },
-    radius: 4.8,
+    center: { x: sceneCoords.pump.x, y: 0, z: sceneCoords.pump.z },
+    radius: 4.5,
     onEnter: () => {
       hud.setZone('Bomba y Tanque de Agua');
       hud.showToast('📍 Te has acercado a la estación de bombeo', 'info', 2500);
@@ -131,8 +266,8 @@ async function bootstrap() {
   triggerSystem.addAABBTrigger({
     id: 'aabb_warehouse',
     name: 'Zona: Almacén y Centro de Cosecha',
-    min: coords.almacenAABB.min,
-    max: coords.almacenAABB.max,
+    min: sceneCoords.warehouseBounds.min,
+    max: sceneCoords.warehouseBounds.max,
     onEnter: () => {
       hud.setZone('Almacén de Cosecha');
       hud.showToast('📦 Has entrado al área de almacenamiento de cosecha', 'success', 3000);
@@ -143,12 +278,14 @@ async function bootstrap() {
   });
 
   // C. Triggers Radiales para cada Parcela
-  coords.plots.forEach(p => {
+  const plotsData = sceneCoords.plots;
+
+  plotsData.forEach(p => {
     triggerSystem.addRadialTrigger({
       id: `trigger_${p.id}`,
       name: `Zona: ${p.name}`,
       center: { x: p.x, y: 0, z: p.z },
-      radius: 5.5,
+      radius: sceneCoords.plotRadius,
       onEnter: () => {
         hud.setZone(p.name);
       },
@@ -158,16 +295,59 @@ async function bootstrap() {
     });
   });
 
-  // 11. CONFIGURACIÓN DE INTERACCIONES CENTRALIZADAS [TECLA E]
+  // 10. CONFIGURACIÓN DE INTERACCIONES CENTRALIZADAS [TECLA E]
+  const PLOT_EMITTER_INDEX = { plot_1: 0, plot_2: 1, plot_3: 2 };
+  let isPumpSprayingManually = false;
+  let irrigationBurstTimer = null;
+
+  const mapPlotIdsToEmitters = (plotIds) => {
+    if (!Array.isArray(plotIds) || plotIds.length === 0) return null;
+    const indices = plotIds
+      .map((id) => PLOT_EMITTER_INDEX[id])
+      .filter((idx) => Number.isInteger(idx));
+    return indices.length > 0 ? indices : null;
+  };
+
+  const triggerIrrigationSprayBurst = (durationMs = 3200, emitterIndices = null) => {
+    if (isPumpSprayingManually) return;
+    if (irrigationBurstTimer) {
+      clearTimeout(irrigationBurstTimer);
+      irrigationBurstTimer = null;
+    }
+    audioSystem.unlockAudio();
+    particleSystem.setSpraying(true, emitterIndices);
+    audioSystem.setWaterSound(true);
+
+    irrigationBurstTimer = setTimeout(() => {
+      irrigationBurstTimer = null;
+      if (!isPumpSprayingManually) {
+        particleSystem.setSpraying(false);
+        audioSystem.setWaterSound(false);
+      }
+    }, durationMs);
+  };
+
   // A. Bomba de Agua: Activar / Desactivar Riego
   interactionSystem.register({
     id: 'interact_pump',
     name: 'Bomba de Agua Hidráulica',
-    position: { x: coords.bomba.x, y: 0.5, z: coords.bomba.z },
+    position: { x: sceneCoords.pump.x, y: 0.5, z: sceneCoords.pump.z },
     actionText: 'Presiona E para activar sistema de riego',
     onInteract: async () => {
       audioSystem.playClick();
-      const isNowSpraying = particleSystem.toggleSpraying();
+      const wasBursting = Boolean(irrigationBurstTimer) && !isPumpSprayingManually;
+      if (irrigationBurstTimer) {
+        clearTimeout(irrigationBurstTimer);
+        irrigationBurstTimer = null;
+      }
+      let isNowSpraying;
+      if (wasBursting) {
+        particleSystem.setSpraying(true);
+        isNowSpraying = true;
+      } else {
+        isNowSpraying = particleSystem.toggleSpraying();
+      }
+      isPumpSprayingManually = isNowSpraying;
       audioSystem.setWaterSound(isNowSpraying);
 
       if (isNowSpraying) {
@@ -188,7 +368,7 @@ async function bootstrap() {
 
   // B. Parcelas Agrícolas: Sembrar / Cosechar según estado
   const setupPlotInteractions = (state) => {
-    coords.plots.forEach(p => {
+    plotsData.forEach(p => {
       const plotState = state.plots[p.id];
       let actionText = 'Presiona E para sembrar';
       if (plotState) {
@@ -208,13 +388,14 @@ async function bootstrap() {
         name: p.name,
         position: { x: p.x, y: 0.5, z: p.z },
         actionText: actionText,
-        customDistance: 5.2,
+        customDistance: sceneCoords.plotInteractDist,
         onInteract: async () => {
           audioSystem.playClick();
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
 
           if (!curPlot.isPlanted) {
+            // Sembrar
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -223,6 +404,7 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (curPlot.daysGrown >= curPlot.daysToMature || curPlot.visualState === 4) {
+            // Cosechar o limpiar
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -244,7 +426,7 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_sensor',
     name: 'Sensor IoT de Humedad de Suelo',
-    position: { x: coords.sensor.x, y: coords.sensor.y, z: coords.sensor.z },
+    position: { x: sceneCoords.sensor.x, y: 1.0, z: sceneCoords.sensor.z },
     actionText: 'Presiona E para consultar telemetría del sensor',
     onInteract: async () => {
       audioSystem.playClick();
@@ -258,7 +440,7 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_compost',
     name: 'Compostera Orgánica',
-    position: { x: coords.compostera.x, y: coords.compostera.y, z: coords.compostera.z },
+    position: { x: sceneCoords.compost.x, y: 0.5, z: sceneCoords.compost.z },
     actionText: 'Presiona E para aplicar abono orgánico',
     onInteract: async () => {
       audioSystem.playClick();
@@ -274,8 +456,8 @@ async function bootstrap() {
   interactionSystem.register({
     id: 'interact_warehouse',
     name: 'Almacén de Cosecha y Cajas Físicas',
-    position: { x: coords.almacenPos.x, y: coords.almacenPos.y, z: coords.almacenPos.z },
-    actionText: 'Presiona E para soltar caja física (Cannon-es)',
+    position: { x: sceneCoords.warehouse.x, y: 0.8, z: sceneCoords.warehouse.z },
+    actionText: 'Presiona E para inspeccionar inventario o soltar caja física',
     onInteract: () => {
       audioSystem.playClick();
       physicsWorld.dropDemoCrate(player.getPosition());
@@ -283,16 +465,18 @@ async function bootstrap() {
     }
   });
 
-  // F. Estación Multimedia Interactiva (Semana 3)
+  // F. Estación Multimedia (Semana 3) y Portal Neón (Semana 9)
+  const spawn = farmEnv?.coordinates?.spawn || { x: 0, y: 0, z: -2 };
+  const multimediaStation = new MultimediaStation(scene, new THREE.Vector3(spawn.x + 2.5, 0, spawn.z - 3.5));
   interactionSystem.register({
     id: 'interact_multimedia',
-    name: 'Estación Multimedia de Telemetría (Semana 3)',
-    position: { x: coords.spawn.x + 2.5, y: 1.5, z: coords.spawn.z - 3.5 },
+    name: 'Estación Multimedia de Telemetría',
+    position: { x: spawn.x + 2.5, y: 1.5, z: spawn.z - 3.5 },
     actionText: 'Presiona E para pausar/reanudar pantalla multimedia',
     onInteract: () => {
       audioSystem.playClick();
-      const isPlaying = multimediaStation.togglePlay();
-      hud.showToast(isPlaying ? '📺 Pantalla multimedia reanudada' : '⏸️ Pantalla multimedia pausada', 'info');
+      const playing = multimediaStation.togglePlay();
+      hud.showToast(playing ? '📺 Pantalla reanudada' : '⏸️ Pantalla pausada', 'info');
     }
   });
 
@@ -305,7 +489,8 @@ async function bootstrap() {
   farmAdapter.on('stateChange', ({ state }) => {
     hud.updateFarmState(state);
 
-    coords.plots.forEach(p => {
+    // Actualizar los textos de acción de las parcelas
+    plotsData.forEach(p => {
       const plotState = state.plots[p.id];
       if (plotState) {
         let actionText = '';
@@ -323,42 +508,47 @@ async function bootstrap() {
     });
   });
 
-  // Cambio de entorno dinámico (GLB <-> Procedural)
-  farmLoader.onEnvironmentChange = (newEnv) => {
-    if (newEnv.obstacles) {
-      player.setObstacles(newEnv.obstacles, newEnv.bounds);
-      physicsWorld.setObstacles(newEnv.obstacles);
+  // Reproducir animación de siembra/cosecha y actualizar cultivos 3D
+  farmAdapter.on('cropPlanted', ({ result }) => {
+    if (result?.success) {
+      player.playActionAnimation();
     }
-    bindCropPlots(newEnv);
-    if (newEnv.waterPumpMesh) {
-      audioSystem.attachPositionalWater(newEnv.waterPumpMesh);
-    }
-    farmAdapter.syncVisuals(initialState);
-  };
-
-  // 12. PANEL DE CONTROL lil-gui (Semanas 2 y 4)
-  const debugGui = new DebugGUI({
-    scene,
-    sunLight: sceneElements.sunLight,
-    ambientLight: sceneElements.ambientLight,
-    hemiLight: sceneElements.hemiLight,
-    player,
-    farmAdapter,
-    physicsWorld,
-    particleSystem,
-    audioSystem,
-    farmLoader,
-    multimediaStation,
-    hud
   });
 
-  // 13. BINDINGS DE BOTONES DEL HUD
+  farmAdapter.on('harvested', ({ result }) => {
+    if (result?.success) {
+      player.playActionAnimation();
+    }
+  });
+
+  // Activar partículas de riego y audio en las parcelas regadas desde el HUD o riego automático IoT
+  farmAdapter.on('irrigated', ({ plotId, result }) => {
+    if (result?.success) {
+      player.playActionAnimation();
+    }
+    if (result?.success && !isPumpSprayingManually) {
+      const targetIds = result.irrigatedPlotIds || (plotId ? [plotId] : null);
+      triggerIrrigationSprayBurst(3200, mapPlotIdsToEmitters(targetIds));
+      audioSystem.playSuccess();
+    }
+  });
+
+  farmAdapter.on('dayAdvanced', ({ result }) => {
+    skySystem.triggerDayNightCycle();
+    if (result?.autoTriggered && !isPumpSprayingManually) {
+      triggerIrrigationSprayBurst(3200, mapPlotIdsToEmitters(result.autoIrrigatedPlotIds));
+      audioSystem.playSuccess();
+    }
+  });
+
+  // 11. BINDINGS DE BOTONES DEL HUD
   // Botón Comenzar
   if (hud.btnStartGame) {
     hud.btnStartGame.addEventListener('click', () => {
-      player.requestLock();
       audioSystem.unlockAudio();
+      audioSystem.startAmbientMusic();
       audioSystem.startAmbient();
+      player.requestLock();
     });
   }
 
@@ -413,24 +603,21 @@ async function bootstrap() {
     });
   }
 
-  // Botón Alternar Modo de Cámara (3ra Persona / OrbitControls)
+  // Cámara dual (tecla C también funciona dentro de PlayerController)
   if (hud.btnToggleCam) {
     hud.btnToggleCam.addEventListener('click', () => {
-      audioSystem.playClick();
       const mode = player.toggleCameraMode();
-      hud.showToast(mode === 'orbit' ? '🛸 Cámara: Órbita Libre (Mouse Drag/Zoom)' : '🏃 Cámara: Tercera Persona (WASD)', 'info');
+      hud.showToast(mode === 'orbit' ? '🎥 Cámara orbital libre' : '🧑‍🌾 Cámara en tercera persona', 'info', 1800);
     });
   }
 
-  // Botón Alternar Panel lil-gui
+  // Panel lil-gui (Semanas 2 y 4)
+  const debugGui = new DebugGUI({ scene, sunLight, ambientLight, hemiLight, player, farmAdapter, physicsWorld, particleSystem, audioSystem, farmLoader, multimediaStation, hud });
   if (hud.btnToggleGui) {
-    hud.btnToggleGui.addEventListener('click', () => {
-      audioSystem.playClick();
-      debugGui.toggle();
-    });
+    hud.btnToggleGui.addEventListener('click', () => debugGui.toggle && debugGui.toggle());
   }
 
-  // Teclas Rápidas de Navegación y Atajos
+  // Tecla F para soltar caja física en cualquier momento
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') {
       physicsWorld.dropDemoCrate(player.getPosition());
@@ -441,59 +628,61 @@ async function bootstrap() {
     }
   });
 
-  // Desbloquear audio tras el primer click o tecla (Políticas de Autoplay)
-  window.addEventListener('click', () => audioSystem.unlockAudio(), { once: true });
-  window.addEventListener('keydown', () => audioSystem.unlockAudio(), { once: true });
+  // Desbloquear audio y asegurar que suene /audio/bgm.mp3 tras cualquier interacción del jugador
+  const ensureAudioOnGesture = () => {
+    if (audioSystem.isMuted) return;
+    if (!audioSystem.isAudioUnlocked || !audioSystem.isMusicPlaying()) {
+      audioSystem.unlockAudio();
+    }
+  };
+  window.addEventListener('pointerdown', ensureAudioOnGesture);
+  window.addEventListener('keydown', ensureAudioOnGesture);
 
-  // 14. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK) — 60 FPS
+  // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
   gameLoop.addUpdateCallback((delta, fps) => {
-    // A. Actualizar jugador y cámara
+    // A. Actualizar jugador y cámara en tercera persona
     player.update(delta);
     const pPos = player.getPosition();
-
-    // Actualizar colisionador cinemático del jugador en Cannon-es
     physicsWorld.updatePlayerPosition(pPos);
 
-    // B. Paso de física fija de Cannon-es y sincronización de matrices
+    // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
     physicsWorld.step(delta);
 
-    // C. Actualizar sistemas de partículas (aspersores, lluvia y polvo) sin asignaciones dinámicas
-    particleSystem.update(delta);
-
-    // D. Actualizar estación multimedia animada y portal neón (Semanas 3 y 9)
-    multimediaStation.update(delta);
-
-    // Detección de Teletransporte por Bounding Box (Semana 9)
-    if (multimediaStation.checkTeleport(pPos)) {
-      audioSystem.playSuccess();
-      hud.showToast('🌀 ¡Portal Cuántico activado! Teletransportando al centro de la finca...', 'success', 3500);
-      player.setPosition(coords.spawn.x, coords.spawn.y, coords.spawn.z);
-    }
-
-    // Actualizar animaciones ambientales
+    // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino) y partículas
+    skySystem.update(delta);
     if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
       farmEnv.environment.update(delta);
     }
+    particleSystem.update(delta);
+    multimediaStation.update(delta);
+    if (multimediaStation.checkTeleport(pPos)) {
+      audioSystem.playSuccess();
+      hud.showToast('🌀 Portal activado: regresando al punto inicial', 'success', 3000);
+      player.setPosition(spawn.x, spawn.y, spawn.z);
+    }
 
-    // E. Detección de proximidad para interacción [E]
+    // D. Detección de proximidad para interacción [E]
     interactionSystem.update(pPos);
 
-    // F. Detección de zonas espaciales por triggers (Radial y AABB)
+    // E. Detección de zonas espaciales por triggers (Radial y AABB)
     triggerSystem.update(pPos);
 
-    // G. Actualizar datos en el HUD
+    // F. Actualizar datos en el HUD
     hud.updateCoordinates(pPos.x, pPos.y, pPos.z);
     hud.updateFps(fps);
 
-    // H. Renderizar escena
+    // G. Renderizar escena
     renderer.render(scene, camera);
   });
+
+  // Esperar modelo del granjero antes de revelar la escena (si falla, conserva respaldo)
+  hud.updateLoadingProgress(95, 'Cargando personaje granjero...');
+  await player.ready;
 
   // Finalizar carga y arrancar el bucle
   hud.updateLoadingProgress(100, '¡Finca lista!');
   setTimeout(() => {
     hud.hideLoadingScreen();
-    window.__agro = { player, farmLoader, physicsWorld, farmAdapter };
     gameLoop.start();
     console.log('✅ AgroRescate 3D inicializado y ejecutándose a 60 FPS.');
   }, 400);
