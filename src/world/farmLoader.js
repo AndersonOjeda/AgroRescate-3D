@@ -9,7 +9,7 @@ export const GLB_BOUNDS = {
   minX: -19.2,
   maxX: 22.2,
   minZ: -21.5,
-  maxZ: 18.0
+  maxZ: 18.2
 };
 
 /**
