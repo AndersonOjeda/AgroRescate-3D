@@ -8,7 +8,29 @@
  */
 
 export const EDUCATIONAL_DISCLAIMER =
-  'Valores educativos de demostración (no representan datos científicos validados).';
+  'Modelo educativo en pesos colombianos (COP) basado en rangos referenciales SIPSA-DANE, Corabastos, EAAB/EPM (CRA) y CREG; no sustituye análisis agronómicos de campo.';
+
+export const COLOMBIA_PRICE_SOURCES = Object.freeze({
+  currency: 'COP',
+  lettuceWholesale: 'DANE - SIPSA / Corabastos (docena 10 kg entre $15.000 y $40.000 COP -> $1.500–$4.000 COP/kg)',
+  seedlings: 'Viveros agrícolas colombianos / SIPSA Insumos ($120–$350 COP por plántula de lechuga)',
+  compost: 'SIPSA Insumos DANE / registro ICA ($35.000–$55.000 COP por bulto de 50 kg de abono orgánico)',
+  water: 'Acueducto de Bogotá (EAAB Acuerdo 244 de 2026) y EPM bajo marco CRA ($2.271–$3.218 COP/m³ en estrato 2–3)',
+  electricity: 'CREG / Enel Colombia / EPM (~$450–$991 COP/kWh según estrato y tarifa plena de bombeo)'
+});
+
+/**
+ * Formatea un monto monetario en pesos colombianos (COP).
+ * @param {number} value
+ * @param {{ withCurrency?: boolean, showPlus?: boolean }} [options]
+ * @returns {string}
+ */
+export function formatCOP(value, { withCurrency = false, showPlus = false } = {}) {
+  const num = Math.round(Number(value) || 0);
+  const abs = Math.abs(num).toLocaleString('es-CO');
+  const sign = num < 0 ? '-' : (showPlus && num > 0 ? '+' : '');
+  return withCurrency ? `${sign}$${abs} COP` : `${sign}$${abs}`;
+}
 
 export const SIMULATION_MODES = Object.freeze({
   SUBSISTENCE: 'subsistence',
@@ -43,7 +65,7 @@ export const MODE_CONFIGS = Object.freeze({
     description:
       'Riego manual tradicional con bajo presupuesto inicial, mayor consumo de agua por evento y desgaste gradual del suelo.',
     primaryPlotId: 'plot_1',
-    initialBudget: 500,
+    initialBudget: 150000,
     initialWater: 600,
     maxWater: 1000,
     initialSoilQuality: 60,
@@ -52,11 +74,11 @@ export const MODE_CONFIGS = Object.freeze({
     evaporationRate: 20,
     dailyFertilityDrain: 3,
     harvestFertilityDrain: 5,
-    seedCost: 35,
-    irrigationCost: 6,
-    compostCost: 20,
+    seedCost: 22000,
+    irrigationCost: 1500,
+    compostCost: 18000,
     waterRefillLiters: 250,
-    waterRefillCost: 25,
+    waterRefillCost: 1500,
     supportsSensor: false,
     supportsAutoIrrigation: false,
     autoIrrigationThreshold: 0,
@@ -72,7 +94,7 @@ export const MODE_CONFIGS = Object.freeze({
     description:
       'Monitoreo por sensor virtual de humedad, micro-riego automático cuando baja el umbral hídrico y alta eficiencia productiva.',
     primaryPlotId: 'plot_2',
-    initialBudget: 1400,
+    initialBudget: 450000,
     initialWater: 900,
     maxWater: 1500,
     initialSoilQuality: 80,
@@ -81,11 +103,11 @@ export const MODE_CONFIGS = Object.freeze({
     evaporationRate: 16,
     dailyFertilityDrain: 2,
     harvestFertilityDrain: 3,
-    seedCost: 60,
-    irrigationCost: 4,
-    compostCost: 20,
+    seedCost: 45000,
+    irrigationCost: 800,
+    compostCost: 18000,
     waterRefillLiters: 300,
-    waterRefillCost: 25,
+    waterRefillCost: 1500,
     supportsSensor: true,
     supportsAutoIrrigation: true,
     autoIrrigationThreshold: 45,
@@ -101,7 +123,7 @@ export const MODE_CONFIGS = Object.freeze({
     description:
       'Uso de compost orgánico para regenerar la fertilidad, retener mejor la humedad del suelo y obtener cosechas ecológicas de mayor valor.',
     primaryPlotId: 'plot_3',
-    initialBudget: 850,
+    initialBudget: 280000,
     initialWater: 800,
     maxWater: 1200,
     initialSoilQuality: 95,
@@ -110,11 +132,11 @@ export const MODE_CONFIGS = Object.freeze({
     evaporationRate: 11,
     dailyFertilityDrain: 1,
     harvestFertilityDrain: 2,
-    seedCost: 45,
-    irrigationCost: 4,
+    seedCost: 32000,
+    irrigationCost: 1000,
     compostCost: 0,
     waterRefillLiters: 280,
-    waterRefillCost: 25,
+    waterRefillCost: 1500,
     supportsSensor: false,
     supportsAutoIrrigation: false,
     autoIrrigationThreshold: 0,
@@ -134,7 +156,7 @@ export const PLOT_TEMPLATES = Object.freeze([
     daysToMature: 3,
     initialMoisture: 50,
     baseYieldKg: 45,
-    marketValuePerKg: 5
+    marketValuePerKg: 2200
   },
   {
     id: 'plot_2',
@@ -145,7 +167,7 @@ export const PLOT_TEMPLATES = Object.freeze([
     daysToMature: 2,
     initialMoisture: 75,
     baseYieldKg: 85,
-    marketValuePerKg: 7
+    marketValuePerKg: 2800
   },
   {
     id: 'plot_3',
@@ -156,7 +178,7 @@ export const PLOT_TEMPLATES = Object.freeze([
     daysToMature: 3,
     initialMoisture: 65,
     baseYieldKg: 65,
-    marketValuePerKg: 9
+    marketValuePerKg: 3200
   }
 ]);
 

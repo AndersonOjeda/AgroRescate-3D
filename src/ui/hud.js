@@ -12,7 +12,7 @@ import {
   setActivePlot,
   setAutoIrrigation
 } from '../simulation/farmSimulation.js';
-import { CROP_STAGES, EDUCATIONAL_DISCLAIMER, SIMULATION_MODES } from '../simulation/constants.js';
+import { CROP_STAGES, EDUCATIONAL_DISCLAIMER, SIMULATION_MODES, formatCOP } from '../simulation/constants.js';
 import { GUIDE_STEPS } from '../world/guideChicken.js';
 
 const LIFECYCLE_STEPS = [
@@ -295,7 +295,7 @@ export class HUD {
     this.lastState = state;
 
     if (this.hudDay) this.hudDay.textContent = state.day;
-    if (this.hudBudget) this.hudBudget.textContent = `$${state.budget.toLocaleString()}`;
+    if (this.hudBudget) this.hudBudget.textContent = formatCOP(state.budget, { withCurrency: true });
     if (this.hudHarvest) this.hudHarvest.textContent = `${state.harvestedTotalKg} kg`;
 
     if (this.hudWater && this.meterWater) {
@@ -377,8 +377,8 @@ export class HUD {
         ['Salud cosecha', `${item.healthAtHarvest}%`],
         ['Producción', `${item.harvestKg} kg`],
         ['Calidad', item.qualityGrade],
-        ['Ingresos', `$${item.earnings}`],
-        ['Balance neto', `$${item.netProfit}`],
+        ['Ingresos', formatCOP(item.earnings, { withCurrency: true })],
+        ['Balance neto', formatCOP(item.netProfit, { withCurrency: true, showPlus: true })],
         ['Sostenibilidad', `${item.sustainabilityScore}/100`]
       ];
 
@@ -648,7 +648,7 @@ export class HUD {
     const econGrid = d.createElement('div');
     econGrid.className = 'agro-hud-econ-grid';
     const statDay = this._createStatBox('Día Virtual', 'Día 1');
-    const statBudget = this._createStatBox('Presupuesto', '$1,400');
+    const statBudget = this._createStatBox('Presupuesto', '$450.000 COP');
     const statWaterUsed = this._createStatBox('Consumo Agua', '0 L');
     const statBalance = this._createStatBox('Gastos / Neto', '$0 / $0');
     econGrid.appendChild(statDay.box);
@@ -1161,11 +1161,11 @@ export class HUD {
 
     // Economía y agua
     refs.statDay.val.textContent = `Día ${state.day}`;
-    refs.statBudget.val.textContent = `$${state.budget.toLocaleString()}`;
+    refs.statBudget.val.textContent = formatCOP(state.budget, { withCurrency: true });
     refs.statWaterUsed.val.textContent = `${state.waterConsumed ?? 0} L`;
     const expenses = state.economy?.totalExpenses ?? 0;
     const net = state.economy?.netProfit ?? 0;
-    refs.statBalance.val.textContent = `-$${expenses} / ${net >= 0 ? '+' : ''}$${net}`;
+    refs.statBalance.val.textContent = `-${formatCOP(expenses)} / ${formatCOP(net, { showPlus: true })} COP`;
 
     // Panel específico de modalidad
     this._renderModeDetailBox(state, activePlot);
@@ -1179,7 +1179,7 @@ export class HUD {
       refs.btnPrepare.style.display = canPrepare ? '' : 'none';
     }
     refs.btnPlant.disabled = !avail.canPlant;
-    refs.btnPlant.textContent = `🌱 Sembrar ($${state.seedCost ?? 35})`;
+    refs.btnPlant.textContent = `🌱 Sembrar (${formatCOP(state.seedCost ?? 22000)})`;
     refs.btnPlant.style.display = !activePlot.isPlanted ? '' : 'none';
 
     refs.btnIrrigate.disabled = !avail.canIrrigate;
@@ -1188,7 +1188,7 @@ export class HUD {
 
     refs.btnCompost.disabled = !avail.canCompost;
     refs.btnCompost.textContent =
-      state.compostCost > 0 ? `♻️ Compost ($${state.compostCost})` : '♻️ Compost (Gratis)';
+      state.compostCost > 0 ? `♻️ Compost (${formatCOP(state.compostCost)})` : '♻️ Compost (Gratis)';
     refs.btnCompost.style.display =
       state.mode === SIMULATION_MODES.ECOLOGICAL || activePlot.isPlanted ? '' : 'none';
 
@@ -1314,7 +1314,7 @@ export class HUD {
       ['Cultivo', report.cropName],
       ['Calidad', report.qualityGrade],
       ['Cosechado', `${report.harvestKg} kg`],
-      ['Ingreso', `+$${report.earnings}`],
+      ['Ingreso', `${formatCOP(report.earnings, { withCurrency: true, showPlus: true })}`],
       ['Eficiencia agua', `${report.waterEfficiencyKgPer100L} kg/100L`],
       ['Sostenibilidad', `${report.sustainabilityScore}/100`]
     ];

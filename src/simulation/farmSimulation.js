@@ -4,6 +4,7 @@ import {
   MODE_CONFIGS,
   PLOT_TEMPLATES,
   SIMULATION_MODES,
+  formatCOP,
   normalizeMode
 } from './constants.js';
 import {
@@ -161,7 +162,7 @@ export class FarmSimulation {
     if (this.budget < seedCost) {
       return {
         success: false,
-        message: `Presupuesto insuficiente para semillas ($${seedCost} requeridos)`
+        message: `Presupuesto insuficiente para semillas (${formatCOP(seedCost, { withCurrency: true })} requeridos)`
       };
     }
 
@@ -178,7 +179,7 @@ export class FarmSimulation {
     target.yieldKg = projectedKg;
     syncPlotStageAndVisual(target);
 
-    const msg = `Sembraste ${target.cropName} en ${target.name} (-$${seedCost})`;
+    const msg = `Sembraste ${target.cropName} en ${target.name} (-${formatCOP(seedCost)} COP)`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
     return {
@@ -430,7 +431,7 @@ export class FarmSimulation {
       } else {
         return {
           success: false,
-          message: `Presupuesto insuficiente para operar el riego ($${cashCost} requeridos)`
+          message: `Presupuesto insuficiente para operar el riego (${formatCOP(cashCost, { withCurrency: true })} requeridos)`
         };
       }
     }
@@ -448,7 +449,7 @@ export class FarmSimulation {
     }
 
     const targetLabel = plotId ? this.plots[plotId].name : 'la finca';
-    const costSuffix = cashCost > 0 ? `, -$${cashCost}` : emergencyManualNote;
+    const costSuffix = cashCost > 0 ? `, -${formatCOP(cashCost)} COP` : emergencyManualNote;
     const msg = `Riego aplicado en ${targetLabel} (-${waterCostL} L${costSuffix})`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
@@ -482,7 +483,7 @@ export class FarmSimulation {
     if (this.budget < cost) {
       return {
         success: false,
-        message: `Presupuesto insuficiente para recargar agua ($${cost} requeridos).`
+        message: `Presupuesto insuficiente para recargar agua (${formatCOP(cost, { withCurrency: true })} requeridos).`
       };
     }
 
@@ -491,7 +492,7 @@ export class FarmSimulation {
     this.budget -= cost;
     this.economy.waterExpenses += cost;
 
-    const msg = `Tanque recargado con +${added} L (-$${cost})`;
+    const msg = `Tanque recargado con +${added} L (-${formatCOP(cost)} COP)`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
     return {
@@ -756,7 +757,7 @@ export class FarmSimulation {
     syncPlotStageAndVisual(target);
     this._recomputeFarmSoilQuality();
 
-    const msg = `¡Cosecha exitosa! Recolectaste ${projectedKg} kg de ${target.cropName} (+$${earnings})`;
+    const msg = `¡Cosecha exitosa! Recolectaste ${projectedKg} kg de ${target.cropName} (+${formatCOP(earnings)} COP)`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
     return {
@@ -783,7 +784,7 @@ export class FarmSimulation {
     if (this.budget < cost) {
       return {
         success: false,
-        message: `Presupuesto insuficiente para compost ($${cost} requeridos)`
+        message: `Presupuesto insuficiente para compost (${formatCOP(cost, { withCurrency: true })} requeridos)`
       };
     }
 
@@ -807,7 +808,7 @@ export class FarmSimulation {
     this._recomputeFarmSoilQuality();
 
     const scopeLabel = plotId ? this.plots[plotId].name : 'toda la finca';
-    const costText = cost > 0 ? ` (-$${cost})` : ' (compostera propia, sin costo)';
+    const costText = cost > 0 ? ` (-${formatCOP(cost)} COP)` : ' (compostera propia, sin costo)';
     const msg = `Compost orgánico aplicado en ${scopeLabel}${costText}. Fertilidad del suelo: ${this.soilQuality}%`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 

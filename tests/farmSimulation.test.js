@@ -24,13 +24,13 @@ describe('Sistema de Simulación Agrícola — AgroRescate 3D', () => {
   it('expone las funciones contractuales independientes y normaliza modalidades', () => {
     const subState = initializeFarm('subsistencia');
     expect(subState.mode).toBe(SIMULATION_MODES.SUBSISTENCE);
-    expect(subState.budget).toBe(500);
+    expect(subState.budget).toBe(150000);
     expect(subState.waterReserve).toBe(600);
     expect(subState.fertility).toBe(60);
 
     const ecoState = initializeFarm('ecológica');
     expect(ecoState.mode).toBe(SIMULATION_MODES.ECOLOGICAL);
-    expect(ecoState.budget).toBe(850);
+    expect(ecoState.budget).toBe(280000);
     expect(ecoState.soilQuality).toBe(95);
 
     const preState = initializeFarm('precision');
@@ -175,12 +175,12 @@ describe('Sistema de Simulación Agrícola — AgroRescate 3D', () => {
     expect(setActivePlot('inexistente').success).toBe(false);
     expect(harvest('plot_1').success).toBe(false);
 
-    // Gasto de siembra y riego
+    // Gasto de siembra y riego en COP
     plant('plot_1');
     irrigate('plot_1');
     let state = getState();
-    expect(state.economy.seedExpenses).toBe(35);
-    expect(state.economy.irrigationExpenses).toBe(6);
+    expect(state.economy.seedExpenses).toBe(22000);
+    expect(state.economy.irrigationExpenses).toBe(1500);
     expect(state.waterConsumed).toBe(120);
 
     // Recarga de agua

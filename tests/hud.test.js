@@ -162,7 +162,7 @@ describe('HUD — Interfaz de Simulación e Integración con Three.js', () => {
     hud.updateFarmState(getState());
 
     expect(doc.getElementById('hud-day').textContent).toBe(1);
-    expect(doc.getElementById('hud-budget').textContent).toBe('$465');
+    expect(doc.getElementById('hud-budget').textContent).toBe('$128.000 COP');
     expect(doc.getElementById('agro-crop-stage').textContent).toBe('Sembrado');
     expect(doc.getElementById('agro-mode-badge').textContent).toContain('Manual');
     expect(hud.panelRefs.moistureMetric.val.textContent).toBe('50%');

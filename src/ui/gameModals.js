@@ -1,4 +1,5 @@
 import { buildRunResult } from '../gameplay/resultsStore.js';
+import { formatCOP } from '../simulation/constants.js';
 
 /**
  * Controlador de pantallas y modales principales del juego:
@@ -278,7 +279,7 @@ export class GameModalsController {
         ['Modalidad', run.modeLabel],
         ['Días transcurridos', `${run.days} días`],
         ['Agua consumida', `${run.waterConsumed} L`],
-        ['Gastos / Neto', `$${run.expenses} / $${run.netProfit}`],
+        ['Gastos / Neto', `${formatCOP(run.expenses)} / ${formatCOP(run.netProfit, { withCurrency: true, showPlus: true })}`],
         ['Salud del suelo', `${run.soilQuality}%`],
         ['Humedad final', `${run.finalMoisture}%`],
         ['Salud del cultivo', `${run.cropHealth}%`],
@@ -328,7 +329,7 @@ export class GameModalsController {
         const tbody = document.createElement('tbody');
         for (const r of comp) {
           const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${r.modeLabel}</td><td>${r.days}</td><td>${r.waterConsumed} L</td><td>${r.soilQuality}%</td><td>${r.harvestKg} kg</td><td>$${r.netProfit}</td>`;
+          tr.innerHTML = `<td>${r.modeLabel}</td><td>${r.days}</td><td>${r.waterConsumed} L</td><td>${r.soilQuality}%</td><td>${r.harvestKg} kg</td><td>${formatCOP(r.netProfit, { withCurrency: true, showPlus: true })}</td>`;
           tbody.appendChild(tr);
         }
         tbl.appendChild(tbody);

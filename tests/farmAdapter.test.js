@@ -15,7 +15,7 @@ describe('FarmSimulation & FarmAdapter — Contrato Agrícola', () => {
     const state = await adapter.getState();
     expect(state.mode).toBe('precision');
     expect(state.day).toBe(1);
-    expect(state.budget).toBe(1400);
+    expect(state.budget).toBe(450000);
     expect(state.waterReserve).toBe(900);
     expect(state.soilQuality).toBe(80);
     expect(state.plots.plot_2.isPlanted).toBe(false);
@@ -24,7 +24,7 @@ describe('FarmSimulation & FarmAdapter — Contrato Agrícola', () => {
   it('debe soportar el cambio a modo subsistencia y ecológica', async () => {
     const stateSub = await adapter.initializeFarm('subsistence');
     expect(stateSub.mode).toBe('subsistence');
-    expect(stateSub.budget).toBe(500);
+    expect(stateSub.budget).toBe(150000);
 
     const stateEco = await adapter.initializeFarm('ecological');
     expect(stateEco.mode).toBe('ecological');
@@ -38,7 +38,7 @@ describe('FarmSimulation & FarmAdapter — Contrato Agrícola', () => {
     const state = await adapter.getState();
     expect(state.plots.plot_1.isPlanted).toBe(true);
     expect(state.plots.plot_1.visualState).toBe(1); // Brote
-    expect(state.budget).toBeLessThan(1400);
+    expect(state.budget).toBeLessThan(450000);
   });
 
   it('debe permitir regar y aumentar la humedad consumiendo agua de reserva', async () => {
