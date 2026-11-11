@@ -1,0 +1,57 @@
+{
+  "version": "1.0.0",
+  "descripcion": "Coordenadas del escenario 3D de AgroRescate para sincronización con Blender y Three.js",
+  "spawn": { "x": 0, "y": 1.0, "z": -2 },
+  "elementos": {
+    "terreno": { "x": 0, "y": 0, "z": 0, "size": [80, 80] },
+    "casaRural": { "x": -16, "y": 0, "z": -14, "rotacionY": 0.2 },
+    "granero": { "x": 16, "y": 0, "z": -14, "rotacionY": -0.2 },
+    "tanqueAgua": { "x": -4, "y": 0, "z": -4 },
+    "bombaAgua": { "x": -3, "y": 0, "z": -3, "radioTrigger": 4.5 },
+    "almacenCosecha": {
+      "x": 12, "y": 0, "z": -8,
+      "bounds": { "min": [8.5, 0, -11.5], "max": [15.5, 4.0, -4.5] }
+    },
+    "compostera": { "x": 14, "y": 0, "z": 1 },
+    "cajasFisicas": [
+      { "id": "crate_1", "x": 13, "y": 1.0, "z": -6, "size": [0.9, 0.9, 0.9], "mass": 5 },
+      { "id": "crate_2", "x": 13, "y": 2.0, "z": -6, "size": [0.9, 0.9, 0.9], "mass": 5 },
+      { "id": "crate_3", "x": 14, "y": 1.0, "z": -6, "size": [0.9, 0.9, 0.9], "mass": 5 }
+    ],
+    "parcelas": [
+      {
+        "id": "plot_1",
+        "nombre": "Parcela 1 — Subsistencia",
+        "modo": "subsistence",
+        "x": -12, "y": 0.05, "z": 8,
+        "width": 7, "depth": 7,
+        "filas": 4, "columnas": 4,
+        "tipoCultivo": "Maíz Tradicional"
+      },
+      {
+        "id": "plot_2",
+        "nombre": "Parcela 2 — Precisión",
+        "modo": "precision",
+        "x": 0, "y": 0.05, "z": 14,
+        "width": 7, "depth": 7,
+        "filas": 4, "columnas": 4,
+        "tipoCultivo": "Hortalizas Tecnificadas",
+        "sensorHumedad": { "x": 0, "y": 0.8, "z": 11 }
+      },
+      {
+        "id": "plot_3",
+        "nombre": "Parcela 3 — Ecológica",
+        "modo": "ecological",
+        "x": 12, "y": 0.05, "z": 8,
+        "width": 7, "depth": 7,
+        "filas": 4, "columnas": 4,
+        "tipoCultivo": "Policultivo Agroecológico"
+      }
+    ],
+    "aspersores": [
+      { "id": "sprinkler_1", "x": -12, "y": 1.2, "z": 8, "plotId": "plot_1" },
+      { "id": "sprinkler_2", "x": 0, "y": 1.2, "z": 14, "plotId": "plot_2" },
+      { "id": "sprinkler_3", "x": 12, "y": 1.2, "z": 8, "plotId": "plot_3" }
+    ]
+  }
+}

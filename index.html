@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgroRescate 3D — Simulador Educativo de Agricultura Inteligente</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Canvas 3D de Three.js -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- Pantalla de Carga -->
+    <div id="loading-screen" class="loading-screen">
+      <div class="loading-card">
+        <div class="loading-logo">🌱 AgroRescate 3D</div>
+        <div class="loading-subtitle">Simulador Educativo de Agricultura Inteligente</div>
+        <div class="loading-bar-container">
+          <div id="loading-bar" class="loading-bar"></div>
+        </div>
+        <div id="loading-status" class="loading-status">Inicializando entorno 3D...</div>
+        <div class="loading-info">UCC — Programación Orientada a Entornos Multimedia</div>
+      </div>
+    </div>
+
+    <!-- Pantalla de Inicio / Bloqueo de Puntero -->
+    <div id="start-overlay" class="start-overlay hidden">
+      <div class="start-card">
+        <h1>🌾 AgroRescate 3D</h1>
+        <p class="tagline">Explora la finca rural y experimenta con 3 enfoques agrícolas:</p>
+        <div class="mode-badges">
+          <span class="mode-badge subsistence">1. Subsistencia</span>
+          <span class="mode-badge precision">2. Precisión</span>
+          <span class="mode-badge ecological">3. Ecológica</span>
+        </div>
+        <div class="instructions-grid">
+          <div class="instruction-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
+          <div class="instruction-item"><kbd>Mouse</kbd><span>Rotar Cámara</span></div>
+          <div class="instruction-item"><kbd>E</kbd><span>Interactuar</span></div>
+          <div class="instruction-item"><kbd>Shift</kbd><span>Correr</span></div>
+          <div class="instruction-item"><kbd>R</kbd><span>Lluvia / Clima</span></div>
+          <div class="instruction-item"><kbd>F</kbd><span>Tirar Caja Física</span></div>
+          <div class="instruction-item"><kbd>ESC</kbd><span>Liberar Cursor</span></div>
+        </div>
+        <button id="btn-start-game" class="btn-primary">Comenzar Exploración 🚜</button>
+      </div>
+    </div>
+
+    <!-- Retícula Central -->
+    <div id="crosshair" class="crosshair"></div>
+
+    <!-- Prompt de Interacción Central [E] -->
+    <div id="interaction-prompt" class="interaction-prompt hidden">
+      <div class="key-indicator">E</div>
+      <div class="prompt-text">
+        <span id="prompt-action" class="prompt-action">Interactuar</span>
+        <span id="prompt-target" class="prompt-target">Objeto</span>
+      </div>
+    </div>
+
+    <!-- HUD Principal Superior -->
+    <header id="hud-top" class="hud-top">
+      <div class="hud-panel farm-status-panel">
+        <div class="stat-group">
+          <span class="stat-label">MODO</span>
+          <select id="mode-selector" class="mode-dropdown">
+            <option value="subsistence">Subsistencia</option>
+            <option value="precision" selected>Precisión (IoT)</option>
+            <option value="ecological">Ecológica</option>
+          </select>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group">
+          <span class="stat-label">DÍA</span>
+          <span id="hud-day" class="stat-value highlight">1</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group">
+          <span class="stat-label">AGUA</span>
+          <div class="progress-meter">
+            <div id="meter-water" class="progress-bar water" style="width: 80%"></div>
+          </div>
+          <span id="hud-water" class="stat-value-sub">800 L</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group">
+          <span class="stat-label">SUELO</span>
+          <div class="progress-meter">
+            <div id="meter-soil" class="progress-bar soil" style="width: 75%"></div>
+          </div>
+          <span id="hud-soil" class="stat-value-sub">75%</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group">
+          <span class="stat-label">PRESUPUESTO</span>
+          <span id="hud-budget" class="stat-value budget">$1,200</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group">
+          <span class="stat-label">COSECHA</span>
+          <span id="hud-harvest" class="stat-value">0 kg</span>
+        </div>
+        <button id="btn-advance-day" class="btn-advance" title="Avanzar 1 Día">⏩ Avanzar Día</button>
+      </div>
+    </header>
+
+    <!-- Zona Actual & Notificaciones -->
+    <div id="hud-zone" class="hud-zone">
+      <span class="zone-icon">📍</span>
+      <span id="zone-name" class="zone-name">Finca Rural — Patio Central</span>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- HUD Inferior: Depuración, Coordenadas y Controles -->
+    <footer id="hud-bottom" class="hud-bottom">
+      <div class="hud-panel debug-panel">
+        <div class="debug-row">
+          <span class="debug-label">POS:</span>
+          <span id="debug-coords" class="debug-val">X: 0.0 | Y: 0.0 | Z: 0.0</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">FPS:</span>
+          <span id="debug-fps" class="debug-val">60</span>
+          <span class="debug-label" style="margin-left: 10px;">FÍSICAS:</span>
+          <span id="debug-physics" class="debug-val">Cannon-es Activo</span>
+        </div>
+      </div>
+
+      <div class="hud-controls-right">
+        <button id="btn-toggle-sound" class="hud-btn" title="Activar/Silenciar Audio">
+          <span id="sound-icon">🔊</span> Audio
+        </button>
+        <button id="btn-toggle-rain" class="hud-btn" title="Alternar Lluvia">
+          🌧️ Clima
+        </button>
+        <button id="btn-spawn-crate" class="hud-btn" title="Demostrar Físicas de Cannon-es">
+          📦 Caída Física
+        </button>
+        <button id="btn-show-help" class="hud-btn" title="Ver Ayuda">
+          ❓ Ayuda
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
