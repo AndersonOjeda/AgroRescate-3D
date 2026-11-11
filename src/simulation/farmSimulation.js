@@ -67,6 +67,11 @@ export class FarmSimulation {
     this.compostApplications = 0;
     this.lastAutoAction = null;
 
+    this._continuousMoistureAcc = 0;
+    this._continuousWaterAcc = 0;
+    this._continuousCostWaterAcc = 0;
+    this._continuousHealthAcc = 0;
+
     this.economy = {
       seedExpenses: 0,
       irrigationExpenses: 0,
@@ -184,6 +189,189 @@ export class FarmSimulation {
     };
   }
 
+  _resolveIrrigationTargets(plotId) {
+    if (plotId) {
+      return [this.plots[plotId]];
+    }
+    const planted = Object.values(this.plots).filter((p) => p.isPlanted);
+    return planted.length > 0 ? planted : Object.values(this.plots);
+  }
+
+  _applyPlotMoistureEffects(plot, moistureGain, waterL, healthGain = 0) {
+    plot.moisture = Math.min(100, plot.moisture + moistureGain);
+    plot.waterAppliedL += waterL;
+
+    if (plot.isPlanted) {
+      if (plot.isWithered && plot.moisture >= 15) {
+        plot.isWithered = false;
+        plot.health = Math.max(35, Math.min(100, plot.health + 15));
+      } else if (healthGain > 0 && plot.moisture <= 85) {
+        plot.health = Math.min(100, plot.health + healthGain);
+      }
+      const { projectedKg } = calculateProjectedYield(plot, this.modeConfig);
+      plot.yieldKg = projectedKg;
+    }
+
+    syncPlotStageAndVisual(plot);
+  }
+
+  /**
+   * Verifica si la bomba continua puede encenderse (hay agua y parcelas bajo 100%).
+   * @param {string} [plotId]
+   */
+  canStartContinuousIrrigation(plotId = null) {
+    if (plotId && !this.plots[plotId]) {
+      return { canStart: false, reason: 'not_found', message: 'Parcela no encontrada' };
+    }
+    if (this.waterReserve < 1) {
+      return {
+        canStart: false,
+        reason: 'empty_tank',
+        message: '¡Reserva de agua insuficiente en el tanque! Recarga agua para continuar.'
+      };
+    }
+    const needingWater = this._resolveIrrigationTargets(plotId).filter((p) => p.moisture < 100);
+    if (needingWater.length === 0) {
+      return {
+        canStart: false,
+        reason: 'all_full',
+        message: 'La humedad del suelo ya se encuentra al 100%.'
+      };
+    }
+    return {
+      canStart: true,
+      targetPlotIds: needingWater.map((p) => p.id)
+    };
+  }
+
+  /**
+   * Aplica un pulso incremental de riego continuo en función del tiempo activo (segundos).
+   * Evita llenado instantáneo al encender/apagar repetidamente la bomba.
+   * @param {number} [deltaSeconds=0.5]
+   * @param {string|null} [plotId=null]
+   * @param {number} [cycleSeconds=5] Duración en segundos equivalente a un ciclo completo
+   */
+  irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5) {
+    if (plotId && !this.plots[plotId]) {
+      return { success: false, applied: false, message: 'Parcela no encontrada' };
+    }
+
+    const allTargets = this._resolveIrrigationTargets(plotId);
+    if (!plotId) {
+      // No sobreescribir activePlotId innecesariamente si ya hay una activa válida
+    } else {
+      this.activePlotId = plotId;
+    }
+
+    const needingWater = allTargets.filter((p) => p.moisture < 100);
+    if (needingWater.length === 0) {
+      return {
+        success: false,
+        applied: false,
+        stoppedReason: 'all_full',
+        message: '💧 Humedad al 100% — Riego detenido automáticamente',
+        irrigatedPlotIds: []
+      };
+    }
+
+    if (this.waterReserve < 1) {
+      return {
+        success: false,
+        applied: false,
+        stoppedReason: 'empty_tank',
+        message: '¡Reserva de agua agotada! Riego detenido automáticamente.',
+        irrigatedPlotIds: []
+      };
+    }
+
+    const safeDelta = Math.max(0, Number(deltaSeconds) || 0);
+    const safeCycle = Math.max(0.5, Number(cycleSeconds) || 5);
+    const fraction = Math.min(1, safeDelta / safeCycle);
+
+    this._continuousMoistureAcc += this.modeConfig.moistureGainPerIrrigation * fraction;
+    this._continuousWaterAcc += this.modeConfig.waterPerIrrigation * fraction;
+    this._continuousHealthAcc += 2 * fraction;
+
+    const desiredMoisture = Math.floor(this._continuousMoistureAcc);
+    const desiredWaterL = Math.floor(this._continuousWaterAcc);
+    const healthStep = Math.floor(this._continuousHealthAcc);
+
+    if (desiredMoisture <= 0 && desiredWaterL <= 0) {
+      return {
+        success: true,
+        applied: false,
+        moistureGain: 0,
+        waterUsedL: 0,
+        stoppedReason: null,
+        irrigatedPlotIds: needingWater.map((p) => p.id),
+        waterReserve: this.waterReserve,
+        waterConsumed: this.waterConsumed
+      };
+    }
+
+    const waterCostL = Math.min(this.waterReserve, desiredWaterL);
+    const waterRatio = desiredWaterL > 0 ? waterCostL / desiredWaterL : 1;
+    const effectiveMoisture = desiredWaterL > 0 && waterCostL === 0
+      ? 0
+      : Math.max(0, Math.round(desiredMoisture * waterRatio));
+
+    this._continuousMoistureAcc = Math.max(0, this._continuousMoistureAcc - desiredMoisture);
+    this._continuousWaterAcc = Math.max(0, this._continuousWaterAcc - desiredWaterL);
+    this._continuousHealthAcc = Math.max(0, this._continuousHealthAcc - healthStep);
+
+    this.waterReserve -= waterCostL;
+    this.waterConsumed += waterCostL;
+
+    this._continuousCostWaterAcc += waterCostL;
+    let cashCost = 0;
+    while (this._continuousCostWaterAcc >= this.modeConfig.waterPerIrrigation) {
+      this._continuousCostWaterAcc -= this.modeConfig.waterPerIrrigation;
+      if (this.budget >= this.modeConfig.irrigationCost) {
+        this.budget -= this.modeConfig.irrigationCost;
+        this.economy.irrigationExpenses += this.modeConfig.irrigationCost;
+        cashCost += this.modeConfig.irrigationCost;
+      }
+    }
+
+    const perPlotWater = waterCostL > 0 ? Math.max(1, Math.round(waterCostL / needingWater.length)) : 0;
+    for (const p of needingWater) {
+      this._applyPlotMoistureEffects(p, effectiveMoisture, perPlotWater, healthStep);
+    }
+
+    const stillNeedsWater = allTargets.some((p) => p.moisture < 100);
+    let stoppedReason = null;
+    if (!stillNeedsWater) {
+      stoppedReason = 'all_full';
+    } else if (this.waterReserve < 1) {
+      stoppedReason = 'empty_tank';
+    }
+
+    return {
+      success: true,
+      applied: effectiveMoisture > 0 || waterCostL > 0,
+      moistureGain: effectiveMoisture,
+      waterUsedL: waterCostL,
+      cashCost,
+      stoppedReason,
+      irrigatedPlotIds: needingWater.map((p) => p.id),
+      waterReserve: this.waterReserve,
+      waterConsumed: this.waterConsumed,
+      state: this.getState()
+    };
+  }
+
+  /**
+   * Registra un resumen único de sesión de riego continuo en la bitácora.
+   * @param {number} totalMoistureGain
+   * @param {number} totalWaterUsedL
+   */
+  recordContinuousIrrigationSummary(totalMoistureGain, totalWaterUsedL) {
+    if (totalWaterUsedL <= 0 && totalMoistureGain <= 0) return;
+    const msg = `Riego continuo en finca (+${totalMoistureGain}% humedad, -${totalWaterUsedL} L)`;
+    this._recordEvent(`Día ${this.day}: ${msg}`);
+    return msg;
+  }
+
   /**
    * Riega una parcela específica o todas las parcelas sembradas.
    * @param {string} [plotId]
@@ -201,13 +389,9 @@ export class FarmSimulation {
       };
     }
 
-    let targetPlots = [];
+    const targetPlots = this._resolveIrrigationTargets(plotId);
     if (plotId) {
-      targetPlots = [this.plots[plotId]];
       this.activePlotId = plotId;
-    } else {
-      const planted = Object.values(this.plots).filter((p) => p.isPlanted);
-      targetPlots = planted.length > 0 ? planted : Object.values(this.plots);
     }
 
     let cashCost = this.modeConfig.irrigationCost;
@@ -233,21 +417,7 @@ export class FarmSimulation {
     const moistureGain = this.modeConfig.moistureGainPerIrrigation;
 
     for (const p of targetPlots) {
-      p.moisture = Math.min(100, p.moisture + moistureGain);
-      p.waterAppliedL += perPlotWater;
-
-      if (p.isPlanted) {
-        if (p.isWithered && p.moisture >= 15) {
-          p.isWithered = false;
-          p.health = Math.max(35, Math.min(100, p.health + 15));
-        } else if (p.moisture <= 85) {
-          p.health = Math.min(100, p.health + 2);
-        }
-        const { projectedKg } = calculateProjectedYield(p, this.modeConfig);
-        p.yieldKg = projectedKg;
-      }
-
-      syncPlotStageAndVisual(p);
+      this._applyPlotMoistureEffects(p, moistureGain, perPlotWater, 2);
     }
 
     const targetLabel = plotId ? this.plots[plotId].name : 'la finca';

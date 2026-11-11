@@ -364,8 +364,14 @@ async function bootstrap() {
 
   // 10. CONFIGURACIÓN DE INTERACCIONES CENTRALIZADAS [TECLA E]
   const PLOT_EMITTER_INDEX = { plot_1: 0, plot_2: 1, plot_3: 2 };
+  const PUMP_TICK_SECONDS = 0.5;
   let isPumpSprayingManually = false;
   let irrigationBurstTimer = null;
+  let pumpTickAcc = 0;
+  let pumpStepPending = false;
+  let pumpSessionMoistureGain = 0;
+  let pumpSessionWaterUsedL = 0;
+  let pumpSessionMissionCounted = false;
 
   const mapPlotIdsToEmitters = (plotIds) => {
     if (!Array.isArray(plotIds) || plotIds.length === 0) return null;
@@ -373,6 +379,37 @@ async function bootstrap() {
       .map((id) => PLOT_EMITTER_INDEX[id])
       .filter((idx) => Number.isInteger(idx));
     return indices.length > 0 ? indices : null;
+  };
+
+  const stopContinuousPump = (toastMessage = null, toastType = 'info') => {
+    isPumpSprayingManually = false;
+    pumpTickAcc = 0;
+    particleSystem.setSpraying(false);
+    audioSystem.setWaterSound(false);
+    interactionSystem.updateActionText('interact_pump', 'Presiona E para activar sistema de riego');
+
+    if (pumpSessionWaterUsedL > 0 || pumpSessionMoistureGain > 0) {
+      const summary = farmAdapter.recordContinuousIrrigationSummary(
+        pumpSessionMoistureGain,
+        pumpSessionWaterUsedL
+      );
+      if (summary) {
+        modals.recordDecision(summary);
+      }
+      if (!toastMessage) {
+        toastMessage = `Riego detenido (+${pumpSessionMoistureGain}% humedad, -${pumpSessionWaterUsedL} L)`;
+      }
+    } else if (!toastMessage) {
+      toastMessage = 'Riego detenido';
+    }
+
+    pumpSessionMoistureGain = 0;
+    pumpSessionWaterUsedL = 0;
+    pumpSessionMissionCounted = false;
+
+    if (toastMessage) {
+      hud.showToast(toastMessage, toastType);
+    }
   };
 
   const triggerIrrigationSprayBurst = (durationMs = 3200, emitterIndices = null) => {
@@ -394,7 +431,7 @@ async function bootstrap() {
     }, durationMs);
   };
 
-  // A. Bomba de Agua: Activar / Desactivar Riego
+  // A. Bomba de Agua: Activar / Desactivar Riego Continuo
   interactionSystem.register({
     id: 'interact_pump',
     name: 'Bomba de Agua Hidráulica',
@@ -402,34 +439,33 @@ async function bootstrap() {
     actionText: 'Presiona E para activar sistema de riego',
     onInteract: async () => {
       audioSystem.playClick();
-      const wasBursting = Boolean(irrigationBurstTimer) && !isPumpSprayingManually;
       if (irrigationBurstTimer) {
         clearTimeout(irrigationBurstTimer);
         irrigationBurstTimer = null;
       }
-      let isNowSpraying;
-      if (wasBursting) {
-        particleSystem.setSpraying(true);
-        isNowSpraying = true;
-      } else {
-        isNowSpraying = particleSystem.toggleSpraying();
-      }
-      isPumpSprayingManually = isNowSpraying;
-      audioSystem.setWaterSound(isNowSpraying);
 
-      if (isNowSpraying) {
-        interactionSystem.updateActionText('interact_pump', 'Presiona E para apagar sistema de riego');
-        const res = await farmAdapter.irrigate();
-        if (res.success) {
-          hud.showToast(res.message, 'success');
-          audioSystem.playSuccess();
-        } else {
-          hud.showToast(res.message, 'warning');
-        }
-      } else {
-        interactionSystem.updateActionText('interact_pump', 'Presiona E para activar sistema de riego');
-        hud.showToast('Riego detenido', 'info');
+      if (isPumpSprayingManually) {
+        stopContinuousPump(null, 'info');
+        return;
       }
+
+      const check = farmAdapter.canStartContinuousIrrigation();
+      if (!check.canStart) {
+        hud.showToast(check.message, check.reason === 'all_full' ? 'info' : 'warning');
+        return;
+      }
+
+      audioSystem.unlockAudio();
+      isPumpSprayingManually = true;
+      pumpTickAcc = 0;
+      pumpSessionMoistureGain = 0;
+      pumpSessionWaterUsedL = 0;
+      pumpSessionMissionCounted = false;
+      particleSystem.setSpraying(true, mapPlotIdsToEmitters(check.targetPlotIds));
+      audioSystem.setWaterSound(true);
+      interactionSystem.updateActionText('interact_pump', 'Presiona E para apagar sistema de riego');
+      hud.showToast('🚿 Riego continuo activado: la humedad subirá mientras permanezca encendido', 'success');
+      audioSystem.playSuccess();
     }
   });
 
@@ -750,6 +786,9 @@ async function bootstrap() {
     hud.modeSelector.addEventListener('change', async (e) => {
       const mode = e.target.value;
       audioSystem.playClick();
+      if (isPumpSprayingManually) {
+        stopContinuousPump();
+      }
       await farmAdapter.initializeFarm(mode);
       missionManager.reset(mode);
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
@@ -880,6 +919,36 @@ async function bootstrap() {
         }
       }
       particleSystem.update(delta);
+      if (isPumpSprayingManually && !pumpStepPending) {
+        pumpTickAcc += delta;
+        if (pumpTickAcc >= PUMP_TICK_SECONDS) {
+          const stepSeconds = Math.min(2.0, pumpTickAcc);
+          pumpTickAcc = 0;
+          pumpStepPending = true;
+          farmAdapter
+            .irrigateContinuousStep(stepSeconds)
+            .then((stepRes) => {
+              if (!isPumpSprayingManually || !stepRes) return;
+              if (stepRes.applied) {
+                pumpSessionMoistureGain += stepRes.moistureGain || 0;
+                pumpSessionWaterUsedL += stepRes.waterUsedL || 0;
+                if (!pumpSessionMissionCounted) {
+                  pumpSessionMissionCounted = true;
+                  missionManager.handleEvent({ type: 'irrigated' });
+                  hud.renderMission(missionManager.getSnapshot());
+                }
+              }
+              if (stepRes.stoppedReason === 'empty_tank') {
+                stopContinuousPump('¡Tanque sin agua! Riego detenido automáticamente', 'warning');
+              } else if (stepRes.stoppedReason === 'all_full') {
+                stopContinuousPump('💧 Parcelas al 100% de humedad — Riego detenido', 'success');
+              }
+            })
+            .finally(() => {
+              pumpStepPending = false;
+            });
+        }
+      }
       multimediaStation.update(delta);
       if (multimediaStation.checkTeleport(pPos)) {
         audioSystem.playSuccess();

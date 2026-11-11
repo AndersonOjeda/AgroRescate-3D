@@ -103,6 +103,44 @@ export class FarmAdapter {
   }
 
   /**
+   * Verifica si es posible iniciar riego continuo en la bomba hidráulica.
+   */
+  canStartContinuousIrrigation(plotId = null) {
+    if (typeof this.simulation.canStartContinuousIrrigation === 'function') {
+      return this.simulation.canStartContinuousIrrigation(plotId);
+    }
+    return { canStart: true, targetPlotIds: null };
+  }
+
+  /**
+   * Ejecuta un pulso progresivo de riego continuo mientras la bomba esté encendida.
+   */
+  async irrigateContinuousStep(deltaSeconds = 0.5, plotId = null, cycleSeconds = 5) {
+    if (typeof this.simulation.irrigateContinuousStep !== 'function') {
+      return { success: false, applied: false };
+    }
+    const result = await Promise.resolve(
+      this.simulation.irrigateContinuousStep(deltaSeconds, plotId, cycleSeconds)
+    );
+    if (result?.applied) {
+      const state = result.state || (await this.getState());
+      this.syncVisuals(state);
+      this.emit('stateChange', { state, action: 'irrigateContinuous', result });
+    }
+    return result;
+  }
+
+  /**
+   * Registra en bitácora un resumen de una sesión de riego continuo al detenerse.
+   */
+  recordContinuousIrrigationSummary(totalMoistureGain, totalWaterUsedL) {
+    if (typeof this.simulation.recordContinuousIrrigationSummary === 'function') {
+      return this.simulation.recordContinuousIrrigationSummary(totalMoistureGain, totalWaterUsedL);
+    }
+    return null;
+  }
+
+  /**
    * Solicita avanzar el día
    */
   async advanceDay() {

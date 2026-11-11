@@ -98,4 +98,25 @@ describe('FarmSimulation & FarmAdapter — Contrato Agrícola', () => {
     expect(eventReceived).not.toBeNull();
     expect(eventReceived.action).toBe('plant');
   });
+
+  it('permite riego continuo progresivo sin disparar múltiples eventos completos de golpe', async () => {
+    await adapter.plant('plot_2');
+    const before = await adapter.getState();
+    const startMoisture = before.plots.plot_2.moisture;
+
+    const events = [];
+    adapter.on('stateChange', (data) => events.push(data.action));
+
+    const res1 = await adapter.irrigateContinuousStep(0.5);
+    expect(res1.applied).toBe(true);
+    const mid = await adapter.getState();
+    expect(mid.plots.plot_2.moisture).toBeGreaterThan(startMoisture);
+    expect(mid.plots.plot_2.moisture).toBeLessThan(startMoisture + 10);
+
+    const res2 = await adapter.irrigateContinuousStep(0.5);
+    expect(res2.applied).toBe(true);
+    const after = await adapter.getState();
+    expect(after.plots.plot_2.moisture).toBeGreaterThan(mid.plots.plot_2.moisture);
+    expect(events).toEqual(['irrigateContinuous', 'irrigateContinuous']);
+  });
 });

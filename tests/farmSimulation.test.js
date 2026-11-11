@@ -207,4 +207,33 @@ describe('Sistema de Simulación Agrícola — AgroRescate 3D', () => {
     // La simulación activa permanece intacta
     expect(getState()).toEqual(before);
   });
+
+  it('incrementa la humedad de forma progresiva por tiempo activo de riego continuo y detiene al 100%', () => {
+    const sim = new FarmSimulation(SIMULATION_MODES.SUBSISTENCE, { registerAsActive: false });
+    sim.plant('plot_1');
+    const initialState = sim.getState();
+    const initialMoisture = initialState.plots.plot_1.moisture; // 50
+    const initialWater = initialState.waterReserve; // 600
+
+    const canStart = sim.canStartContinuousIrrigation('plot_1');
+    expect(canStart.canStart).toBe(true);
+
+    // Un pulso de 0.5s en Subsistencia (30% / 5s = +3% y -12L) no debe llenar de golpe
+    const step1 = sim.irrigateContinuousStep(0.5, 'plot_1', 5);
+    expect(step1.success).toBe(true);
+    expect(step1.applied).toBe(true);
+    expect(step1.moistureGain).toBe(3);
+    expect(step1.waterUsedL).toBe(12);
+    expect(sim.getState().plots.plot_1.moisture).toBe(initialMoisture + 3);
+    expect(sim.getState().waterReserve).toBe(initialWater - 12);
+
+    // Varios pulsos acumulan humedad gradualmente hasta alcanzar 100% y reportar stoppedReason='all_full'
+    let lastStep = step1;
+    for (let i = 0; i < 30 && !lastStep.stoppedReason; i++) {
+      lastStep = sim.irrigateContinuousStep(0.5, 'plot_1', 5);
+    }
+    expect(sim.getState().plots.plot_1.moisture).toBe(100);
+    expect(lastStep.stoppedReason).toBe('all_full');
+    expect(sim.canStartContinuousIrrigation('plot_1').canStart).toBe(false);
+  });
 });
