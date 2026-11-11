@@ -13,6 +13,7 @@ import {
   setAutoIrrigation
 } from '../simulation/farmSimulation.js';
 import { CROP_STAGES, EDUCATIONAL_DISCLAIMER, SIMULATION_MODES } from '../simulation/constants.js';
+import { GUIDE_STEPS } from '../world/guideChicken.js';
 
 const LIFECYCLE_STEPS = [
   { key: CROP_STAGES.UNPLANTED, label: 'Sin sembrar' },
@@ -45,6 +46,13 @@ export class HUD {
     this.currentCoords = { x: 0, y: 0, z: 0 };
     this.isCollapsed = Boolean(options.collapsed);
     this._lastDisplayedHarvestId = null;
+
+    this.chickenGuideSteps = GUIDE_STEPS;
+    this.chickenGuideIndex = 0;
+    this.chickenVoiceEnabled = true;
+    this.onChickenGuideStepChange = null;
+    this.onChickenGuideClose = null;
+    this.onChickenVoiceToggle = null;
 
     if (!this.doc) return;
 
@@ -94,6 +102,7 @@ export class HUD {
     this.btnShowResults = d.getElementById('btn-show-results');
     this.btnPauseGame = d.getElementById('btn-pause-game');
     this.btnShowReport = d.getElementById('btn-show-report');
+    this.btnShowGuide = d.getElementById('btn-show-guide');
     this.btnShowHelp = d.getElementById('btn-show-help');
     this.reportModal = d.getElementById('report-modal');
     this.btnCloseReport = d.getElementById('btn-close-report');
@@ -119,8 +128,13 @@ export class HUD {
 
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('keydown', (e) => {
-        if (e.code === 'Escape' && this.reportModal && !this.reportModal.classList.contains('hidden')) {
-          this.reportModal.classList.add('hidden');
+        if (e.code === 'Escape') {
+          if (this.reportModal && !this.reportModal.classList.contains('hidden')) {
+            this.reportModal.classList.add('hidden');
+          }
+          if (this.isChickenGuideOpen()) {
+            this.closeChickenGuide({ relock: false });
+          }
         }
       });
     }
@@ -165,7 +179,7 @@ export class HUD {
   showInteractionPrompt(interactable) {
     if (!this.interactionPrompt) return;
 
-    if (interactable) {
+    if (interactable && !this.isChickenGuideOpen()) {
       if (this.promptAction) {
         this.promptAction.textContent = interactable.actionText || 'Presiona E';
       }
@@ -398,6 +412,7 @@ export class HUD {
     if (this.dockEl?.parentNode) this.dockEl.parentNode.removeChild(this.dockEl);
     if (this.harvestCardEl?.parentNode) this.harvestCardEl.parentNode.removeChild(this.harvestCardEl);
     if (this.demoModal?.parentNode) this.demoModal.parentNode.removeChild(this.demoModal);
+    if (this.guideCardEl?.parentNode) this.guideCardEl.parentNode.removeChild(this.guideCardEl);
   }
 
   _setupHelpModal() {
@@ -405,6 +420,15 @@ export class HUD {
       this.btnShowHelp.addEventListener('click', () => {
         if (this.startOverlay) {
           this.startOverlay.classList.remove('hidden');
+        }
+      });
+    }
+    if (this.btnShowGuide) {
+      this.btnShowGuide.addEventListener('click', () => {
+        if (this.isChickenGuideOpen()) {
+          this.closeChickenGuide({ relock: false });
+        } else {
+          this.openChickenGuide(0);
         }
       });
     }
@@ -768,6 +792,7 @@ export class HUD {
     this.dockEl = dock;
     this.harvestCardEl = harvestCard;
     this.demoModal = demoModal;
+    this._mountChickenGuide(host);
 
     this.panelRefs = {
       toggleBtn,
@@ -807,6 +832,205 @@ export class HUD {
       demoGrid,
       demoDisclaimer
     };
+  }
+
+  _mountChickenGuide(host) {
+    const d = this.doc;
+    const card = d.createElement('section');
+    card.id = 'agro-guide-card';
+    card.className = 'agro-guide-card hidden';
+
+    const head = d.createElement('div');
+    head.className = 'agro-guide-head';
+
+    const speaker = d.createElement('div');
+    speaker.className = 'agro-guide-speaker';
+    const speakerName = d.createElement('span');
+    speakerName.textContent = '🐔 Rudy — Gallina Guía';
+    const badge = d.createElement('span');
+    badge.id = 'agro-guide-badge';
+    badge.className = 'agro-guide-badge';
+    badge.textContent = '1 / 5';
+    speaker.appendChild(speakerName);
+    speaker.appendChild(badge);
+
+    const closeBtn = d.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'agro-guide-close';
+    closeBtn.className = 'agro-close-btn';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => this.closeChickenGuide({ relock: true }));
+
+    head.appendChild(speaker);
+    head.appendChild(closeBtn);
+
+    const title = d.createElement('h3');
+    title.id = 'agro-guide-title';
+    title.className = 'agro-guide-title';
+
+    const body = d.createElement('p');
+    body.id = 'agro-guide-body';
+    body.className = 'agro-guide-body';
+
+    const tips = d.createElement('ul');
+    tips.id = 'agro-guide-tips';
+    tips.className = 'agro-guide-tips';
+
+    const actions = d.createElement('div');
+    actions.className = 'agro-guide-actions';
+
+    const voiceBtn = d.createElement('button');
+    voiceBtn.type = 'button';
+    voiceBtn.id = 'agro-guide-voice';
+    voiceBtn.className = 'agro-guide-btn voice-active';
+    voiceBtn.textContent = '🔊 Voz: ON';
+    voiceBtn.addEventListener('click', () => this.toggleChickenVoice());
+
+    const nav = d.createElement('div');
+    nav.className = 'agro-guide-nav';
+
+    const prevBtn = d.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.id = 'agro-guide-prev';
+    prevBtn.className = 'agro-guide-btn';
+    prevBtn.textContent = '◀ Anterior';
+    prevBtn.addEventListener('click', () => this.prevChickenGuideStep());
+
+    const nextBtn = d.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.id = 'agro-guide-next';
+    nextBtn.className = 'agro-guide-btn primary';
+    nextBtn.textContent = 'Siguiente ▶';
+    nextBtn.addEventListener('click', () => this.nextChickenGuideStep({ closeAtEnd: true, relock: true }));
+
+    nav.appendChild(prevBtn);
+    nav.appendChild(nextBtn);
+    actions.appendChild(voiceBtn);
+    actions.appendChild(nav);
+
+    const hint = d.createElement('div');
+    hint.className = 'agro-guide-hint';
+    const hintLeft = d.createElement('span');
+    hintLeft.textContent = 'Presiona E cerca de Rudy para avanzar';
+    const hintRight = d.createElement('span');
+    hintRight.textContent = 'ESC para cerrar';
+    hint.appendChild(hintLeft);
+    hint.appendChild(hintRight);
+
+    card.appendChild(head);
+    card.appendChild(title);
+    card.appendChild(body);
+    card.appendChild(tips);
+    card.appendChild(actions);
+    card.appendChild(hint);
+    host.appendChild(card);
+
+    this.guideCardEl = card;
+    this.guideRefs = {
+      badge,
+      title,
+      body,
+      tips,
+      voiceBtn,
+      prevBtn,
+      nextBtn
+    };
+    this._renderChickenGuideStep();
+  }
+
+  isChickenGuideOpen() {
+    return Boolean(this.guideCardEl && !this.guideCardEl.classList.contains('hidden'));
+  }
+
+  openChickenGuide(stepIndex = 0, options = {}) {
+    if (!this.guideCardEl) return null;
+    const total = this.chickenGuideSteps.length;
+    this.chickenGuideIndex = Math.max(0, Math.min(total - 1, stepIndex));
+    this.guideCardEl.classList.remove('hidden');
+    if (this.interactionPrompt) {
+      this.interactionPrompt.classList.add('hidden');
+    }
+    const step = this._renderChickenGuideStep();
+    if (!options.silent && typeof this.onChickenGuideStepChange === 'function') {
+      this.onChickenGuideStepChange(step, this.chickenGuideIndex, total, this.chickenVoiceEnabled);
+    }
+    return step;
+  }
+
+  nextChickenGuideStep(options = {}) {
+    const total = this.chickenGuideSteps.length;
+    if (this.chickenGuideIndex + 1 >= total) {
+      if (options.closeAtEnd !== false) {
+        this.closeChickenGuide({ relock: options.relock });
+        return null;
+      }
+      this.chickenGuideIndex = 0;
+    } else {
+      this.chickenGuideIndex += 1;
+    }
+    const step = this._renderChickenGuideStep();
+    if (!options.silent && typeof this.onChickenGuideStepChange === 'function') {
+      this.onChickenGuideStepChange(step, this.chickenGuideIndex, total, this.chickenVoiceEnabled);
+    }
+    return step;
+  }
+
+  prevChickenGuideStep(options = {}) {
+    const total = this.chickenGuideSteps.length;
+    this.chickenGuideIndex = Math.max(0, this.chickenGuideIndex - 1);
+    const step = this._renderChickenGuideStep();
+    if (!options.silent && typeof this.onChickenGuideStepChange === 'function') {
+      this.onChickenGuideStepChange(step, this.chickenGuideIndex, total, this.chickenVoiceEnabled);
+    }
+    return step;
+  }
+
+  closeChickenGuide(options = {}) {
+    if (this.guideCardEl) {
+      this.guideCardEl.classList.add('hidden');
+    }
+    if (typeof this.onChickenGuideClose === 'function') {
+      this.onChickenGuideClose(options);
+    }
+  }
+
+  toggleChickenVoice() {
+    this.chickenVoiceEnabled = !this.chickenVoiceEnabled;
+    if (this.guideRefs?.voiceBtn) {
+      this.guideRefs.voiceBtn.textContent = this.chickenVoiceEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
+      this.guideRefs.voiceBtn.classList.toggle('voice-active', this.chickenVoiceEnabled);
+    }
+    const step = this.chickenGuideSteps[this.chickenGuideIndex];
+    if (typeof this.onChickenVoiceToggle === 'function') {
+      this.onChickenVoiceToggle(this.chickenVoiceEnabled, step);
+    }
+    return this.chickenVoiceEnabled;
+  }
+
+  _renderChickenGuideStep() {
+    const total = this.chickenGuideSteps.length;
+    const step = this.chickenGuideSteps[this.chickenGuideIndex] || this.chickenGuideSteps[0];
+    if (!this.guideRefs || !step) return step;
+
+    const { badge, title, body, tips, voiceBtn, prevBtn, nextBtn } = this.guideRefs;
+    badge.textContent = `${step.badge} (${this.chickenGuideIndex + 1}/${total})`;
+    title.textContent = step.title;
+    body.textContent = step.body;
+
+    tips.innerHTML = '';
+    for (const tipText of step.tips || []) {
+      const li = this.doc.createElement('li');
+      li.textContent = tipText;
+      tips.appendChild(li);
+    }
+
+    voiceBtn.textContent = this.chickenVoiceEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
+    voiceBtn.classList.toggle('voice-active', this.chickenVoiceEnabled);
+
+    prevBtn.disabled = this.chickenGuideIndex === 0;
+    const isLast = this.chickenGuideIndex >= total - 1;
+    nextBtn.textContent = isLast ? '¡A jugar! 🚜' : 'Siguiente ▶';
+    return step;
   }
 
   _createMetricBar(labelText, fillClass) {
