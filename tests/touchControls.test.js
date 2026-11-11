@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { PlayerController } from '../src/player/playerController.js';
-import { TouchControls } from '../src/ui/touchControls.js';
+import { TouchControls, detectTouchSupport } from '../src/ui/touchControls.js';
 
 function createMockElement(tagName = 'div') {
   const listeners = new Map();
@@ -72,6 +72,28 @@ function createMockDocument() {
 }
 
 describe('Controles Táctiles Móviles y PlayerController.setTouchMove', () => {
+  it('oculta los controles táctiles en PC de escritorio aunque exista pantalla táctil y los activa en celular', () => {
+    const pcWin = {
+      innerWidth: 1366,
+      ontouchstart: null,
+      navigator: { maxTouchPoints: 5 },
+      matchMedia: (q) => ({
+        matches: q.includes('pointer: fine') || q.includes('hover: hover')
+      })
+    };
+    expect(detectTouchSupport(pcWin)).toBe(false);
+
+    const phoneWin = {
+      innerWidth: 390,
+      ontouchstart: null,
+      navigator: { maxTouchPoints: 5 },
+      matchMedia: (q) => ({
+        matches: q.includes('pointer: coarse')
+      })
+    };
+    expect(detectTouchSupport(phoneWin)).toBe(true);
+  });
+
   it('mueve al jugador según el joystick analógico y activa caminar/correr', () => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200);

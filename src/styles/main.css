@@ -1041,6 +1041,12 @@ body.is-touch-device .crosshair {
   display: none;
 }
 
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) {
+  .mobile-controls {
+    display: none !important;
+  }
+}
+
 .mobile-joystick {
   position: absolute;
   left: max(16px, env(safe-area-inset-left));

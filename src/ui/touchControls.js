@@ -7,12 +7,26 @@
 
 export function detectTouchSupport(win = typeof window !== 'undefined' ? window : null) {
   if (!win) return false;
-  if ('ontouchstart' in win) return true;
-  if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return true;
-  if (typeof win.matchMedia === 'function') {
-    return win.matchMedia('(pointer: coarse)').matches;
+
+  const hasMatchMedia = typeof win.matchMedia === 'function';
+  const hasCoarse = hasMatchMedia && win.matchMedia('(pointer: coarse)').matches;
+  const hasFine = hasMatchMedia && win.matchMedia('(pointer: fine)').matches;
+  const hasHover = hasMatchMedia && win.matchMedia('(hover: hover)').matches;
+
+  // Teléfonos y tablets reales (sin mouse/hover de PC)
+  if (hasCoarse && !hasFine && !hasHover) {
+    return true;
   }
-  return false;
+
+  // Pantallas móviles/compactas con soporte táctil (incluye emulación DevTools)
+  const hasTouchApi =
+    'ontouchstart' in win ||
+    (typeof win.navigator !== 'undefined' && win.navigator.maxTouchPoints > 0) ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  const isCompactViewport =
+    typeof win.innerWidth === 'number' && win.innerWidth > 0 && win.innerWidth <= 900;
+
+  return Boolean(hasTouchApi && isCompactViewport && !hasFine);
 }
 
 export class TouchControls {
@@ -31,8 +45,9 @@ export class TouchControls {
     this.interactionSystem = interactionSystem;
     this.onToggleCamera = onToggleCamera;
     this.onDropCrate = onDropCrate;
+    this.forceEnable = Boolean(forceEnable);
 
-    this.enabled = Boolean(forceEnable || detectTouchSupport());
+    this.enabled = Boolean(this.forceEnable || detectTouchSupport());
     this.sprintLocked = false;
     this._stickTouchId = null;
     this._maxRadius = 44;
@@ -49,9 +64,18 @@ export class TouchControls {
       this.enable();
     } else if (typeof window !== 'undefined' && window.addEventListener) {
       this._onFirstTouch = () => {
-        this.enable();
+        if (detectTouchSupport()) {
+          this.enable();
+        }
       };
-      window.addEventListener('touchstart', this._onFirstTouch, { once: true, passive: true });
+      window.addEventListener('touchstart', this._onFirstTouch, { passive: true });
+    }
+
+    if (!this.forceEnable && typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('resize', () => {
+        if (detectTouchSupport()) this.enable();
+        else this.disable();
+      });
     }
   }
 
