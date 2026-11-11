@@ -73,10 +73,11 @@ function buildHumanoidSkinAttributes(geometry, box) {
     // 1. Cabeza y sombrero (parte superior)
     const headWeight = smoothstep(0.695, 0.745, ny);
 
-    // 2. Brazos en pose T (excluir mochila trasera nz < -0.065)
+    // 2. Brazos en pose T (excluir mochila trasera solo en el centro del torso |nx| < 0.15)
     const armXBlend = smoothstep(0.095, 0.14, absX);
     const armYBlend = smoothstep(0.50, 0.54, ny) * (1 - smoothstep(0.68, 0.71, ny));
-    const armZBlend = smoothstep(-0.07, -0.045, nz);
+    const clearOfBackpack = smoothstep(0.135, 0.16, absX);
+    const armZBlend = Math.max(clearOfBackpack, smoothstep(-0.07, -0.045, nz));
     const armWeight = armXBlend * armYBlend * armZBlend * (1 - headWeight);
 
     // 3. Piernas (debajo de cadera/entrepierna)
