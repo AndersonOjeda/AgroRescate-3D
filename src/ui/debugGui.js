@@ -169,7 +169,9 @@ export class DebugGUI {
     });
     fAudio.add(audioParams, 'probarExito').name('🔔 Sonido de Éxito (Global)');
     fAudio.add(audioParams, 'probarClic').name('🔘 Sonido de Clic (UI)');
-    fAudio.add(audioParams, 'pausarPantalla').name('⏯️ Pausar Pantalla (Semana 3)');
+    if (multimediaStation) {
+      fAudio.add(audioParams, 'pausarPantalla').name('⏯️ Pausar Pantalla (Semana 3)');
+    }
 
     // 7. CARPETA: ESCENARIO 3D (Semanas 7, 8, 10)
     const fScene = this.gui.addFolder('🏗️ Escenario 3D');
