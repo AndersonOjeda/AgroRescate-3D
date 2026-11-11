@@ -12,6 +12,7 @@ import { SkySystem } from './systems/skySystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader, collectGlbSceneObstacles } from './world/farmLoader.js';
 import { createNaturalHorizon } from './world/landscapeEnhancer.js';
+import { MultimediaStation } from './world/multimediaStation.js';
 import { GuideChicken } from './world/guideChicken.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
@@ -537,7 +538,23 @@ async function bootstrap() {
     }
   });
 
-  // F. Rudy — Gallina Guía (Instrucciones de cómo jugar)
+  // F. Estación Multimedia (Semana 3) y Portal Neón (Semana 9) en área despejada del patio central
+  const stationPos = new THREE.Vector3(-2.8, 0, -2.2);
+  const multimediaStation = new MultimediaStation(scene, stationPos);
+  player.addObstacle({ id: 'multimedia_station', type: 'circle', x: stationPos.x, z: stationPos.z, r: 0.65 });
+  interactionSystem.register({
+    id: 'interact_multimedia',
+    name: 'Estación Multimedia de Telemetría',
+    position: { x: stationPos.x, y: 1.5, z: stationPos.z },
+    actionText: 'Presiona E para pausar/reanudar pantalla multimedia',
+    onInteract: () => {
+      audioSystem.playClick();
+      const playing = multimediaStation.togglePlay();
+      hud.showToast(playing ? '📺 Pantalla reanudada' : '⏸️ Pantalla pausada', 'info');
+    }
+  });
+
+  // G. Rudy — Gallina Guía (Instrucciones de cómo jugar)
   let guideOpenedByProximity = false;
 
   hud.onChickenGuideStepChange = (step, index, total, voiceEnabled) => {
@@ -800,7 +817,7 @@ async function bootstrap() {
   }
 
   // Panel lil-gui (Semanas 2 y 4) — oculto inicialmente en móvil para no tapar el HUD superior
-  const debugGui = new DebugGUI({ scene, sunLight, ambientLight, hemiLight, player, farmAdapter, physicsWorld, particleSystem, audioSystem, farmLoader, multimediaStation: null, hud });
+  const debugGui = new DebugGUI({ scene, sunLight, ambientLight, hemiLight, player, farmAdapter, physicsWorld, particleSystem, audioSystem, farmLoader, multimediaStation, hud });
   if (typeof window !== 'undefined' && window.innerWidth <= 900) {
     debugGui.hide();
   }
@@ -840,7 +857,7 @@ async function bootstrap() {
       // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
       physicsWorld.step(delta);
 
-      // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino), gallina guía y partículas
+      // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino), gallina guía, multimedia y partículas
       skySystem.update(delta);
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
         farmEnv.environment.update(delta);
@@ -854,6 +871,12 @@ async function bootstrap() {
         }
       }
       particleSystem.update(delta);
+      multimediaStation.update(delta);
+      if (multimediaStation.checkTeleport(pPos)) {
+        audioSystem.playSuccess();
+        hud.showToast('🌀 Portal activado: regresando al patio central', 'success', 3000);
+        player.setPosition(0, 0, -2);
+      }
 
       // D. Detección de proximidad para interacción [E]
       interactionSystem.update(pPos);

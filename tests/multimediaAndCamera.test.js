@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { MultimediaStation } from '../src/world/multimediaStation.js';
 import { PlayerController } from '../src/player/playerController.js';
 import { GLBCropPlot } from '../src/world/farmLoader.js';
+import { FarmEnvironment } from '../src/world/environment.js';
 
 describe('MultimediaStation & Portales — Requisitos Semanas 3 y 9', () => {
   it('debe inicializar la estación multimedia con textura y portal neón', () => {
@@ -96,5 +97,21 @@ describe('PlayerController — Modos de Cámara Dual', () => {
     const prevMode = player.toggleCameraMode();
     expect(prevMode).toBe('third-person');
     expect(player.cameraMode).toBe('third-person');
+  });
+});
+
+describe('FarmEnvironment — Aislamiento de Parcelas Procedurales bajo el Grupo Principal', () => {
+  it('incluye sus CropPlot dentro de env.group para ocultarlos completos al usar finca.glb', () => {
+    const scene = new THREE.Scene();
+    const env = new FarmEnvironment(scene);
+
+    expect(Object.keys(env.cropPlots)).toEqual(['plot_1', 'plot_2', 'plot_3']);
+    for (const plot of Object.values(env.cropPlots)) {
+      expect(plot.group.parent).toBe(env.group);
+    }
+
+    // Ningún crop_plot_* debe quedar suelto como hijo directo de scene
+    const strayPlots = scene.children.filter((c) => c.name?.startsWith('crop_plot_'));
+    expect(strayPlots.length).toBe(0);
   });
 });

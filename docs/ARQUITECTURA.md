@@ -28,6 +28,7 @@ AgroRescate 3D desacopla estrictamente el motor gráfico (Three.js), la simulaci
 | - ParticleSys  |   +-----------------+   +-------------------+
 | - AudioSystem  |
 | - SkySystem    |
+| - Multimedia   |
 +----------------+
 ```
 
@@ -39,6 +40,7 @@ AgroRescate 3D desacopla estrictamente el motor gráfico (Three.js), la simulaci
 - **Mundo 3D y Blender (`blender/`, `src/world/`):**
   - `blender/generar_finca.py` genera `blender/finca.blend`, `public/models/finca.glb` (40 × 40 u.) y `public/models/finca.interactivos.json` / `posiciones.json`.
   - `farmLoader.js`: carga asíncronamente `finca.glb`, vincula las mallas de etapas de cultivo (`GLBCropPlot`) y exporta `GLB_OBSTACLES`/`GLB_BOUNDS`, con alternativa procedural (`environment.js`) conmutable en vivo desde `lil-gui`.
+  - `multimediaStation.js`: estación de telemetría dinámica (`CanvasTexture`) interactiva con `E` y portal cuántico neón (`THREE.Box3`).
   - `guideChicken.js`: personaje guía interactivo (Rudy) con animaciones y tutorial contextual.
 - **Jugador y Físicas (`src/player/`, `src/physics/`):**
   - `playerController.js`: carga `public/models/granjero.glb` (`prepareFarmerGlbModel`) con animaciones esqueléticas (`AnimationMixer`) y respaldo `farmerRig.js`, cámara dual (3ra persona + `OrbitControls` con tecla `C`), colisiones sólidas, *Wall Sliding* y `_resolvePenetration()`.

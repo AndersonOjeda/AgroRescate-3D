@@ -260,7 +260,7 @@ export class FarmEnvironment {
     ];
 
     plotsConfig.forEach(cfg => {
-      const plot = new CropPlot(this.scene, cfg);
+      const plot = new CropPlot(this.group, cfg);
       this.cropPlots[cfg.id] = plot;
     });
 
