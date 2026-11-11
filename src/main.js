@@ -908,15 +908,24 @@ async function bootstrap() {
     });
   }
 
-  // Botón Avanzar Día
-  if (hud.btnAdvanceDay) {
-    hud.btnAdvanceDay.addEventListener('click', async () => {
+  // Botón y tecla [Espacio] para Avanzar Día
+  let advanceDayPending = false;
+  const triggerAdvanceDay = async () => {
+    if (advanceDayPending || modals.isPaused || player._isAnyModalOpen()) return;
+    advanceDayPending = true;
+    try {
       audioSystem.playClick();
       const res = await farmAdapter.advanceDay();
       if (res.success) {
         hud.showToast(res.message, 'info');
       }
-    });
+    } finally {
+      advanceDayPending = false;
+    }
+  };
+
+  if (hud.btnAdvanceDay) {
+    hud.btnAdvanceDay.addEventListener('click', triggerAdvanceDay);
   }
 
   // Botón Alternar Audio
@@ -965,7 +974,7 @@ async function bootstrap() {
     hud.btnToggleGui.addEventListener('click', () => debugGui.toggle && debugGui.toggle());
   }
 
-  // Tecla F para soltar caja física en cualquier momento
+  // Atajos de teclado globales en partida (F caja física, R lluvia, Espacio avanzar día)
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') {
       physicsWorld.dropDemoCrate(player.getPosition());
@@ -973,6 +982,12 @@ async function bootstrap() {
     } else if (e.code === 'KeyR') {
       const raining = particleSystem.toggleRain();
       hud.showToast(raining ? '🌧️ Lluvia ambiental' : '☀️ Clima despejado', 'info', 1800);
+    } else if (e.code === 'Space') {
+      if (e.repeat || modals.isPaused || player._isAnyModalOpen()) return;
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      triggerAdvanceDay();
     }
   });
 

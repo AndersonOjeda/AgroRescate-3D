@@ -636,6 +636,7 @@ export class HUD {
       () => this._handleAdvanceDay(),
       'primary'
     );
+    btnAdvance.title = 'Avanzar 1 Día (Tecla Espacio)';
 
     actionsGrid.appendChild(btnPrepare);
     actionsGrid.appendChild(btnPlant);
