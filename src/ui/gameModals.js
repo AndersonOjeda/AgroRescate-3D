@@ -100,11 +100,11 @@ export class GameModalsController {
     document.getElementById('btn-close-pause')?.addEventListener('click', () => this.setPaused(false));
     document.getElementById('btn-resume-game')?.addEventListener('click', () => this.setPaused(false));
     document.getElementById('btn-restart-mode')?.addEventListener('click', async () => {
-      this.setPaused(false);
+      this.setPaused(false, { relock: false });
       await this.startNewGame(this.selectedMode);
     });
     document.getElementById('btn-back-menu')?.addEventListener('click', () => {
-      this.setPaused(false);
+      this.setPaused(false, { relock: false });
       this.openMainMenu();
     });
 
@@ -113,11 +113,11 @@ export class GameModalsController {
     document.getElementById('btn-close-results')?.addEventListener('click', () => this.closeResults());
     document.getElementById('btn-results-continue')?.addEventListener('click', () => this.closeResults());
     document.getElementById('btn-results-retry')?.addEventListener('click', async () => {
-      this.closeResults();
+      this.closeResults({ relock: false });
       await this.startNewGame(this.selectedMode);
     });
     document.getElementById('btn-results-switch')?.addEventListener('click', () => {
-      this.closeResults();
+      this.closeResults({ relock: false });
       this.openMainMenu();
     });
 
@@ -207,8 +207,21 @@ export class GameModalsController {
     this.helpModal?.classList.remove('hidden');
   }
 
+  _relockIfPlaying() {
+    const inGame =
+      !this.isPaused &&
+      (!this.startOverlay || this.startOverlay.classList.contains('hidden')) &&
+      (!this.helpModal || this.helpModal.classList.contains('hidden')) &&
+      (!this.aboutModal || this.aboutModal.classList.contains('hidden')) &&
+      (!this.resultsModal || this.resultsModal.classList.contains('hidden'));
+    if (inGame && this.player?.cameraMode === 'third-person') {
+      this.player.requestLock();
+    }
+  }
+
   closeHelp() {
     this.helpModal?.classList.add('hidden');
+    this._relockIfPlaying();
   }
 
   openAbout() {
@@ -218,19 +231,21 @@ export class GameModalsController {
 
   closeAbout() {
     this.aboutModal?.classList.add('hidden');
+    this._relockIfPlaying();
   }
 
   togglePause() {
     this.setPaused(!this.isPaused);
   }
 
-  setPaused(paused) {
+  setPaused(paused, { relock = true } = {}) {
     this.isPaused = Boolean(paused);
     if (this.isPaused) {
       this.player?.unlock();
       this.pauseModal?.classList.remove('hidden');
     } else {
       this.pauseModal?.classList.add('hidden');
+      if (relock) this._relockIfPlaying();
     }
   }
 
@@ -325,7 +340,8 @@ export class GameModalsController {
     this.resultsModal?.classList.remove('hidden');
   }
 
-  closeResults() {
+  closeResults({ relock = true } = {}) {
     this.resultsModal?.classList.add('hidden');
+    if (relock) this._relockIfPlaying();
   }
 }

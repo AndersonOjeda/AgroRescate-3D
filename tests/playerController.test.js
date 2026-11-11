@@ -144,4 +144,67 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
     expect(player.avatarVisual).toBe(mockGlbRoot);
     warnSpy.mockRestore();
   });
+
+  it('reactiva pointer lock al hacer clic en el canvas en tercera persona tras pausar y limpia teclas al liberar', () => {
+    const prevWindow = globalThis.window;
+    const prevDocument = globalThis.document;
+    const canvasListeners = {};
+    const pauseHidden = new Set(['hidden']);
+    const canvas = {
+      addEventListener: vi.fn((type, fn) => {
+        canvasListeners[type] = fn;
+      }),
+      requestPointerLock: vi.fn(),
+      click() {
+        canvasListeners.click?.();
+      }
+    };
+    const pauseEl = {
+      classList: {
+        contains: (cls) => pauseHidden.has(cls),
+        add: (cls) => pauseHidden.add(cls),
+        remove: (cls) => pauseHidden.delete(cls)
+      }
+    };
+
+    globalThis.window = {
+      addEventListener: vi.fn()
+    };
+    globalThis.document = {
+      pointerLockElement: null,
+      addEventListener: vi.fn(),
+      exitPointerLock: vi.fn(),
+      getElementById: vi.fn((id) => (id === 'pause-modal' ? pauseEl : null))
+    };
+
+    try {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200);
+      const player = new PlayerController(camera, canvas, scene, { autoLoad: false });
+
+      player.keys.forward = true;
+      player.isSprinting = true;
+      player.unlock();
+      expect(player.keys.forward).toBe(false);
+      expect(player.isSprinting).toBe(false);
+
+      // Con pausa abierta no debe capturar el puntero al hacer clic
+      pauseEl.classList.remove('hidden');
+      canvas.click();
+      expect(canvas.requestPointerLock).not.toHaveBeenCalled();
+
+      // Al cerrar pausa y hacer clic en la pantalla en tercera persona, debe re-capturar el puntero
+      pauseEl.classList.add('hidden');
+      canvas.click();
+      expect(canvas.requestPointerLock).toHaveBeenCalledTimes(1);
+
+      // En modo orbital no debe capturar el puntero al hacer clic
+      player.setCameraMode('orbit');
+      canvas.click();
+      expect(canvas.requestPointerLock).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.window = prevWindow;
+      globalThis.document = prevDocument;
+    }
+  });
 });

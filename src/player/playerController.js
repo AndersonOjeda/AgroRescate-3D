@@ -630,6 +630,14 @@ export class PlayerController {
       }
     });
 
+    if (this.domElement && typeof this.domElement.addEventListener === 'function') {
+      this.domElement.addEventListener('click', () => {
+        if (this.cameraMode !== 'third-person' || this.isLocked) return;
+        if (this._isAnyModalOpen()) return;
+        this.requestLock();
+      });
+    }
+
     document.addEventListener('mousemove', (e) => {
       if (!this.isLocked) return;
 
@@ -733,7 +741,28 @@ export class PlayerController {
     }
   }
 
+  _isAnyModalOpen() {
+    if (typeof document === 'undefined') return false;
+    const modalIds = [
+      'start-overlay',
+      'pause-modal',
+      'help-modal',
+      'about-modal',
+      'results-modal',
+      'report-modal'
+    ];
+    return modalIds.some((id) => {
+      const el = document.getElementById(id);
+      return el && !el.classList.contains('hidden');
+    });
+  }
+
   unlock() {
+    this.keys.forward = false;
+    this.keys.backward = false;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.isSprinting = false;
     if (typeof document !== 'undefined' && document.exitPointerLock) {
       document.exitPointerLock();
     }
