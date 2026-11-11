@@ -25,14 +25,25 @@ El código está estructurado de forma modular y desacoplada para facilitar el t
 
 ```text
 AgroRescate 3D/
+├── blender/
+│   ├── generar_finca.py     # Script bpy generador reproducible de la finca
+│   └── finca.blend          # Escena editable de Blender
+├── docs/
+│   ├── ARQUITECTURA.md      # Arquitectura técnica entre Three.js, Cannon-es, simulación y HUD
+│   ├── REQUISITOS.md        # Tabla de los 8 requisitos obligatorios del docente
+│   └── PRUEBAS.md           # Registro real de pruebas automatizadas y compilación
 ├── public/
 │   ├── audio/
+│   │   ├── bgm.mp3          # Música ambiental en bucle
 │   │   ├── pump.wav         # Sonido espacial de bomba y aspersor (loop)
 │   │   ├── water.wav        # Audio de flujo de agua
 │   │   ├── success.wav      # Audio global de éxito (arpegio armónico)
 │   │   └── click.wav        # Feedback auditivo de UI
 │   ├── models/
-│   │   └── posiciones.json  # Coordenadas maestras de sincronización con Blender
+│   │   ├── finca.glb        # Escenario 3D de Blender
+│   │   ├── granjero.glb     # Personaje animado de Blender
+│   │   ├── finca.interactivos.json
+│   │   └── posiciones.json  # Coordenadas de zonas interactivas
 │   └── textures/
 ├── src/
 │   ├── core/
@@ -89,7 +100,8 @@ AgroRescate 3D/
 | **E** | **Interactuar** con el objeto más cercano (Bomba, Parcela, Sensor, Compostera, Almacén, Pantalla) |
 | **F** | **Demostración física:** Arrojar una nueva caja dinámica con Cannon-es |
 | **R** | Alternar lluvia ambiental y partículas atmosféricas |
-| **ESC** | Liberar el cursor del navegador |
+| **H** | Abrir / cerrar la ventana **Cómo jugar** |
+| **ESC** | Pausar simulación (volumen, calidad gráfica, reiniciar o menú) o cerrar modales |
 
 ---
 
@@ -149,15 +161,13 @@ El proyecto cuenta con una suite completa de pruebas automatizadas con Vitest:
 npm test
 ```
 
-### Resultados de Verificación (27/27 Pruebas Pasadas):
-- **`tests/farmAdapter.test.js`**: 7 pruebas pasadas (inicialización, modos de cultivo, siembra, riego, maduración, cosecha, eventos).
-- **`tests/triggers.test.js`**: 2 pruebas pasadas (cálculo radial euclidiano y detección AABB dentro/fuera).
-- **`tests/physics.test.js`**: 2 pruebas pasadas (gravedad -9.81, caída libre y sincronización de matrices Cannon-Three).
-- **`tests/particleSystem.test.js`**: 2 pruebas pasadas (pooling de partículas con Float32Array y lluvia).
-- **`tests/playerCollision.test.js`**: 9 pruebas pasadas (bloqueo en paredes de casa, granero, tanque, bomba, wall sliding, colisiones precisas contra el modelo GLB de Blender `finca.glb` y actualización física de Cannon-es).
-- **`tests/multimediaAndCamera.test.js`**: 5 pruebas pasadas (pantalla multimedia con VideoTexture/Canvas, portal de teletransporte con AABB y cooldown de 3.5s, etapas de crecimiento en GLB y control dual de cámara 3ra persona / OrbitControls).
-- **`npm run build`**: Compilación de producción en Vite completada en 2.2 s con 0 errores.
-- **Navegador en vivo (Chrome DevTools):** Ejecución a 60 FPS estables, colisiones sólidas verificadas y 0 errores en consola.
+### Resultados de Verificación (56/56 Pruebas Pasadas en 12 Suites):
+- **`tests/farmSimulation.test.js`** y **`tests/farmAdapter.test.js`**: 15 pruebas (modos, siembra, riego, evaporación, compost, cosecha y eventos).
+- **`tests/gameplay.test.js`**: 4 pruebas (preparación previa del terreno, umbral IoT configurable, 5 misiones guiadas y resultados comparativos reales).
+- **`tests/playerCollision.test.js`** y **`tests/playerController.test.js`**: 12 pruebas (colisiones GLB y procedurales, *Wall Sliding*, `granjero.glb` y Cannon-es).
+- **`tests/multimediaAndCamera.test.js`**, **`tests/hud.test.js`** y **`tests/skySystem.test.js`**: 15 pruebas (pantalla multimedia, portal `Box3`, cámara dual `OrbitControls`, HUD y cielo).
+- **`tests/audioSystem.test.js`**, **`tests/particleSystem.test.js`**, **`tests/triggers.test.js`** y **`tests/physics.test.js`**: 10 pruebas (volumen maestro, música, pooling de partículas, triggers radial/AABB y gravedad).
+- **`npm run build`**: Compilación de producción en Vite completada con 0 errores. Ver detalle completo en [docs/PRUEBAS.md](docs/PRUEBAS.md).
 
 ---
 

@@ -137,8 +137,45 @@ export class FarmAdapter {
       result = { success: true, message: 'Compost orgánico aplicado' };
     }
     const state = await this.getState();
+    this.syncVisuals(state);
     this.emit('stateChange', { state, action: 'applyCompost', result });
+    this.emit('compostApplied', { result });
     return result;
+  }
+
+  /**
+   * Ejecuta una acción opcional del simulador y notifica al HUD/escena.
+   * @private
+   */
+  async _run(method, action, ...args) {
+    if (typeof this.simulation[method] !== 'function') {
+      return { success: false, message: `Acción no disponible: ${method}` };
+    }
+    const result = await Promise.resolve(this.simulation[method](...args));
+    const state = await this.getState();
+    this.syncVisuals(state);
+    this.emit('stateChange', { state, action, result });
+    this.emit(action, { result, args });
+    return result;
+  }
+
+  /** Prepara el terreno de una parcela (habilita la siembra) */
+  prepareSoil(plotId) { return this._run('prepareSoil', 'soilPrepared', plotId); }
+
+  /** Activa/desactiva riego automático IoT (Precisión) */
+  setAutoIrrigation(enabled) { return this._run('setAutoIrrigation', 'autoIrrigationChanged', enabled); }
+
+  /** Configura el umbral de humedad del riego automático */
+  setAutoIrrigationThreshold(value) { return this._run('setAutoIrrigationThreshold', 'thresholdChanged', value); }
+
+  /** Consulta el sensor virtual de humedad */
+  getSensorReading(plotId) {
+    return typeof this.simulation.getSensorReading === 'function' ? this.simulation.getSensorReading(plotId) : null;
+  }
+
+  /** Exige preparar el terreno antes de sembrar */
+  setRequirePreparation(enabled) {
+    if (typeof this.simulation.setRequirePreparation === 'function') this.simulation.setRequirePreparation(enabled);
   }
 
   /**

@@ -15,6 +15,9 @@ import { MultimediaStation } from './world/multimediaStation.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
 import { DebugGUI } from './ui/debugGui.js';
+import { MissionManager } from './gameplay/missionManager.js';
+import { ResultsStore } from './gameplay/resultsStore.js';
+import { GameModalsController } from './ui/gameModals.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -59,9 +62,22 @@ async function bootstrap() {
     particleSystem.emitFootstepDust(player.getPosition());
   };
 
-  // 7. Adaptador del Simulador Agrícola
+  // 7. Adaptador del Simulador Agrícola, Misiones y Resultados
   const farmAdapter = new FarmAdapter();
+  farmAdapter.setRequirePreparation(true);
+  const missionManager = new MissionManager('precision');
+  const resultsStore = new ResultsStore(typeof localStorage !== 'undefined' ? localStorage : null);
+  const modals = new GameModalsController({
+    renderer,
+    audioSystem,
+    player,
+    farmAdapter,
+    missionManager,
+    resultsStore,
+    hud
+  });
   hud.connectAdapter(farmAdapter);
+  hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
 
   // 8. Carga del Escenario de la Finca (GLB o Procedural Fallback)
   const farmLoader = new FarmLoader(scene);
@@ -262,7 +278,7 @@ async function bootstrap() {
     }
   });
 
-  // B. Trigger AABB: Almacén de Cosecha (THREE.Box3)
+  // B. Trigger AABB: Almacén de Cosecha (THREE.Box3) con onEnter, onStay y onExit
   triggerSystem.addAABBTrigger({
     id: 'aabb_warehouse',
     name: 'Zona: Almacén y Centro de Cosecha',
@@ -270,7 +286,24 @@ async function bootstrap() {
     max: sceneCoords.warehouseBounds.max,
     onEnter: () => {
       hud.setZone('Almacén de Cosecha');
-      hud.showToast('📦 Has entrado al área de almacenamiento de cosecha', 'success', 3000);
+      if (modals.pendingWarehouseDelivery) {
+        modals.pendingWarehouseDelivery = false;
+        modals.recordDecision('Cosecha entregada en el almacén');
+        missionManager.handleEvent({ type: 'visitedWarehouse' });
+        hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: Entregada en almacén');
+        audioSystem.playGameComplete();
+        hud.showToast('🏆 ¡Cosecha entregada en el almacén! Consulta tus resultados.', 'success', 4200);
+        setTimeout(() => modals.showResults(), 650);
+      } else {
+        hud.showToast('📦 Has entrado al área de almacenamiento de cosecha', 'success', 3000);
+      }
+    },
+    onStay: () => {
+      if (modals.pendingWarehouseDelivery) {
+        modals.pendingWarehouseDelivery = false;
+        missionManager.handleEvent({ type: 'visitedWarehouse' });
+        hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: Entregada en almacén');
+      }
     },
     onExit: () => {
       hud.setZone('Patio Central');
@@ -288,6 +321,9 @@ async function bootstrap() {
       radius: sceneCoords.plotRadius,
       onEnter: () => {
         hud.setZone(p.name);
+        if (missionManager.handleEvent({ type: 'enteredPlot', plotId: p.id })) {
+          hud.renderMission(missionManager.getSnapshot());
+        }
       },
       onExit: () => {
         hud.setZone('Patio Central');
@@ -372,7 +408,9 @@ async function bootstrap() {
       const plotState = state.plots[p.id];
       let actionText = 'Presiona E para sembrar';
       if (plotState) {
-        if (!plotState.isPlanted) {
+        if (!plotState.isPlanted && !plotState.isPrepared) {
+          actionText = `Presiona E para preparar terreno en ${p.name}`;
+        } else if (!plotState.isPlanted) {
           actionText = `Presiona E para sembrar ${plotState.cropName}`;
         } else if (plotState.daysGrown >= plotState.daysToMature) {
           actionText = `Presiona E para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`;
@@ -394,7 +432,15 @@ async function bootstrap() {
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
 
-          if (!curPlot.isPlanted) {
+          if (!curPlot.isPlanted && !curPlot.isPrepared) {
+            const res = await farmAdapter.prepareSoil(p.id);
+            if (res.success) {
+              hud.showToast(res.message, 'success');
+              audioSystem.playSuccess();
+            } else {
+              hud.showToast(res.message, 'warning');
+            }
+          } else if (!curPlot.isPlanted) {
             // Sembrar
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
@@ -432,6 +478,10 @@ async function bootstrap() {
       audioSystem.playClick();
       const state = await farmAdapter.getState();
       const p2 = state.plots.plot_2;
+      modals.recordDecision(`Sensor IoT consultado (humedad ${p2.moisture}%)`);
+      if (missionManager.handleEvent({ type: 'special', kind: 'sensor' })) {
+        hud.renderMission(missionManager.getSnapshot());
+      }
       hud.showToast(`📊 Telemetría Sensor: Humedad suelo = ${p2.moisture}% | Salud suelo = ${state.soilQuality}%`, 'info', 4500);
     }
   });
@@ -486,7 +536,11 @@ async function bootstrap() {
   };
 
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
-  farmAdapter.on('stateChange', ({ state }) => {
+  farmAdapter.on('stateChange', ({ state, action }) => {
+    if (action === 'initialize' && state?.mode) {
+      missionManager.reset(state.mode);
+      hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
+    }
     hud.updateFarmState(state);
 
     // Actualizar los textos de acción de las parcelas
@@ -494,7 +548,9 @@ async function bootstrap() {
       const plotState = state.plots[p.id];
       if (plotState) {
         let actionText = '';
-        if (!plotState.isPlanted) {
+        if (!plotState.isPlanted && !plotState.isPrepared) {
+          actionText = `Presiona E para preparar terreno en ${p.name}`;
+        } else if (!plotState.isPlanted) {
           actionText = `Presiona E para sembrar ${plotState.cropName}`;
         } else if (plotState.daysGrown >= plotState.daysToMature) {
           actionText = `Presiona E para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`;
@@ -508,16 +564,56 @@ async function bootstrap() {
     });
   });
 
-  // Reproducir animación de siembra/cosecha y actualizar cultivos 3D
-  farmAdapter.on('cropPlanted', ({ result }) => {
+  // Eventos de progreso de cultivo, misiones y animaciones
+  farmAdapter.on('soilPrepared', ({ result }) => {
     if (result?.success) {
       player.playActionAnimation();
+      modals.recordDecision(result.message);
+      missionManager.handleEvent({ type: 'soilPrepared' });
+      hud.renderMission(missionManager.getSnapshot());
     }
   });
 
-  farmAdapter.on('harvested', ({ result }) => {
+  farmAdapter.on('cropPlanted', ({ result }) => {
     if (result?.success) {
       player.playActionAnimation();
+      modals.recordDecision(result.message);
+      missionManager.handleEvent({ type: 'planted' });
+      hud.renderMission(missionManager.getSnapshot());
+    }
+  });
+
+  farmAdapter.on('harvested', async ({ result }) => {
+    if (result?.success) {
+      player.playActionAnimation();
+      modals.recordDecision(result.message);
+      const state = result.state || (await farmAdapter.getState());
+      modals.recordHarvest(state, result.report);
+      missionManager.handleEvent({ type: 'harvested', success: true, harvestKg: result.harvestKg });
+      hud.renderMission(
+        missionManager.getSnapshot(),
+        result.harvestKg > 0
+          ? 'Estado cosecha: Cosechada — Ve al almacén o abre Resultados'
+          : 'Estado cosecha: Parcela limpiada'
+      );
+      audioSystem.playGameComplete();
+    }
+  });
+
+  farmAdapter.on('compostApplied', ({ result }) => {
+    if (result?.success) {
+      player.playActionAnimation();
+      modals.recordDecision(result.message);
+      missionManager.handleEvent({ type: 'special', kind: 'compost' });
+      hud.renderMission(missionManager.getSnapshot());
+    }
+  });
+
+  farmAdapter.on('thresholdChanged', ({ result }) => {
+    if (result?.success) {
+      modals.recordDecision(result.message);
+      missionManager.handleEvent({ type: 'special', kind: 'threshold' });
+      hud.renderMission(missionManager.getSnapshot());
     }
   });
 
@@ -525,6 +621,9 @@ async function bootstrap() {
   farmAdapter.on('irrigated', ({ plotId, result }) => {
     if (result?.success) {
       player.playActionAnimation();
+      modals.recordDecision(result.message);
+      missionManager.handleEvent({ type: 'irrigated' });
+      hud.renderMission(missionManager.getSnapshot());
     }
     if (result?.success && !isPumpSprayingManually) {
       const targetIds = result.irrigatedPlotIds || (plotId ? [plotId] : null);
@@ -533,8 +632,16 @@ async function bootstrap() {
     }
   });
 
-  farmAdapter.on('dayAdvanced', ({ result }) => {
+  farmAdapter.on('dayAdvanced', async ({ result }) => {
     skySystem.triggerDayNightCycle();
+    const state = result?.state || (await farmAdapter.getState());
+    missionManager.handleEvent({ type: 'dayAdvanced', state });
+    const p = state?.plots?.[state.activePlotId];
+    const ready = p && p.isPlanted && p.daysGrown >= p.daysToMature;
+    hud.renderMission(
+      missionManager.getSnapshot(),
+      ready ? 'Estado cosecha: ¡Lista para cosechar!' : undefined
+    );
     if (result?.autoTriggered && !isPumpSprayingManually) {
       triggerIrrigationSprayBurst(3200, mapPlotIdsToEmitters(result.autoIrrigatedPlotIds));
       audioSystem.playSuccess();
@@ -542,24 +649,35 @@ async function bootstrap() {
   });
 
   // 11. BINDINGS DE BOTONES DEL HUD
-  // Botón Comenzar
-  if (hud.btnStartGame) {
-    hud.btnStartGame.addEventListener('click', () => {
-      audioSystem.unlockAudio();
-      audioSystem.startAmbientMusic();
-      audioSystem.startAmbient();
-      player.requestLock();
-    });
-  }
-
-  // Selector de modo agrícola
+  // Selector de modo agrícola (resetea misiones al cambiar desde el HUD)
   if (hud.modeSelector) {
     hud.modeSelector.addEventListener('change', async (e) => {
       const mode = e.target.value;
       audioSystem.playClick();
-      const newState = await farmAdapter.initializeFarm(mode);
+      await farmAdapter.initializeFarm(mode);
+      missionManager.reset(mode);
+      hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
       hud.showToast(`Modo cambiado a: ${mode.toUpperCase()}`, 'info');
       audioSystem.playSuccess();
+    });
+  }
+
+  // Modo Demostración Rápida (Sec. 33 — acelera el ciclo hasta maduración sin sustituir el flujo normal)
+  if (hud.btnDemoFast) {
+    hud.btnDemoFast.addEventListener('click', async () => {
+      audioSystem.playClick();
+      let st = await farmAdapter.getState();
+      const pid = st.activePlotId;
+      const p = st.plots[pid];
+      if (!p.isPlanted && !p.isPrepared) await farmAdapter.prepareSoil(pid);
+      if (!p.isPlanted) await farmAdapter.plant(pid);
+      await farmAdapter.irrigate(pid);
+      st = await farmAdapter.getState();
+      const remaining = Math.max(1, st.plots[pid].daysToMature - st.plots[pid].daysGrown);
+      for (let i = 0; i < remaining; i++) {
+        await farmAdapter.advanceDay();
+      }
+      hud.showToast('⚡ Demo Ciclo: Cultivo maduro listo para cosechar', 'success', 3000);
     });
   }
 
@@ -640,35 +758,37 @@ async function bootstrap() {
 
   // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
   gameLoop.addUpdateCallback((delta, fps) => {
-    // A. Actualizar jugador y cámara en tercera persona
-    player.update(delta);
-    const pPos = player.getPosition();
-    physicsWorld.updatePlayerPosition(pPos);
+    if (!modals.isPaused) {
+      // A. Actualizar jugador y cámara en tercera persona
+      player.update(delta);
+      const pPos = player.getPosition();
+      physicsWorld.updatePlayerPosition(pPos);
 
-    // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
-    physicsWorld.step(delta);
+      // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
+      physicsWorld.step(delta);
 
-    // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino) y partículas
-    skySystem.update(delta);
-    if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
-      farmEnv.environment.update(delta);
+      // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino) y partículas
+      skySystem.update(delta);
+      if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
+        farmEnv.environment.update(delta);
+      }
+      particleSystem.update(delta);
+      multimediaStation.update(delta);
+      if (multimediaStation.checkTeleport(pPos)) {
+        audioSystem.playSuccess();
+        hud.showToast('🌀 Portal activado: regresando al punto inicial', 'success', 3000);
+        player.setPosition(spawn.x, spawn.y, spawn.z);
+      }
+
+      // D. Detección de proximidad para interacción [E]
+      interactionSystem.update(pPos);
+
+      // E. Detección de zonas espaciales por triggers (Radial y AABB)
+      triggerSystem.update(pPos);
+
+      // F. Actualizar datos en el HUD
+      hud.updateCoordinates(pPos.x, pPos.y, pPos.z);
     }
-    particleSystem.update(delta);
-    multimediaStation.update(delta);
-    if (multimediaStation.checkTeleport(pPos)) {
-      audioSystem.playSuccess();
-      hud.showToast('🌀 Portal activado: regresando al punto inicial', 'success', 3000);
-      player.setPosition(spawn.x, spawn.y, spawn.z);
-    }
-
-    // D. Detección de proximidad para interacción [E]
-    interactionSystem.update(pPos);
-
-    // E. Detección de zonas espaciales por triggers (Radial y AABB)
-    triggerSystem.update(pPos);
-
-    // F. Actualizar datos en el HUD
-    hud.updateCoordinates(pPos.x, pPos.y, pPos.z);
     hud.updateFps(fps);
 
     // G. Renderizar escena

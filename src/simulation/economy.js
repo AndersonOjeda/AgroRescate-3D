@@ -35,6 +35,9 @@ export function syncPlotStageAndVisual(plot) {
   plot.stageLabel = meta.label;
   plot.stageIndex = meta.index;
   plot.visualState = meta.visualState;
+  if (!plot.isPlanted && plot.isPrepared) {
+    plot.stageLabel = 'Terreno preparado';
+  }
 }
 
 /**

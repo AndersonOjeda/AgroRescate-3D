@@ -90,10 +90,18 @@ export class HUD {
     this.soundIcon = d.getElementById('sound-icon');
     this.btnToggleRain = d.getElementById('btn-toggle-rain');
     this.btnSpawnCrate = d.getElementById('btn-spawn-crate');
+    this.btnDemoFast = d.getElementById('btn-demo-fast');
+    this.btnShowResults = d.getElementById('btn-show-results');
+    this.btnPauseGame = d.getElementById('btn-pause-game');
     this.btnShowReport = d.getElementById('btn-show-report');
     this.btnShowHelp = d.getElementById('btn-show-help');
     this.reportModal = d.getElementById('report-modal');
     this.btnCloseReport = d.getElementById('btn-close-report');
+
+    this.missionTitle = d.getElementById('mission-title');
+    this.missionProgress = d.getElementById('mission-progress');
+    this.missionTasks = d.getElementById('mission-tasks');
+    this.missionHarvestStatus = d.getElementById('mission-harvest-status');
   }
 
   _setupReportModal() {
@@ -222,6 +230,32 @@ export class HUD {
     if (this.debugFps) {
       this.debugFps.textContent = fps;
       this.debugFps.style.color = fps >= 45 ? '#34d399' : fps >= 25 ? '#f59e0b' : '#ef4444';
+    }
+  }
+
+  /**
+   * Renderiza el panel flotante de Misión Guiada (Tutorial).
+   */
+  renderMission(snapshot, harvestStatusText) {
+    if (!this.missionTitle || !this.missionTasks || !this.doc) return;
+    if (snapshot.complete) {
+      this.missionTitle.textContent = '🎉 ¡Todas las misiones completadas!';
+      this.missionTasks.innerHTML = '';
+    } else if (snapshot.current) {
+      this.missionTitle.textContent = `🎯 ${snapshot.current.title}`;
+      this.missionTasks.innerHTML = '';
+      for (const t of snapshot.current.tasks) {
+        const li = this.doc.createElement('li');
+        li.className = t.done ? 'done' : '';
+        li.textContent = `${t.done ? '✅' : '⬜'} ${t.label}`;
+        this.missionTasks.appendChild(li);
+      }
+    }
+    if (this.missionProgress) {
+      this.missionProgress.textContent = `${snapshot.completedTasks}/${snapshot.totalTasks}`;
+    }
+    if (this.missionHarvestStatus && harvestStatusText) {
+      this.missionHarvestStatus.textContent = harvestStatusText;
     }
   }
 
@@ -561,14 +595,43 @@ export class HUD {
     modeBoxText.id = 'agro-mode-detail';
     modeBoxText.textContent = 'Lectura óptima de humedad.';
 
+    const thresholdRow = d.createElement('div');
+    thresholdRow.className = 'agro-threshold-row';
+    const thresholdLbl = d.createElement('span');
+    thresholdLbl.textContent = 'Umbral IoT:';
+    const thresholdSlider = d.createElement('input');
+    thresholdSlider.type = 'range';
+    thresholdSlider.id = 'agro-threshold-slider';
+    thresholdSlider.min = '20';
+    thresholdSlider.max = '80';
+    thresholdSlider.step = '5';
+    thresholdSlider.value = '45';
+    const thresholdVal = d.createElement('strong');
+    thresholdVal.textContent = '45%';
+    thresholdSlider.addEventListener('change', () => {
+      const val = Number(thresholdSlider.value);
+      thresholdVal.textContent = `${val}%`;
+      this._executeAction('setAutoIrrigationThreshold', val);
+    });
+    thresholdSlider.addEventListener('input', () => {
+      thresholdVal.textContent = `${thresholdSlider.value}%`;
+    });
+    thresholdRow.appendChild(thresholdLbl);
+    thresholdRow.appendChild(thresholdSlider);
+    thresholdRow.appendChild(thresholdVal);
+
     modeBox.appendChild(modeBoxHead);
     modeBox.appendChild(modeBoxText);
+    modeBox.appendChild(thresholdRow);
     panel.appendChild(modeBox);
 
     // 8. Acciones Disponibles
     const actionsGrid = d.createElement('div');
     actionsGrid.className = 'agro-hud-actions';
 
+    const btnPrepare = this._createActionButton('agro-btn-prepare', '🚜 Preparar', () =>
+      this._executeAction('prepareSoil', this._getSelectedPlotId())
+    );
     const btnPlant = this._createActionButton('agro-btn-plant', '🌱 Sembrar', () =>
       this._executeAction('plant', this._getSelectedPlotId())
     );
@@ -591,6 +654,7 @@ export class HUD {
       'primary'
     );
 
+    actionsGrid.appendChild(btnPrepare);
     actionsGrid.appendChild(btnPlant);
     actionsGrid.appendChild(btnIrrigate);
     actionsGrid.appendChild(btnCompost);
@@ -726,6 +790,10 @@ export class HUD {
       modeBoxTitle,
       autoBtn,
       modeBoxText,
+      thresholdRow,
+      thresholdSlider,
+      thresholdVal,
+      btnPrepare,
       btnPlant,
       btnIrrigate,
       btnCompost,
@@ -856,6 +924,10 @@ export class HUD {
 
     // Disponibilidad de acciones
     const avail = state.availableActions || {};
+    if (refs.btnPrepare) {
+      refs.btnPrepare.disabled = !(avail.canPrepare ?? (!activePlot.isPlanted && !activePlot.isPrepared));
+      refs.btnPrepare.textContent = activePlot.isPrepared ? '✅ Preparada' : '🚜 Preparar';
+    }
     refs.btnPlant.disabled = !avail.canPlant;
     refs.btnPlant.textContent = `🌱 Sembrar ($${state.seedCost ?? 35})`;
 
@@ -897,6 +969,12 @@ export class HUD {
         ? 'Riego Auto: ON'
         : 'Riego Auto: OFF';
       refs.autoBtn.classList.toggle('off', !state.autoIrrigationEnabled);
+      if (refs.thresholdRow) {
+        refs.thresholdRow.style.display = 'flex';
+        const t = state.autoIrrigationThreshold ?? 45;
+        refs.thresholdSlider.value = String(t);
+        refs.thresholdVal.textContent = `${t}%`;
+      }
 
       const statusText = reading
         ? `${reading.statusLabel} (${reading.moisture}%). ${reading.recommendation}`
@@ -906,6 +984,7 @@ export class HUD {
     } else if (state.mode === SIMULATION_MODES.ECOLOGICAL) {
       refs.modeBoxTitle.textContent = '♻️ Compostaje y Conservación';
       refs.autoBtn.style.display = 'none';
+      if (refs.thresholdRow) refs.thresholdRow.style.display = 'none';
       const evap = state.evaporationRate ?? 11;
       const compostState = activePlot.composted
         ? `Cobertura orgánica activa (evap. ${evap}%/día, prima +25%).`
@@ -914,6 +993,7 @@ export class HUD {
     } else {
       refs.modeBoxTitle.textContent = '🪣 Riego Manual (Subsistencia)';
       refs.autoBtn.style.display = 'none';
+      if (refs.thresholdRow) refs.thresholdRow.style.display = 'none';
       refs.modeBoxText.textContent =
         `Consumo alto (${state.waterConsumptionPerIrrigation} L/riego) y evaporación ${state.evaporationRate ?? 20}%/día. Controla reserva (${state.waterReserve} L).`;
     }

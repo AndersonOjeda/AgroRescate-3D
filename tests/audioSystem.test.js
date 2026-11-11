@@ -147,4 +147,14 @@ describe('AudioSystem — Música de fondo (/audio/bgm.mp3)', () => {
     expect(audioSystem.ambientMusic.buffer).toBeTruthy();
     warnSpy.mockRestore();
   });
+
+  it('ajusta y acota el volumen maestro entre 0 y 1', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const camera = new THREE.PerspectiveCamera();
+    const audioSystem = new AudioSystem(camera);
+    expect(audioSystem.setMasterVolume(0.5)).toBe(0.5);
+    expect(audioSystem.setMasterVolume(2.0)).toBe(1.0);
+    expect(audioSystem.setMasterVolume(-1.0)).toBe(0.0);
+    warnSpy.mockRestore();
+  });
 });

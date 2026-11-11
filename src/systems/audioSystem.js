@@ -14,6 +14,7 @@ export class AudioSystem {
     this.audioLoader = new THREE.AudioLoader();
     this.isAudioUnlocked = false;
     this.isMuted = false;
+    this.masterVolume = 1.0;
 
     // Audio Posicional (Bomba de agua / Riego)
     this.positionalWater = new THREE.PositionalAudio(this.listener);
@@ -404,6 +405,64 @@ export class AudioSystem {
     this.unlockAudio();
     if (this.ambientAudio && this.ambientAudio.buffer && !this.ambientAudio.isPlaying) {
       this.ambientAudio.play();
+    }
+  }
+
+  /**
+   * Ajusta el volumen maestro del sistema de audio (0.0 a 1.0).
+   * @param {number} volume
+   */
+  setMasterVolume(volume) {
+    const clamped = Math.max(0, Math.min(1, Number(volume)));
+    if (!Number.isFinite(clamped)) return this.masterVolume;
+    this.masterVolume = clamped;
+
+    if (typeof this.listener?.setMasterVolume === 'function') {
+      this.listener.setMasterVolume(clamped);
+    }
+    if (this.musicElement) {
+      this.musicElement.volume = this.musicVolume * clamped;
+    }
+    if (this.ambientMusic) {
+      this.ambientMusic.setVolume(this.musicVolume * clamped);
+    }
+    if (this.positionalWater) this.positionalWater.setVolume(0.85 * clamped);
+    if (this.globalSuccess) this.globalSuccess.setVolume(0.7 * clamped);
+    if (this.globalClick) this.globalClick.setVolume(0.4 * clamped);
+    if (this.ambientAudio) this.ambientAudio.setVolume(0.08 * clamped);
+    return this.masterVolume;
+  }
+
+  getMasterVolume() {
+    return this.masterVolume;
+  }
+
+  /**
+   * Reproduce un sonido festivo global al completar la simulación o cosecha final.
+   */
+  playGameComplete() {
+    if (this.isMuted) return;
+    this.playSuccess();
+    const ctx = this.listener?.context;
+    if (!ctx || typeof ctx.createOscillator !== 'function') return;
+    try {
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = ctx.currentTime + idx * 0.09;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.exponentialRampToValueAtTime(0.14 * this.masterVolume, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.28);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.3);
+      });
+    } catch {
+      /* AudioContext no activo */
     }
   }
 

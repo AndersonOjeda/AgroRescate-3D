@@ -27,27 +27,83 @@
       </div>
     </div>
 
-    <!-- Pantalla de Inicio / Bloqueo de Puntero -->
+    <!-- Pantalla de Bienvenida y Selección de Modalidad -->
     <div id="start-overlay" class="start-overlay hidden">
-      <div class="start-card">
-        <h1>🌾 AgroRescate 3D</h1>
-        <p class="tagline">Explora la finca rural y experimenta con 3 enfoques agrícolas:</p>
-        <div class="mode-badges">
-          <span class="mode-badge subsistence">1. Subsistencia</span>
-          <span class="mode-badge precision">2. Precisión</span>
-          <span class="mode-badge ecological">3. Ecológica</span>
+      <div class="start-card start-card-wide">
+        <div class="welcome-header">
+          <div>
+            <h1>🌾 AgroRescate 3D</h1>
+            <p class="tagline">Siembra, experimenta y aprende</p>
+          </div>
+          <div class="welcome-nav-btns">
+            <button id="btn-menu-how-to" type="button" class="hud-btn">📖 Cómo jugar</button>
+            <button id="btn-menu-about" type="button" class="hud-btn">ℹ️ Acerca del proyecto</button>
+          </div>
         </div>
-        <div class="instructions-grid">
-          <div class="instruction-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
-          <div class="instruction-item"><kbd>Mouse</kbd><span>Rotar Cámara</span></div>
-          <div class="instruction-item"><kbd>E</kbd><span>Interactuar</span></div>
-          <div class="instruction-item"><kbd>C</kbd><span>3ra Persona / Órbita</span></div>
-          <div class="instruction-item"><kbd>Shift</kbd><span>Correr</span></div>
-          <div class="instruction-item"><kbd>R</kbd><span>Lluvia / Clima</span></div>
-          <div class="instruction-item"><kbd>F</kbd><span>Tirar Caja Física</span></div>
-          <div class="instruction-item"><kbd>ESC</kbd><span>Liberar Cursor</span></div>
+
+        <div class="welcome-settings-bar">
+          <label class="setting-item">
+            <span>🔊 Volumen:</span>
+            <input id="setting-volume" type="range" min="0" max="100" value="100" />
+            <strong id="setting-volume-val">100%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🖥️ Calidad gráfica:</span>
+            <select id="setting-quality" class="mode-dropdown">
+              <option value="low">Baja (Rápida)</option>
+              <option value="medium" selected>Media (Equilibrada)</option>
+              <option value="high">Alta (Sombras HD)</option>
+            </select>
+          </label>
         </div>
-        <button id="btn-start-game" class="btn-primary">Comenzar Exploración 🚜</button>
+
+        <p class="mode-select-prompt">Selecciona una modalidad agrícola para comenzar tu partida:</p>
+
+        <div class="mode-select-grid">
+          <div class="mode-card subsistence" data-mode="subsistence">
+            <div class="mode-card-head">
+              <h3>🌾 1. Subsistencia</h3>
+              <span class="mode-pill-tag">$500 | 600 L</span>
+            </div>
+            <p class="mode-card-desc">Producción alimentaria tradicional con herramientas manuales y presupuesto limitado.</p>
+            <ul class="mode-card-list">
+              <li><strong>Herramientas:</strong> Balde manual, surcos básicos.</li>
+              <li><strong>Ventajas:</strong> Semillas económicas ($25), inicio accesible.</li>
+              <li><strong>Limitaciones:</strong> Sin riego automático, alta evaporación (20%/día).</li>
+            </ul>
+            <button type="button" class="btn-mode-start" data-start-mode="subsistence">Iniciar Subsistencia</button>
+          </div>
+
+          <div class="mode-card precision active" data-mode="precision">
+            <div class="mode-card-head">
+              <h3>📡 2. Precisión (IoT)</h3>
+              <span class="mode-pill-tag">$1,400 | 1,000 L</span>
+            </div>
+            <p class="mode-card-desc">Uso de datos simulados mediante sensor de humedad virtual y riego automatizado por umbral.</p>
+            <ul class="mode-card-list">
+              <li><strong>Herramientas:</strong> Sensor virtual IoT, aspersores automáticos.</li>
+              <li><strong>Ventajas:</strong> Ahorro hídrico (60 L/riego), control por umbral.</li>
+              <li><strong>Limitaciones:</strong> Mayor inversión operativa y tecnológica.</li>
+            </ul>
+            <button type="button" class="btn-mode-start" data-start-mode="precision">Iniciar Precisión IoT</button>
+          </div>
+
+          <div class="mode-card ecological" data-mode="ecological">
+            <div class="mode-card-head">
+              <h3>🌿 3. Ecológica</h3>
+              <span class="mode-pill-tag">$850 | 850 L</span>
+            </div>
+            <p class="mode-card-desc">Prácticas orientadas a conservar el suelo vivo y la retención hídrica mediante compost orgánico.</p>
+            <ul class="mode-card-list">
+              <li><strong>Herramientas:</strong> Compostera orgánica y cobertura vegetal.</li>
+              <li><strong>Ventajas:</strong> Compost gratuito que reduce evaporación y protege el suelo.</li>
+              <li><strong>Limitaciones:</strong> Requiere manejo constante de fertilidad e hidratación.</li>
+            </ul>
+            <button type="button" class="btn-mode-start" data-start-mode="ecological">Iniciar Ecológica</button>
+          </div>
+        </div>
+
+        <button id="btn-start-game" class="btn-primary">🌱 Nueva Partida (Modalidad Seleccionada)</button>
       </div>
     </div>
 
@@ -106,6 +162,7 @@
           <span id="hud-harvest" class="stat-value">0 kg</span>
         </div>
         <button id="btn-advance-day" class="btn-advance" title="Avanzar 1 Día">⏩ Avanzar Día</button>
+        <button id="btn-pause-game" type="button" class="hud-btn" title="Pausar Juego (ESC)">⏸️ Pausa</button>
       </div>
     </header>
 
@@ -114,6 +171,16 @@
       <span class="zone-icon">📍</span>
       <span id="zone-name" class="zone-name">Finca Rural — Patio Central</span>
     </div>
+
+    <!-- Panel de Misión Guiada (Tutorial) -->
+    <aside id="mission-hud" class="mission-hud">
+      <div class="mission-hud-head">
+        <span id="mission-title" class="mission-title">🎯 Misión 1: Preparar la finca</span>
+        <span id="mission-progress" class="mission-progress">0/9</span>
+      </div>
+      <ul id="mission-tasks" class="mission-tasks"></ul>
+      <div id="mission-harvest-status" class="mission-harvest-status">Estado cosecha: En espera</div>
+    </aside>
 
     <div id="toast-container" class="toast-container"></div>
 
@@ -148,10 +215,16 @@
         <button id="btn-spawn-crate" class="hud-btn" title="Demostrar Físicas de Cannon-es">
           📦 Caída Física
         </button>
+        <button id="btn-demo-fast" class="hud-btn" title="Modo Demostración Rápida (Avanza días hasta maduración)">
+          ⚡ Demo Ciclo
+        </button>
+        <button id="btn-show-results" class="hud-btn" title="Ver Resultados y Comparativa Real">
+          🏆 Resultados
+        </button>
         <button id="btn-show-report" class="hud-btn" title="Comparativa Agronómica">
           📊 Comparativa
         </button>
-        <button id="btn-show-help" class="hud-btn" title="Ver Ayuda">
+        <button id="btn-show-help" class="hud-btn" title="Ver Ayuda (Tecla H)">
           ❓ Ayuda
         </button>
       </div>
@@ -190,6 +263,94 @@
             <div class="metric"><span class="m-label">Rendimiento:</span> <span class="m-val">65 kg ($9/kg Premium)</span></div>
             <p class="m-desc">Enriquecimiento orgánico con compost. Excelente retención de humedad y producto de alto valor.</p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Cómo Jugar (Tecla H o botón Ayuda) -->
+    <div id="help-modal" class="report-modal hidden">
+      <div class="report-card">
+        <div class="report-header">
+          <h2>📖 Cómo Jugar AgroRescate 3D</h2>
+          <button id="btn-close-help" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <p class="report-intro">Sigue el ciclo agrícola completo en tu parcela asignada usando el teclado o el panel lateral:</p>
+        <div class="instructions-grid">
+          <div class="instruction-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
+          <div class="instruction-item"><kbd>Mouse</kbd><span>Rotar Cámara</span></div>
+          <div class="instruction-item"><kbd>E</kbd><span>Interactuar (Preparar / Sembrar / Regar / Cosechar)</span></div>
+          <div class="instruction-item"><kbd>C</kbd><span>3ra Persona / Órbita</span></div>
+          <div class="instruction-item"><kbd>Shift</kbd><span>Correr</span></div>
+          <div class="instruction-item"><kbd>R</kbd><span>Lluvia / Clima</span></div>
+          <div class="instruction-item"><kbd>F</kbd><span>Tirar Caja Física</span></div>
+          <div class="instruction-item"><kbd>H</kbd><span>Abrir Ayuda</span></div>
+          <div class="instruction-item"><kbd>ESC</kbd><span>Pausar / Liberar Cursor</span></div>
+        </div>
+        <p class="modal-note">Ciclo recomendado: 1) Ve a tu parcela &rarr; 2) Prepara la tierra &rarr; 3) Siembra lechuga &rarr; 4) Riega y usa la herramienta de tu modalidad &rarr; 5) Avanza días hasta maduración &rarr; 6) Cosecha y visita el almacén.</p>
+      </div>
+    </div>
+
+    <!-- Modal: Acerca del Proyecto -->
+    <div id="about-modal" class="report-modal hidden">
+      <div class="report-card">
+        <div class="report-header">
+          <h2>ℹ️ Acerca de AgroRescate 3D</h2>
+          <button id="btn-close-about" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <p class="report-intro"><strong>AgroRescate 3D: Siembra, experimenta y aprende</strong> — Proyecto final de Programación Orientada a Entornos Multimedia, Universidad Cooperativa de Colombia (UCC). Docente: Mg. Gabriel Guerrero Arellano.</p>
+        <div class="modal-about-body">
+          <p><strong>Motor e Integración:</strong> Three.js / WebGL con escenario low-poly modelado en Blender (<code>finca.glb</code>), físicas rígidas con Cannon-es, audio espacial posicional y global, triggers radiales y AABB, sistema de partículas con pooling y simulador determinista de tres enfoques agrícolas.</p>
+          <p class="modal-disclaimer"><strong>Advertencia metodológica:</strong> Este simulador emplea un modelo agrícola educativo simplificado. Sus resultados ilustran conceptos básicos de manejo de agua, suelo y presupuesto y no representan predicciones científicas ni recomendaciones agronómicas validadas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Pausa y Ajustes -->
+    <div id="pause-modal" class="report-modal hidden">
+      <div class="report-card pause-card">
+        <div class="report-header">
+          <h2>⏸️ Simulación en Pausa</h2>
+          <button id="btn-close-pause" class="btn-close" title="Reanudar">&times;</button>
+        </div>
+        <div class="pause-controls">
+          <label class="setting-item">
+            <span>🔊 Volumen maestro:</span>
+            <input id="pause-volume" type="range" min="0" max="100" value="100" />
+            <strong id="pause-volume-val">100%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🖥️ Calidad gráfica:</span>
+            <select id="pause-quality" class="mode-dropdown">
+              <option value="low">Baja</option>
+              <option value="medium" selected>Media</option>
+              <option value="high">Alta</option>
+            </select>
+          </label>
+        </div>
+        <div class="pause-actions">
+          <button id="btn-resume-game" type="button" class="btn-primary">▶️ Reanudar Partida</button>
+          <button id="btn-restart-mode" type="button" class="hud-btn">🔄 Reintentar Modalidad</button>
+          <button id="btn-back-menu" type="button" class="hud-btn">🏠 Cambiar Modalidad / Menú</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Resultados Finales y Comparativa Real -->
+    <div id="results-modal" class="report-modal hidden">
+      <div class="report-card results-card">
+        <div class="report-header">
+          <h2>🏆 Resultados de la Simulación</h2>
+          <button id="btn-close-results" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <div id="results-summary-grid" class="results-summary-grid"></div>
+        <div id="results-decisions-box" class="results-decisions-box"></div>
+        <p id="results-edu-note" class="modal-note"></p>
+        <div id="results-comparison-wrap" class="results-comparison-wrap"></div>
+        <p id="results-disclaimer" class="modal-disclaimer"></p>
+        <div class="results-actions">
+          <button id="btn-results-retry" type="button" class="btn-primary">🔄 Reintentar Modalidad</button>
+          <button id="btn-results-switch" type="button" class="hud-btn">🔀 Elegir Otra Modalidad</button>
+          <button id="btn-results-continue" type="button" class="hud-btn">Seguir Explorando</button>
         </div>
       </div>
     </div>

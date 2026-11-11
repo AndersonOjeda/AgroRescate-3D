@@ -61,6 +61,8 @@ export class FarmSimulation {
     this.waterConsumed = 0;
     this.harvestedTotalKg = 0;
     this.autoIrrigationEnabled = Boolean(config.supportsAutoIrrigation);
+    this.autoIrrigationThreshold = config.autoIrrigationThreshold ?? 45;
+    this.dailyLog = [];
     this.autoIrrigationsTriggered = 0;
     this.compostApplications = 0;
     this.lastAutoAction = null;
@@ -89,6 +91,7 @@ export class FarmSimulation {
         cropSpecies: tpl.cropSpecies,
         cropName: tpl.cropName,
         isPlanted: false,
+        isPrepared: false,
         daysGrown: 0,
         daysToMature: tpl.daysToMature,
         moisture: tpl.initialMoisture,
@@ -143,6 +146,10 @@ export class FarmSimulation {
 
     if (target.isPlanted) {
       return { success: false, message: `${target.name} ya se encuentra sembrada` };
+    }
+
+    if (this.requirePreparation && !target.isPrepared) {
+      return { success: false, message: `Primero prepara el terreno de ${target.name}` };
     }
 
     const seedCost = this.modeConfig.seedCost;
@@ -300,6 +307,45 @@ export class FarmSimulation {
   }
 
   /**
+   * Exige preparar el terreno antes de sembrar (flujo completo del videojuego).
+   * @param {boolean} enabled
+   */
+  setRequirePreparation(enabled) {
+    this.requirePreparation = Boolean(enabled);
+  }
+
+  /**
+   * Prepara (ara) el terreno de una parcela para habilitar la siembra.
+   * @param {string} [plotId]
+   */
+  prepareSoil(plotId) {
+    const target = this.plots[plotId || this.activePlotId];
+    if (!target) return { success: false, message: 'Parcela no encontrada' };
+    this.activePlotId = target.id;
+    if (target.isPlanted) return { success: false, message: `${target.name} ya tiene un cultivo sembrado` };
+    if (target.isPrepared) return { success: false, message: `${target.name} ya está preparada` };
+    target.isPrepared = true;
+    target.stageLabel = 'Terreno preparado';
+    const msg = `Preparaste el terreno de ${target.name} (surcos listos para sembrar)`;
+    this._recordEvent(`Día ${this.day}: ${msg}`);
+    return { success: true, message: msg, plot: { ...target }, state: this.getState() };
+  }
+
+  /**
+   * Configura el umbral de humedad (%) que dispara el riego automático (Precisión).
+   * Parámetro didáctico, limitado a [20, 80].
+   * @param {number} value
+   */
+  setAutoIrrigationThreshold(value) {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return { success: false, message: 'Umbral inválido' };
+    this.autoIrrigationThreshold = Math.max(20, Math.min(80, Math.round(v)));
+    const msg = `Umbral de riego automático: ${this.autoIrrigationThreshold}%`;
+    this._recordEvent(`Día ${this.day}: ${msg}`);
+    return { success: true, message: msg, threshold: this.autoIrrigationThreshold, state: this.getState() };
+  }
+
+  /**
    * Activa o desactiva el riego automático en modalidad Precisión.
    * @param {boolean} enabled
    */
@@ -343,7 +389,7 @@ export class FarmSimulation {
     if (this.modeConfig.supportsAutoIrrigation && this.autoIrrigationEnabled) {
       const needing = getPlotsNeedingAutoIrrigation(
         this.plots,
-        this.modeConfig.autoIrrigationThreshold
+        this.autoIrrigationThreshold
       );
 
       if (needing.length > 0) {
@@ -383,6 +429,8 @@ export class FarmSimulation {
     }
 
     this._recomputeFarmSoilQuality();
+    const snap = this.plots[this.activePlotId];
+    this.dailyLog.push({ day: this.day, moisture: snap.moisture, fertility: snap.fertility, health: snap.health, waterReserve: this.waterReserve, budget: this.budget });
 
     const message = this.lastAutoAction
       ? `Amanece el Día ${this.day}. ${this.lastAutoAction}`
@@ -503,6 +551,7 @@ export class FarmSimulation {
 
     // Resetear cama de cultivo lista para un nuevo ciclo
     target.isPlanted = false;
+    target.isPrepared = false;
     target.daysGrown = 0;
     target.health = 90;
     target.waterAppliedL = 0;
@@ -621,7 +670,8 @@ export class FarmSimulation {
     );
 
     const availableActions = {
-      canPlant: !activePlot.isPlanted && this.budget >= this.modeConfig.seedCost,
+      canPrepare: !activePlot.isPlanted && !activePlot.isPrepared,
+      canPlant: !activePlot.isPlanted && this.budget >= this.modeConfig.seedCost && (!this.requirePreparation || activePlot.isPrepared),
       canIrrigate:
         this.waterReserve >= this.waterConsumptionPerIrrigation &&
         (this.budget >= this.modeConfig.irrigationCost ||
@@ -659,6 +709,9 @@ export class FarmSimulation {
       compostCost: this.modeConfig.compostCost,
       evaporationRate: calculateDailyEvaporation(this.modeConfig, activePlot),
       autoIrrigationEnabled: this.autoIrrigationEnabled,
+      autoIrrigationThreshold: this.autoIrrigationThreshold,
+      requirePreparation: Boolean(this.requirePreparation),
+      dailyLog: this.dailyLog.map((d) => ({ ...d })),
       autoIrrigationsTriggered: this.autoIrrigationsTriggered,
       compostApplications: this.compostApplications,
       availableActions,
