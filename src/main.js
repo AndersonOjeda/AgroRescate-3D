@@ -223,7 +223,7 @@ async function bootstrap() {
       }
     }
     // Unir cajas medidas del GLB con los obstáculos declarados (árboles, tanque, panel, etc.)
-    player.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])], farmEnv.bounds);
+    player.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])], player.bounds);
     physicsWorld.setObstacles([...glbObstacles, ...(farmEnv.obstacles || [])]);
   } else if (farmEnv?.obstacles) {
     player.setObstacles(farmEnv.obstacles, farmEnv.bounds);

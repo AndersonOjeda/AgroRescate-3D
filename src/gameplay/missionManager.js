@@ -109,8 +109,11 @@ export class MissionManager {
     switch (event.type) {
       case 'enteredPlot':
         return event.plotId === this.primaryPlotId ? this._complete('reachPlot') : false;
-      case 'soilPrepared':
-        return this._complete('prepare');
+      case 'soilPrepared': {
+        const c1 = this._complete('reachPlot');
+        const c2 = this._complete('prepare');
+        return c1 || c2;
+      }
       case 'planted':
         return this._complete('plant');
       case 'irrigated': {

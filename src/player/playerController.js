@@ -628,7 +628,14 @@ export class PlayerController {
 
   requestLock() {
     if (this.domElement && this.domElement.requestPointerLock) {
-      this.domElement.requestPointerLock();
+      try {
+        const res = this.domElement.requestPointerLock();
+        if (res && typeof res.catch === 'function') {
+          res.catch(() => {});
+        }
+      } catch {
+        /* pointer lock requiere gesto de usuario válido */
+      }
     }
   }
 

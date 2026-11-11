@@ -6,10 +6,10 @@ import { FarmEnvironment } from './environment.js';
  * Límites del terreno en Three.js para el modelo GLB de Blender (40x40 m)
  */
 export const GLB_BOUNDS = {
-  minX: -18.8,
-  maxX: 18.8,
-  minZ: -18.8,
-  maxZ: 18.8
+  minX: -19.2,
+  maxX: 22.2,
+  minZ: -21.5,
+  maxZ: 18.0
 };
 
 /**

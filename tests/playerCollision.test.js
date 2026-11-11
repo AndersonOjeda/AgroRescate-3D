@@ -117,11 +117,11 @@ describe('PlayerController — Colisiones contra Paredes y Estructuras', () => {
     // 5. Compostera en GLB (-4.6, 15.1)
     expect(player.isColliding(-4.6, 15.1)).toBe(true);
 
-    // 6. Límites perimetrales del terreno GLB
-    expect(player.isColliding(19.5, 0)).toBe(true);
+    // 6. Límites perimetrales del terreno GLB (finca2: X[-19.2..22.2], Z[-21.5..18.0])
+    expect(player.isColliding(23.0, 0)).toBe(true);
     expect(player.isColliding(-19.5, 0)).toBe(true);
     expect(player.isColliding(0, 19.5)).toBe(true);
-    expect(player.isColliding(0, -19.5)).toBe(true);
+    expect(player.isColliding(0, -22.5)).toBe(true);
 
     // 7. Área despejada transitable en GLB
     expect(player.isColliding(0, 0)).toBe(false);
