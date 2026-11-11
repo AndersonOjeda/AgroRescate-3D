@@ -208,8 +208,17 @@ async function bootstrap() {
     }
 
     const glbObstacles = collectGlbSceneObstacles(farmEnv.root);
-    // Unir cajas reales del GLB (casa nueva, granero, silo, vallas Farm_Fence*, fardos, etc.) con obstáculos declarados
-    const mergedObstacles = [...glbObstacles, ...(farmEnv.obstacles || [])];
+    // Colapsar las ~95 vallas perimetrales Farm_Fence* en 4 muros AABB para reducir carga de Cannon-es sin perder bloqueo
+    const mergedObstacles = glbObstacles.filter((obs) => !/^Farm_Fence/i.test(obs.id));
+    if (!fenceBounds.isEmpty()) {
+      mergedObstacles.push(
+        { id: 'fence_north', type: 'box', minX: fenceBounds.min.x, maxX: fenceBounds.max.x, minZ: fenceBounds.min.z, maxZ: fenceBounds.min.z + 0.5, height: 1.5 },
+        { id: 'fence_south', type: 'box', minX: fenceBounds.min.x, maxX: fenceBounds.max.x, minZ: fenceBounds.max.z - 0.5, maxZ: fenceBounds.max.z, height: 1.5 },
+        { id: 'fence_west', type: 'box', minX: fenceBounds.min.x, maxX: fenceBounds.min.x + 0.5, minZ: fenceBounds.min.z, maxZ: fenceBounds.max.z, height: 1.5 },
+        { id: 'fence_east', type: 'box', minX: fenceBounds.max.x - 0.5, maxX: fenceBounds.max.x, minZ: fenceBounds.min.z, maxZ: fenceBounds.max.z, height: 1.5 }
+      );
+    }
+    mergedObstacles.push(...(farmEnv.obstacles || []));
     player.setObstacles(mergedObstacles, player.bounds);
     physicsWorld.setObstacles(mergedObstacles);
   } else if (farmEnv?.obstacles) {

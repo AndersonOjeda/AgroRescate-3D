@@ -94,7 +94,7 @@ export function createNaturalHorizon(scene) {
   group.name = 'natural_andes_horizon';
 
   // 1. Valle ondulado extenso (440x440 m), plano debajo de la finca para evitar Z-fighting
-  const valleyGeo = new THREE.PlaneGeometry(440, 440, 72, 72);
+  const valleyGeo = new THREE.PlaneGeometry(440, 440, 40, 40);
   valleyGeo.rotateX(-Math.PI / 2);
 
   const pos = valleyGeo.attributes.position;
@@ -139,35 +139,36 @@ export function createNaturalHorizon(scene) {
     flatShading: true
   });
   const valleyMesh = new THREE.Mesh(valleyGeo, valleyMat);
-  valleyMesh.receiveShadow = true;
+  valleyMesh.receiveShadow = false;
   group.add(valleyMesh);
 
-  // 2. Cordillera lejana de colinas suaves (silueta natural en los 360°)
-  const ridgeGroup = new THREE.Group();
+  // 2. Cordillera lejana de colinas suaves con InstancedMesh (1 draw call en lugar de 24)
   const hillGeo = new THREE.ConeGeometry(1, 1, 7);
-  const ridgeMatA = new THREE.MeshStandardMaterial({
-    color: 0x3b6e44,
+  const ridgeMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
     roughness: 0.95,
     flatShading: true
   });
-  const ridgeMatB = new THREE.MeshStandardMaterial({
-    color: 0x4b7d5b,
-    roughness: 0.95,
-    flatShading: true
-  });
+  const hillsInst = new THREE.InstancedMesh(hillGeo, ridgeMat, 24);
+  const hillDummy = new THREE.Object3D();
+  const hillColorA = new THREE.Color(0x3b6e44);
+  const hillColorB = new THREE.Color(0x4b7d5b);
 
   for (let i = 0; i < 24; i++) {
     const angle = (i / 24) * Math.PI * 2 + (i % 2) * 0.08;
     const dist = 105 + (i % 3) * 22;
     const radius = 24 + (i % 4) * 6;
     const height = 16 + ((i * 7) % 14);
-    const hill = new THREE.Mesh(hillGeo, i % 2 === 0 ? ridgeMatA : ridgeMatB);
-    hill.position.set(Math.cos(angle) * dist, height * 0.42 - 1.5, Math.sin(angle) * dist);
-    hill.scale.set(radius, height, radius * 0.85);
-    hill.rotation.y = angle + i;
-    ridgeGroup.add(hill);
+    hillDummy.position.set(Math.cos(angle) * dist, height * 0.42 - 1.5, Math.sin(angle) * dist);
+    hillDummy.scale.set(radius, height, radius * 0.85);
+    hillDummy.rotation.y = angle + i;
+    hillDummy.updateMatrix();
+    hillsInst.setMatrixAt(i, hillDummy.matrix);
+    hillsInst.setColorAt(i, i % 2 === 0 ? hillColorA : hillColorB);
   }
-  group.add(ridgeGroup);
+  hillsInst.instanceMatrix.needsUpdate = true;
+  if (hillsInst.instanceColor) hillsInst.instanceColor.needsUpdate = true;
+  group.add(hillsInst);
 
   // 3. Arboleda perimetral externa con InstancedMesh (solo 2 draw calls)
   const treeCoords = [];

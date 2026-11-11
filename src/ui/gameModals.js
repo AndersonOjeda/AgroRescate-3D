@@ -141,10 +141,10 @@ export class GameModalsController {
         this.renderer.setPixelRatio(1);
         this.renderer.shadowMap.enabled = false;
       } else if (q === 'high') {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
         this.renderer.shadowMap.enabled = true;
       } else {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
         this.renderer.shadowMap.enabled = true;
       }
       this.hud?.showToast(`Calidad gráfica: ${q.toUpperCase()}`, 'info', 1800);

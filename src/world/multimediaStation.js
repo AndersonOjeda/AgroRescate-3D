@@ -17,6 +17,7 @@ export class MultimediaStation {
     this.currentTipIndex = 0;
     this.lastTipChange = 0;
     this.time = 0;
+    this._canvasAccumulator = 1; // Fuerza render inicial en el primer frame
 
     this.tips = [
       '💧 Riego Inteligente: Optimiza un 45% el consumo hídrico con aspersión localizada.',
@@ -25,12 +26,15 @@ export class MultimediaStation {
       '🌾 Cosecha Sostenible: Rotación de parcelas para evitar la degradación del terreno.'
     ];
 
-    // 1. Crear lienzo 2D en memoria para la textura animada (Video / Canvas Texture)
+    // 1. Crear lienzo 2D en memoria (640x360 escalado desde coordenadas 1024x576 para bajo costo GPU)
     if (typeof document !== 'undefined' && document.createElement) {
       this.canvas = document.createElement('canvas');
-      this.canvas.width = 1024;
-      this.canvas.height = 576; // Relación de aspecto 16:9
+      this.canvas.width = 640;
+      this.canvas.height = 360; // Relación de aspecto 16:9
       this.ctx = this.canvas.getContext('2d');
+      if (this.ctx && typeof this.ctx.setTransform === 'function') {
+        this.ctx.setTransform(640 / 1024, 0, 0, 360 / 576, 0, 0);
+      }
 
       this.canvasTexture = new THREE.CanvasTexture(this.canvas);
       this.canvasTexture.minFilter = THREE.LinearFilter;
@@ -124,18 +128,22 @@ export class MultimediaStation {
       this.portalMesh.rotation.x = Math.sin(this.time * 2) * 0.1;
     }
 
-    // 2. Renderizar contenido multimedia en el lienzo a 60 FPS si está reproduciendo
+    // 2. Renderizar contenido multimedia a ~12 FPS para evitar subir la textura a GPU en cada frame
     if (this.isPlaying) {
-      this._renderCanvasContent();
-      this.canvasTexture.needsUpdate = true;
+      this._canvasAccumulator += delta;
+      if (this._canvasAccumulator >= 1 / 12) {
+        this._canvasAccumulator = 0;
+        this._renderCanvasContent();
+        this.canvasTexture.needsUpdate = true;
+      }
     }
   }
 
   _renderCanvasContent() {
     if (!this.ctx || !this.canvas) return;
     const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const w = 1024;
+    const h = 576;
 
     // Fondo degradado tecnológico
     const grad = ctx.createLinearGradient(0, 0, w, h);

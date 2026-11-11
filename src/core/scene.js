@@ -18,13 +18,13 @@ export function createScene() {
   sunLight.position.set(25, 40, 20);
   sunLight.castShadow = true;
 
-  // Parámetros de la cámara de sombra para cubrir toda la finca (~60x60m)
-  sunLight.shadow.mapSize.width = 2048;
-  sunLight.shadow.mapSize.height = 2048;
+  // Parámetros de la cámara de sombra ajustados a la finca (~56x56m) para máximo rendimiento
+  sunLight.shadow.mapSize.width = 1024;
+  sunLight.shadow.mapSize.height = 1024;
   sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 100;
+  sunLight.shadow.camera.far = 90;
 
-  const d = 40;
+  const d = 28;
   sunLight.shadow.camera.left = -d;
   sunLight.shadow.camera.right = d;
   sunLight.shadow.camera.top = d;

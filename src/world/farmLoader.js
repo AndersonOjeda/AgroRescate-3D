@@ -585,6 +585,7 @@ export class FarmLoader {
   }
 
   _processLoadedGLB(modelScene) {
+    const noCastShadowRegex = /^(grass|rock|flower|camino|acceso|parcela|surco|riego|plane\.065|mountain|flores)/i;
     modelScene.traverse((child) => {
       if (child.name) {
         const key = child.name.toLowerCase();
@@ -593,7 +594,7 @@ export class FarmLoader {
         }
       }
       if (child.isMesh) {
-        child.castShadow = true;
+        child.castShadow = !noCastShadowRegex.test(child.name || '');
         child.receiveShadow = true;
       }
     });

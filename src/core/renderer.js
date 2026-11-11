@@ -10,9 +10,9 @@ export function createRenderer(canvas) {
     powerPreference: 'high-performance'
   });
 
-  // Configuración de renderizado
+  // Configuración de renderizado (tope 1.25 para evitar caída de FPS en pantallas HiDPI)
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limite para rendimiento
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 
   // Sombras optimizadas
   renderer.shadowMap.enabled = true;
@@ -29,7 +29,7 @@ export function createRenderer(canvas) {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   }
 
   return {
