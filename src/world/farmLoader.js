@@ -527,12 +527,15 @@ export class FarmLoader {
 
   _processLoadedGLB(modelScene) {
     modelScene.traverse((child) => {
+      if (child.name) {
+        const key = child.name.toLowerCase();
+        if (!this.namedObjects.has(key)) {
+          this.namedObjects.set(key, child);
+        }
+      }
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        if (child.name) {
-          this.namedObjects.set(child.name.toLowerCase(), child);
-        }
       }
     });
     applyNaturalMountainShading(modelScene);
