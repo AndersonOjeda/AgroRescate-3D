@@ -511,9 +511,9 @@ export class HUD {
     plotTabsWrap.className = 'agro-hud-plot-tabs';
     const plotButtons = {};
     for (const [plotId, label] of [
-      ['plot_1', 'Parcela 1'],
-      ['plot_2', 'Parcela 2'],
-      ['plot_3', 'Parcela 3']
+      ['plot_1', 'P1 · Subsist.'],
+      ['plot_2', 'P2 · Precisión'],
+      ['plot_3', 'P3 · Ecológica']
     ]) {
       const btn = d.createElement('button');
       btn.type = 'button';
@@ -587,6 +587,50 @@ export class HUD {
     metrics.appendChild(healthMetric.row);
     panel.appendChild(metrics);
 
+    // 5b. Guía rápida de siguiente paso y Acciones Contextuales (siempre visibles arriba)
+    const nextStepHint = d.createElement('div');
+    nextStepHint.id = 'agro-next-hint';
+    nextStepHint.className = 'agro-next-hint';
+    nextStepHint.textContent = '👉 Paso 1: Prepara la parcela o siembra';
+    panel.appendChild(nextStepHint);
+
+    const actionsGrid = d.createElement('div');
+    actionsGrid.className = 'agro-hud-actions';
+
+    const btnPrepare = this._createActionButton('agro-btn-prepare', '🚜 Preparar', () =>
+      this._executeAction('prepareSoil', this._getSelectedPlotId())
+    );
+    const btnPlant = this._createActionButton('agro-btn-plant', '🌱 Sembrar', () =>
+      this._executeAction('plant', this._getSelectedPlotId())
+    );
+    const btnIrrigate = this._createActionButton('agro-btn-irrigate', '💧 Regar', () =>
+      this._executeAction('irrigate', this._getSelectedPlotId())
+    );
+    const btnCompost = this._createActionButton('agro-btn-compost', '♻️ Compost', () =>
+      this._executeAction('applyCompost', this._getSelectedPlotId())
+    );
+    const btnHarvest = this._createActionButton('agro-btn-harvest', '🌾 Cosechar', () =>
+      this._executeAction('harvest', this._getSelectedPlotId())
+    );
+    const btnRefill = this._createActionButton('agro-btn-refill', '🛢️ +Agua', () =>
+      this._executeAction('refillWater')
+    );
+    const btnAdvance = this._createActionButton(
+      'agro-btn-advance',
+      '⏩ Avanzar Día',
+      () => this._handleAdvanceDay(),
+      'primary'
+    );
+
+    actionsGrid.appendChild(btnPrepare);
+    actionsGrid.appendChild(btnPlant);
+    actionsGrid.appendChild(btnIrrigate);
+    actionsGrid.appendChild(btnCompost);
+    actionsGrid.appendChild(btnHarvest);
+    actionsGrid.appendChild(btnRefill);
+    actionsGrid.appendChild(btnAdvance);
+    panel.appendChild(actionsGrid);
+
     // 6. Economía y Consumo Hídrico
     const econGrid = d.createElement('div');
     econGrid.className = 'agro-hud-econ-grid';
@@ -652,44 +696,6 @@ export class HUD {
     modeBox.appendChild(modeBoxText);
     modeBox.appendChild(thresholdRow);
     panel.appendChild(modeBox);
-
-    // 8. Acciones Disponibles
-    const actionsGrid = d.createElement('div');
-    actionsGrid.className = 'agro-hud-actions';
-
-    const btnPrepare = this._createActionButton('agro-btn-prepare', '🚜 Preparar', () =>
-      this._executeAction('prepareSoil', this._getSelectedPlotId())
-    );
-    const btnPlant = this._createActionButton('agro-btn-plant', '🌱 Sembrar', () =>
-      this._executeAction('plant', this._getSelectedPlotId())
-    );
-    const btnIrrigate = this._createActionButton('agro-btn-irrigate', '💧 Regar', () =>
-      this._executeAction('irrigate', this._getSelectedPlotId())
-    );
-    const btnCompost = this._createActionButton('agro-btn-compost', '♻️ Compost', () =>
-      this._executeAction('applyCompost', this._getSelectedPlotId())
-    );
-    const btnHarvest = this._createActionButton('agro-btn-harvest', '🌾 Cosechar', () =>
-      this._executeAction('harvest', this._getSelectedPlotId())
-    );
-    const btnRefill = this._createActionButton('agro-btn-refill', '🛢️ +Agua', () =>
-      this._executeAction('refillWater')
-    );
-    const btnAdvance = this._createActionButton(
-      'agro-btn-advance',
-      '⏩ Avanzar Día',
-      () => this._handleAdvanceDay(),
-      'primary'
-    );
-
-    actionsGrid.appendChild(btnPrepare);
-    actionsGrid.appendChild(btnPlant);
-    actionsGrid.appendChild(btnIrrigate);
-    actionsGrid.appendChild(btnCompost);
-    actionsGrid.appendChild(btnHarvest);
-    actionsGrid.appendChild(btnRefill);
-    actionsGrid.appendChild(btnAdvance);
-    panel.appendChild(actionsGrid);
 
     // 9. Telemetría recibida desde Three.js + Disclaimer educativo
     const threeBox = d.createElement('div');
@@ -822,6 +828,7 @@ export class HUD {
       thresholdRow,
       thresholdSlider,
       thresholdVal,
+      nextStepHint,
       btnPrepare,
       btnPlant,
       btnIrrigate,
@@ -1150,26 +1157,72 @@ export class HUD {
     // Panel específico de modalidad
     this._renderModeDetailBox(state, activePlot);
 
-    // Disponibilidad de acciones
+    // Disponibilidad de acciones y recomendación clara del siguiente paso
     const avail = state.availableActions || {};
+    const canPrepare = avail.canPrepare ?? (!activePlot.isPlanted && !activePlot.isPrepared);
     if (refs.btnPrepare) {
-      refs.btnPrepare.disabled = !(avail.canPrepare ?? (!activePlot.isPlanted && !activePlot.isPrepared));
+      refs.btnPrepare.disabled = !canPrepare;
       refs.btnPrepare.textContent = activePlot.isPrepared ? '✅ Preparada' : '🚜 Preparar';
+      refs.btnPrepare.style.display = canPrepare ? '' : 'none';
     }
     refs.btnPlant.disabled = !avail.canPlant;
     refs.btnPlant.textContent = `🌱 Sembrar ($${state.seedCost ?? 35})`;
+    refs.btnPlant.style.display = !activePlot.isPlanted ? '' : 'none';
 
     refs.btnIrrigate.disabled = !avail.canIrrigate;
     refs.btnIrrigate.textContent = `💧 Regar (-${state.waterConsumptionPerIrrigation ?? 80}L)`;
+    refs.btnIrrigate.style.display = activePlot.isPlanted && !avail.canHarvest ? '' : 'none';
 
     refs.btnCompost.disabled = !avail.canCompost;
     refs.btnCompost.textContent =
       state.compostCost > 0 ? `♻️ Compost ($${state.compostCost})` : '♻️ Compost (Gratis)';
+    refs.btnCompost.style.display =
+      state.mode === SIMULATION_MODES.ECOLOGICAL || activePlot.isPlanted ? '' : 'none';
 
     refs.btnHarvest.disabled = !avail.canHarvest;
     refs.btnHarvest.textContent = activePlot.isWithered ? '🧹 Limpiar' : '🌾 Cosechar';
+    refs.btnHarvest.style.display = avail.canHarvest ? '' : 'none';
 
     refs.btnRefill.disabled = !avail.canRefillWater;
+    refs.btnRefill.style.display = avail.canRefillWater ? '' : 'none';
+
+    // Resaltar exactamente el botón recomendado según el estado del cultivo
+    const allActionBtns = [
+      refs.btnPrepare,
+      refs.btnPlant,
+      refs.btnIrrigate,
+      refs.btnCompost,
+      refs.btnHarvest,
+      refs.btnAdvance
+    ].filter(Boolean);
+    allActionBtns.forEach((b) => b.classList.remove('recommended'));
+
+    let hint = '👉 Sigue las acciones disponibles en tu parcela';
+    let recBtn = refs.btnAdvance;
+    if (!activePlot.isPlanted && !activePlot.isPrepared && state.requirePreparation) {
+      hint = '👉 Paso 1: Prepara el terreno (botón 🚜 o tecla E en parcela)';
+      recBtn = refs.btnPrepare;
+    } else if (!activePlot.isPlanted) {
+      hint = '👉 Paso 2: Siembra la lechuga en la parcela';
+      recBtn = refs.btnPlant;
+    } else if (activePlot.isWithered) {
+      hint = '⚠️ Cultivo marchito: limpia la parcela para volver a sembrar';
+      recBtn = refs.btnHarvest;
+    } else if (avail.canHarvest) {
+      hint = '🎉 ¡Madura! Cosecha ahora y llévala al almacén';
+      recBtn = refs.btnHarvest;
+    } else if (activePlot.moisture < 45 && avail.canIrrigate) {
+      hint = `💧 Humedad baja (${activePlot.moisture}%): aplica riego`;
+      recBtn = refs.btnIrrigate;
+    } else if (state.mode === SIMULATION_MODES.ECOLOGICAL && !activePlot.composted && avail.canCompost) {
+      hint = '♻️ Aplica compost orgánico para proteger humedad y fertilidad';
+      recBtn = refs.btnCompost;
+    } else {
+      hint = `⏩ Cultivo saludable (${activePlot.daysGrown}/${activePlot.daysToMature} días): avanza un día`;
+      recBtn = refs.btnAdvance;
+    }
+    if (recBtn) recBtn.classList.add('recommended');
+    if (refs.nextStepHint) refs.nextStepHint.textContent = hint;
   }
 
   _updateBar(metricRef, rawVal, dangerThreshold, warnThreshold) {
