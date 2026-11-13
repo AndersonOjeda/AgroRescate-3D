@@ -81,6 +81,9 @@ export class HUD {
     this.interactionPrompt = d.getElementById('interaction-prompt');
     this.promptAction = d.getElementById('prompt-action');
     this.promptTarget = d.getElementById('prompt-target');
+    this.promptHoldBar = d.getElementById('prompt-hold-bar');
+    this.promptHoldFill = d.getElementById('prompt-hold-fill');
+    this.holdRingProgress = d.getElementById('hold-ring-progress');
     if (this.interactionPrompt && typeof this.interactionPrompt.addEventListener === 'function') {
       this.interactionPrompt.addEventListener('click', () => {
         if (!this.interactionPrompt.classList.contains('hidden') && this.onPromptTap) {
@@ -95,6 +98,8 @@ export class HUD {
     this.meterWater = d.getElementById('meter-water');
     this.hudSoil = d.getElementById('hud-soil');
     this.meterSoil = d.getElementById('meter-soil');
+    this.hudEnergy = d.getElementById('hud-energy');
+    this.meterEnergy = d.getElementById('meter-energy');
     this.hudBudget = d.getElementById('hud-budget');
     this.hudHarvest = d.getElementById('hud-harvest');
     this.btnAdvanceDay = d.getElementById('btn-advance-day');
@@ -200,9 +205,46 @@ export class HUD {
       if (this.promptTarget) {
         this.promptTarget.textContent = interactable.name || '';
       }
+      this.setHoldProgress(0, interactable);
       this.interactionPrompt.classList.remove('hidden');
     } else {
       this.interactionPrompt.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Refleja visualmente el esfuerzo continuo (mantener presionado) en el anillo radial y barra.
+   * @param {number} progress 0.0 .. 1.0
+   * @param {object} [interactable]
+   * @param {boolean} [isCancelled=false]
+   */
+  setHoldProgress(progress, interactable = null, isCancelled = false) {
+    if (!this.interactionPrompt) return;
+    const target = interactable || this.lastInteractable;
+    if (interactable) this.lastInteractable = interactable;
+
+    if (this.promptHoldBar) {
+      if (target && target.holdDuration > 0) {
+        this.promptHoldBar.style.display = 'block';
+      } else {
+        this.promptHoldBar.style.display = 'none';
+      }
+    }
+
+    const pct = Math.max(0, Math.min(100, Math.round(progress * 100)));
+    if (this.promptHoldFill) {
+      this.promptHoldFill.style.width = `${pct}%`;
+      if (pct > 0) {
+        this.promptHoldFill.classList.add('active');
+      } else {
+        this.promptHoldFill.classList.remove('active');
+      }
+    }
+
+    if (this.holdRingProgress) {
+      const circumference = 113.1;
+      const offset = circumference - (pct / 100) * circumference;
+      this.holdRingProgress.style.strokeDashoffset = String(offset);
     }
   }
 
@@ -308,6 +350,13 @@ export class HUD {
     if (this.hudSoil && this.meterSoil) {
       this.hudSoil.textContent = `${state.soilQuality}%`;
       this.meterSoil.style.width = `${Math.max(0, Math.min(100, state.soilQuality))}%`;
+    }
+
+    if (this.hudEnergy && this.meterEnergy) {
+      const energy = Number.isFinite(state.farmerEnergy) ? state.farmerEnergy : 100;
+      this.hudEnergy.textContent = `${energy}%`;
+      this.meterEnergy.style.width = `${Math.max(0, Math.min(100, energy))}%`;
+      this.meterEnergy.style.backgroundColor = energy > 50 ? '#10b981' : energy > 20 ? '#f59e0b' : '#ef4444';
     }
 
     if (this.modeSelector && state.mode) {

@@ -290,18 +290,51 @@ kbd {
 }
 
 .key-indicator {
+  position: relative;
   background: #10b981;
   color: #0f172a;
   font-weight: 800;
   font-family: var(--font-mono);
   font-size: 0.9rem;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 3px 0 #059669;
+  flex-shrink: 0;
+}
+
+.key-letter {
+  position: relative;
+  z-index: 2;
+}
+
+.hold-ring-svg {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.hold-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 3;
+}
+
+.hold-ring-fill {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 113.1;
+  stroke-dashoffset: 113.1;
+  transition: stroke-dashoffset 0.05s linear;
 }
 
 .prompt-text {
@@ -318,6 +351,28 @@ kbd {
 .prompt-target {
   font-size: 0.75rem;
   color: #a7f3d0;
+}
+
+.prompt-hold-container {
+  display: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.prompt-hold-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #10b981, #f59e0b);
+  border-radius: 3px;
+  transition: width 0.05s linear;
+}
+
+.prompt-hold-fill.active {
+  box-shadow: 0 0 8px #f59e0b;
 }
 
 /* HUD Superior */
@@ -419,6 +474,7 @@ kbd {
 
 .progress-bar.water { background: #38bdf8; }
 .progress-bar.soil { background: #10b981; }
+.progress-bar.energy { background: #10b981; transition: width 0.3s ease, background-color 0.3s ease; }
 
 .btn-advance {
   background: rgba(59, 130, 246, 0.2);

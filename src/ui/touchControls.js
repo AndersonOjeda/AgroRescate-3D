@@ -282,12 +282,34 @@ export class TouchControls {
       });
     };
 
-    bindTap(this.btnInteractEl, () => {
-      this.interactionSystem?.triggerInteraction();
-      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        navigator.vibrate(12);
-      }
-    });
+    if (this.btnInteractEl) {
+      let touchHoldActive = false;
+
+      this.btnInteractEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchHoldActive = true;
+        this.interactionSystem?.startHold();
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(15);
+        }
+      }, { passive: false });
+
+      const onTouchEnd = (e) => {
+        if (touchHoldActive) {
+          touchHoldActive = false;
+          this.interactionSystem?.stopHold(true);
+        }
+      };
+      this.btnInteractEl.addEventListener('touchend', onTouchEnd);
+      this.btnInteractEl.addEventListener('touchcancel', onTouchEnd);
+
+      // Compatibilidad con clics de mouse y suites de pruebas automatizadas
+      this.btnInteractEl.addEventListener('click', (e) => {
+        if (!touchHoldActive) {
+          this.interactionSystem?.triggerInteraction();
+        }
+      });
+    }
 
     bindTap(this.btnSprintEl, () => {
       this.sprintLocked = !this.sprintLocked;

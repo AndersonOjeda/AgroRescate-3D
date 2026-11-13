@@ -206,6 +206,15 @@ export class FarmSimulation {
     }
 
     let seedCost = plotCfg.seedCost !== undefined ? plotCfg.seedCost : chosenSeed.cost;
+    if (this.farmerEnergy < 15) {
+      return {
+        success: false,
+        message: '¡Demasiado cansado para sembrar! Descansa en la Casa Campesina con agua de panela para recuperar energía.',
+        farmerEnergy: this.farmerEnergy,
+        state: this.getState()
+      };
+    }
+
     if (chosenSeed.id === SEED_VARIETIES.OWN_HARVEST.id) {
       if (this.ownSeedInventory <= 0) {
         return {
@@ -624,6 +633,15 @@ export class FarmSimulation {
     if (target.isPlanted) return { success: false, message: `${target.name} ya tiene un cultivo sembrado` };
     if (target.isPrepared) return { success: false, message: `${target.name} ya está preparada` };
 
+    if (this.farmerEnergy < 20) {
+      return {
+        success: false,
+        message: '¡No tienes fuerzas para labrar la tierra con la azada! Descansa en la Casa Campesina con agua de panela.',
+        farmerEnergy: this.farmerEnergy,
+        state: this.getState()
+      };
+    }
+
     this.consumeFarmerEnergy(20);
 
     target.isPrepared = true;
@@ -868,6 +886,16 @@ export class FarmSimulation {
         message: `El cultivo aún está en ${target.stageLabel.toLowerCase()} (${target.daysGrown}/${target.daysToMature} días)`
       };
     }
+
+    if (this.farmerEnergy < 15) {
+      return {
+        success: false,
+        message: '¡Agotado para cosechar! Ve a descansar a la Casa Campesina y tómate un agua de panela.',
+        farmerEnergy: this.farmerEnergy,
+        state: this.getState()
+      };
+    }
+    this.consumeFarmerEnergy(15);
 
     const harvestCfg = this._getPlotModeConfig(target);
     const { projectedKg, effectivePricePerKg } = calculateProjectedYield(

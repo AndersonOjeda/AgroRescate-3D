@@ -137,12 +137,21 @@
     <!-- Retícula Central -->
     <div id="crosshair" class="crosshair"></div>
 
-    <!-- Prompt de Interacción Central [E] -->
+    <!-- Prompt de Interacción Central [E] con anillo y barra de esfuerzo campesino -->
     <div id="interaction-prompt" class="interaction-prompt hidden">
-      <div class="key-indicator">E</div>
+      <div class="key-indicator">
+        <span class="key-letter">E</span>
+        <svg class="hold-ring-svg" viewBox="0 0 44 44">
+          <circle class="hold-ring-bg" cx="22" cy="22" r="18" />
+          <circle id="hold-ring-progress" class="hold-ring-fill" cx="22" cy="22" r="18" />
+        </svg>
+      </div>
       <div class="prompt-text">
         <span id="prompt-action" class="prompt-action">Interactuar</span>
         <span id="prompt-target" class="prompt-target">Objeto</span>
+        <div id="prompt-hold-bar" class="prompt-hold-container">
+          <div id="prompt-hold-fill" class="prompt-hold-fill"></div>
+        </div>
       </div>
     </div>
 
@@ -178,6 +187,14 @@
             <div id="meter-soil" class="progress-bar soil" style="width: 75%"></div>
           </div>
           <span id="hud-soil" class="stat-value-sub">75%</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-group" title="Energía física del campesino. Si se agota, descansa en tu Casa Campesina con agua de panela.">
+          <span class="stat-label">ENERGÍA</span>
+          <div class="progress-meter">
+            <div id="meter-energy" class="progress-bar energy" style="width: 100%"></div>
+          </div>
+          <span id="hud-energy" class="stat-value-sub">100%</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-group">

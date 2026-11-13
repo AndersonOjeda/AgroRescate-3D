@@ -618,66 +618,130 @@ async function bootstrap() {
     }
   });
 
-  // B. Parcelas Agrícolas: Sembrar / Cosechar según estado
+  // B. Parcelas Agrícolas: Labranza, Siembra y Cosecha con Esfuerzo Físico Campesino (Hold [E])
+  const getPlotActionInfo = (plotState, plotName) => {
+    if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, mode: 'none' };
+    if (!plotState.isPlanted && !plotState.isPrepared) {
+      return {
+        actionText: `Mantén [E] para labrar la tierra en ${plotName} (Azada)`,
+        holdDuration: 1.8,
+        mode: 'prepare'
+      };
+    }
+    if (!plotState.isPlanted) {
+      return {
+        actionText: `Mantén [E] para sembrar ${plotState.cropName} (Surco a surco)`,
+        holdDuration: 1.4,
+        mode: 'plant'
+      };
+    }
+    if (plotState.daysGrown >= plotState.daysToMature) {
+      return {
+        actionText: `Mantén [E] para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`,
+        holdDuration: 1.6,
+        mode: 'harvest'
+      };
+    }
+    if (plotState.visualState === 4) {
+      return {
+        actionText: `Mantén [E] para desyerbar cultivo marchito`,
+        holdDuration: 1.2,
+        mode: 'clean'
+      };
+    }
+    return {
+      actionText: `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días). Riega o avanza el día.`,
+      holdDuration: 0,
+      mode: 'growing'
+    };
+  };
+
   const setupPlotInteractions = (state) => {
     plotsData.forEach(p => {
       const plotState = state.plots[p.id];
-      let actionText = 'Presiona E para sembrar';
-      if (plotState) {
-        if (!plotState.isPlanted && !plotState.isPrepared) {
-          actionText = `Presiona E para preparar terreno en ${p.name}`;
-        } else if (!plotState.isPlanted) {
-          actionText = `Presiona E para sembrar ${plotState.cropName}`;
-        } else if (plotState.daysGrown >= plotState.daysToMature) {
-          actionText = `Presiona E para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`;
-        } else if (plotState.visualState === 4) {
-          actionText = `Presiona E para limpiar cultivo marchito`;
-        } else {
-          actionText = `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días)`;
-        }
-      }
+      const initialInfo = getPlotActionInfo(plotState, p.name);
 
       interactionSystem.register({
         id: `interact_${p.id}`,
         name: p.name,
         position: { x: p.x, y: 0.5, z: p.z },
-        actionText: actionText,
+        actionText: initialInfo.actionText,
+        holdDuration: initialInfo.holdDuration,
         customDistance: sceneCoords.plotInteractDist,
+        onHoldStart: async () => {
+          const currentState = await farmAdapter.getState();
+          const curPlot = currentState.plots[p.id];
+          const info = getPlotActionInfo(curPlot, p.name);
+
+          if (info.mode === 'prepare') {
+            if (currentState.farmerEnergy < 20) {
+              hud.showToast('⚠️ ¡Estás exhausto! El campesino no tiene fuerzas para labrar. Descansa en la Casa Campesina con agua de panela.', 'warning', 4200);
+              interactionSystem.stopHold(true);
+              return;
+            }
+            player.playActionAnimation('hoe');
+          } else if (info.mode === 'plant') {
+            if (currentState.farmerEnergy < 15) {
+              hud.showToast('⚠️ ¡Demasiado cansado para sembrar! Descansa en la Casa Campesina para recuperar energía.', 'warning', 4200);
+              interactionSystem.stopHold(true);
+              return;
+            }
+            player.playActionAnimation('action');
+          } else if (info.mode === 'harvest' || info.mode === 'clean') {
+            if (currentState.farmerEnergy < 15) {
+              hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Campesina.', 'warning', 4200);
+              interactionSystem.stopHold(true);
+              return;
+            }
+            player.playActionAnimation('action');
+          }
+        },
+        onHoldCancel: () => {
+          player._fadeToAnimation('idle', 0.2);
+        },
         onInteract: async () => {
           audioSystem.playClick();
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
+          const info = getPlotActionInfo(curPlot, p.name);
 
-          if (!curPlot.isPlanted && !curPlot.isPrepared) {
-            // Labranza campesina con animación de azada y golpe a tierra
+          if (info.mode === 'prepare') {
+            if (currentState.farmerEnergy < 20) {
+              hud.showToast('⚠️ ¡Estás exhausto! Descansa en la Casa Campesina y tómate un agua de panela caliente.', 'warning', 4000);
+              return;
+            }
             player.playActionAnimation('hoe');
-            setTimeout(() => {
-              particleSystem.emitFootstepDust(player.getPosition());
-              audioSystem.playFootstep();
-            }, 550);
+            particleSystem.emitFootstepDust(player.getPosition());
+            audioSystem.playFootstep();
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
-              hud.showToast(res.message, 'success');
+              hud.showToast('🌾 ' + res.message, 'success');
               audioSystem.playSuccess();
             } else {
               hud.showToast(res.message, 'warning');
             }
-          } else if (!curPlot.isPlanted) {
-            // Sembrar con dedicación agachado
-            player.playActionAnimation();
+          } else if (info.mode === 'plant') {
+            if (currentState.farmerEnergy < 15) {
+              hud.showToast('⚠️ ¡Estás sin energía para sembrar! Descansa en tu Casa Campesina.', 'warning', 4000);
+              return;
+            }
+            player.playActionAnimation('action');
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
-              hud.showToast(res.message, 'success');
+              hud.showToast('🌱 ' + res.message, 'success');
               audioSystem.playSuccess();
             } else {
               hud.showToast(res.message, 'warning');
             }
-          } else if (curPlot.daysGrown >= curPlot.daysToMature || curPlot.visualState === 4) {
-            // Cosechar con canastilla
-            player.playActionAnimation();
+          } else if (info.mode === 'harvest' || info.mode === 'clean') {
+            if (currentState.farmerEnergy < 15) {
+              hud.showToast('⚠️ ¡Sin energía para cosechar! Descansa en tu Casa Campesina.', 'warning', 4000);
+              return;
+            }
+            player.playActionAnimation('action');
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
-              hud.showToast(res.message, 'success');
+              hud.showToast('🧺 ' + res.message, 'success');
               audioSystem.playSuccess();
             } else {
               hud.showToast(res.message, 'warning');
@@ -837,6 +901,11 @@ async function bootstrap() {
     touchControls.setInteractable(item);
   };
 
+  // Conectar barra/anillo de progreso de faena física continua con el HUD
+  interactionSystem.onHoldProgress = (progress, item, isCancelled) => {
+    hud.setHoldProgress(progress, item, isCancelled);
+  };
+
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
   farmAdapter.on('stateChange', ({ state, action }) => {
     if (action === 'initialize' && state?.mode) {
@@ -845,23 +914,12 @@ async function bootstrap() {
     }
     hud.updateFarmState(state);
 
-    // Actualizar los textos de acción de las parcelas
+    // Actualizar los textos de acción y tiempos de faena física de las parcelas
     plotsData.forEach(p => {
       const plotState = state.plots[p.id];
       if (plotState) {
-        let actionText = '';
-        if (!plotState.isPlanted && !plotState.isPrepared) {
-          actionText = `Presiona E para preparar terreno en ${p.name}`;
-        } else if (!plotState.isPlanted) {
-          actionText = `Presiona E para sembrar ${plotState.cropName}`;
-        } else if (plotState.daysGrown >= plotState.daysToMature) {
-          actionText = `Presiona E para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`;
-        } else if (plotState.visualState === 4) {
-          actionText = `Presiona E para limpiar cultivo marchito`;
-        } else {
-          actionText = `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días)`;
-        }
-        interactionSystem.updateActionText(`interact_${p.id}`, actionText);
+        const info = getPlotActionInfo(plotState, p.name);
+        interactionSystem.updateActionText(`interact_${p.id}`, info.actionText, info.holdDuration);
       }
     });
   });
@@ -1204,8 +1262,8 @@ async function bootstrap() {
         player.setPosition(0, 0, -2);
       }
 
-      // D. Detección de proximidad para interacción [E]
-      interactionSystem.update(pPos);
+      // D. Detección de proximidad para interacción [E] y progreso de faena física campesina
+      interactionSystem.update(pPos, delta);
 
       // E. Detección de zonas espaciales por triggers (Radial y AABB)
       triggerSystem.update(pPos);
