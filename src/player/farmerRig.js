@@ -543,50 +543,85 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
     ])
   ]);
 
-  // 5. HOE / LABRANZA (1.2s): movimiento rítmico campesino blandiendo azada
-  const hoeT = [0, 0.35, 0.65, 0.95, 1.2];
-  const hoeClip = new THREE.AnimationClip('hoe', 1.2, [
+  // 5. HOE / LABRANZA (1.05s): movimiento rítmico campesino blandiendo azada contra la tierra
+  const hoeT = [0, 0.28, 0.58, 0.82, 1.05];
+  const hoeClip = new THREE.AnimationClip('hoe', 1.05, [
     makePosTrack('hips', hoeT, hipsRestPosition, [
       [0, 0, 0],
+      [0, 0.015 * height, 0],
+      [0, -0.14 * height, 0],
       [0, -0.08 * height, 0],
-      [0, -0.12 * height, 0],
-      [0, -0.06 * height, 0],
       [0, 0, 0]
     ]),
     makeQuatTrack('spine', hoeT, [
-      [0.05, 0, 0],
-      [-0.20, 0.1, 0],
-      [0.75, 0.05, 0],
-      [0.45, 0, 0],
-      [0.05, 0, 0]
+      [0.02, 0, 0],
+      [-0.10, -0.04, 0],
+      [0.72, 0, 0],
+      [0.55, 0.02, 0],
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('head', hoeT, [
+      [0.02, 0, 0],
+      [-0.08, 0, 0],
+      [0.32, 0, 0],
+      [0.22, 0, 0],
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('leftThigh', hoeT, [
+      [-0.03, 0, 0.02],
+      [-0.02, 0, 0.02],
+      [-0.65, 0, 0.04],
+      [-0.42, 0, 0.03],
+      [-0.03, 0, 0.02]
+    ]),
+    makeQuatTrack('leftShin', hoeT, [
+      [0.06, 0, 0],
+      [0.04, 0, 0],
+      [1.05, 0, 0],
+      [0.68, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    makeQuatTrack('rightThigh', hoeT, [
+      [-0.03, 0, -0.02],
+      [-0.02, 0, -0.02],
+      [-0.65, 0, -0.04],
+      [-0.42, 0, -0.03],
+      [-0.03, 0, -0.02]
+    ]),
+    makeQuatTrack('rightShin', hoeT, [
+      [0.06, 0, 0],
+      [0.04, 0, 0],
+      [1.05, 0, 0],
+      [0.68, 0, 0],
+      [0.06, 0, 0]
     ]),
     makeQuatTrack('rightUpperArm', hoeT, [
-      [-0.1, 0, 1.0],
-      [-1.4, 0.2, 0.7],
-      [-0.4, -0.2, 0.5],
-      [-0.8, 0, 0.6],
-      [-0.1, 0, 1.0]
+      [-0.45, 0, 0.95],
+      [-1.25, 0.15, 0.65],
+      [-1.38, 0, 0.82],
+      [-1.10, -0.10, 0.90],
+      [-0.45, 0, 0.95]
     ]),
     makeQuatTrack('rightForeArm', hoeT, [
-      [0, 0.3, 0],
-      [0, 1.1, 0],
-      [0, 0.4, 0],
-      [0, 0.8, 0],
-      [0, 0.3, 0]
+      [0, 0.45, 0],
+      [0, 0.95, 0],
+      [0, 0.52, 0],
+      [0, 0.75, 0],
+      [0, 0.45, 0]
     ]),
     makeQuatTrack('leftUpperArm', hoeT, [
-      [-0.1, 0, -1.0],
-      [-1.2, -0.1, -0.6],
-      [-0.3, 0.1, -0.4],
-      [-0.7, 0, -0.5],
-      [-0.1, 0, -1.0]
+      [-0.45, 0, -0.95],
+      [-1.05, -0.15, -0.65],
+      [-1.38, 0, -0.82],
+      [-1.10, 0.10, -0.90],
+      [-0.45, 0, -0.95]
     ]),
     makeQuatTrack('leftForeArm', hoeT, [
-      [0, -0.3, 0],
-      [0, -1.0, 0],
-      [0, -0.4, 0],
-      [0, -0.7, 0],
-      [0, -0.3, 0]
+      [0, -0.45, 0],
+      [0, -0.95, 0],
+      [0, -0.52, 0],
+      [0, -0.75, 0],
+      [0, -0.45, 0]
     ])
   ]);
 
@@ -663,7 +698,7 @@ export function applyProceduralFarmerRig(modelRoot) {
   actions.run.setLoop(THREE.LoopRepeat, Infinity);
   actions.action.setLoop(THREE.LoopOnce, 1);
   actions.action.clampWhenFinished = true;
-  actions.hoe.setLoop(THREE.LoopRepeat, 2);
+  actions.hoe.setLoop(THREE.LoopOnce, 1);
   actions.hoe.clampWhenFinished = true;
 
   return {

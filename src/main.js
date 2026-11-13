@@ -108,36 +108,49 @@ async function bootstrap() {
   });
   createNaturalHorizon(scene);
 
-  // Construir herramienta campesina (azada) para el personaje usando mallas del GLB o respaldo low-poly
-  const createHoeTool = (root) => {
+  // Construir herramienta campesina (azada) para el personaje para labores de labranza
+  const createRusticHoeTool = () => {
     const group = new THREE.Group();
     group.name = 'player_hoe_tool';
-    const mango = root?.getObjectByName ? root.getObjectByName('azada_mango') : null;
-    const cabeza = root?.getObjectByName ? root.getObjectByName('azada_cabeza') : null;
-    if (mango && cabeza) {
-      const mClone = mango.clone();
-      const cClone = cabeza.clone();
-      mClone.position.set(0, 0, 0);
-      cClone.position.set(0, 0, 0);
-      group.add(mClone, cClone);
-      group.scale.setScalar(0.7);
-      group.rotation.set(-0.3, 0.4, 0.2);
-      group.position.set(0.05, -0.3, 0.2);
-    } else {
-      const handleMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
-      const metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.4, metalness: 0.5 });
-      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.0, 6), handleMat);
-      handle.position.y = 0.35;
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.025), metalMat);
-      blade.position.set(0, 0.85, 0.03);
-      blade.rotation.x = 0.4;
-      group.add(handle, blade);
-      group.position.set(0.05, -0.3, 0.2);
-      group.rotation.set(-0.3, 0.4, 0.2);
-    }
+
+    // 1. Mango de madera rústico pulido (cilindro esbelto, 1.15m de largo)
+    const handleMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 1.15, 8), handleMat);
+    handle.position.y = 0.25; // Punto de agarre de la mano en y = 0
+    handle.castShadow = true;
+    group.add(handle);
+
+    // 2. Casquillo metálico en la unión superior
+    const metalMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.35,
+      metalness: 0.75
+    });
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.024, 0.07, 8), metalMat);
+    collar.position.y = 0.80;
+    collar.castShadow = true;
+    group.add(collar);
+
+    // 3. Cuello forjado
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.10), metalMat);
+    neck.position.set(0, 0.81, 0.04);
+    neck.rotation.x = -0.35;
+    neck.castShadow = true;
+    group.add(neck);
+
+    // 4. Hoja forjada de azada tradicional (inclinada hacia la tierra para picar)
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.15, 0.014), metalMat);
+    blade.position.set(0, 0.76, 0.10);
+    blade.rotation.x = 1.35;
+    blade.castShadow = true;
+    group.add(blade);
+
+    // Orientación natural respecto a la mano derecha
+    group.rotation.set(-1.15, 0.15, -0.25);
+    group.scale.setScalar(0.85);
     return group;
   };
-  player.setHoeTool(createHoeTool(farmEnv?.root));
+  player.setHoeTool(createRusticHoeTool());
 
   // Vincular las parcelas visuales con el adaptador agrícola (procedural o nodos de etapa en finca.glb)
   if (farmEnv && farmEnv.cropPlots) {
@@ -636,8 +649,12 @@ async function bootstrap() {
           const curPlot = currentState.plots[p.id];
 
           if (!curPlot.isPlanted && !curPlot.isPrepared) {
-            // Labranza campesina con animación de azada
+            // Labranza campesina con animación de azada y golpe a tierra
             player.playActionAnimation('hoe');
+            setTimeout(() => {
+              particleSystem.emitFootstepDust(player.getPosition());
+              audioSystem.playFootstep();
+            }, 550);
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -852,7 +869,9 @@ async function bootstrap() {
   // Eventos de progreso de cultivo, misiones y animaciones
   farmAdapter.on('soilPrepared', ({ result }) => {
     if (result?.success) {
-      player.playActionAnimation('hoe');
+      if (!player._isPlayingAction) {
+        player.playActionAnimation('hoe');
+      }
       particleSystem.emitFootstepDust(player.getPosition());
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'soilPrepared' });

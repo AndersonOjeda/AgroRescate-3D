@@ -274,6 +274,10 @@ export class PlayerController {
           });
 
           if (this.hoeToolMesh && this.rig.bones && this.rig.bones[6]) {
+            if (this.hoeToolMesh.parent) {
+              this.hoeToolMesh.parent.remove(this.hoeToolMesh);
+            }
+            this.hoeToolMesh.position.set(-0.24, -0.02, 0.04);
             this.rig.bones[6].add(this.hoeToolMesh);
           }
         }
@@ -298,8 +302,10 @@ export class PlayerController {
     this.hoeToolMesh.visible = false;
 
     if (this.rig && this.rig.bones && this.rig.bones[6]) {
+      this.hoeToolMesh.position.set(-0.24, -0.02, 0.04);
       this.rig.bones[6].add(this.hoeToolMesh);
     } else if (this.parts && this.parts.rightArm) {
+      this.hoeToolMesh.position.set(0, -0.34, 0.08);
       this.parts.rightArm.add(this.hoeToolMesh);
     } else {
       this.mesh.add(this.hoeToolMesh);
@@ -333,7 +339,9 @@ export class PlayerController {
    * @returns {boolean}
    */
   playActionAnimation(animName = 'action') {
-    this._actionTimer = animName === 'hoe' ? 1.2 : this._actionDuration;
+    this._actionDuration = animName === 'hoe' ? 1.05 : 0.75;
+    this._actionTimer = this._actionDuration;
+    this.currentAnimName = animName;
     const actionAnim = this.animations[animName] || this.animations.action;
     if (!actionAnim) {
       if (this.parts && this.parts.pelvis) {
@@ -346,7 +354,6 @@ export class PlayerController {
 
     const prevAction = this.activeAction;
     this._isPlayingAction = true;
-    this.currentAnimName = animName;
     this.activeAction = actionAnim;
 
     if (animName === 'hoe' && this.hoeToolMesh) {
@@ -1072,15 +1079,52 @@ export class PlayerController {
       // ANIMACIONES PROCEDURALES DEL RESPALDO ARTICULADO (Agacharse, Caminar, Correr e Inactivo)
       if (this._isPlayingAction && this._actionTimer > 0) {
         this._actionTimer = Math.max(0, this._actionTimer - delta);
-        const phase = Math.sin((1 - this._actionTimer / this._actionDuration) * Math.PI);
-        this.parts.pelvis.position.y = 0.68 - 0.24 * phase;
-        this.parts.torso.rotation.x = 0.72 * phase;
-        this.parts.leftLeg.rotation.x = -0.55 * phase;
-        this.parts.rightLeg.rotation.x = -0.55 * phase;
-        this.parts.leftArm.rotation.x = -1.15 * phase;
-        this.parts.rightArm.rotation.x = -1.15 * phase;
+        const progress = Math.max(0, Math.min(1, 1 - this._actionTimer / this._actionDuration));
+
+        if (this.currentAnimName === 'hoe') {
+          // Faena campesina rítmica de labranza con azada:
+          // 0.0 -> 0.30: Impulso (subir brazos con azada, torso se estira hacia atrás)
+          // 0.30 -> 0.65: Golpe descendente a la tierra (flexión de rodillas, torso se inclina con fuerza)
+          // 0.65 -> 1.0: Tirón de tierra hacia el campesino y regreso suave a postura erguida
+          if (progress < 0.30) {
+            const upT = progress / 0.30;
+            this.parts.pelvis.position.y = 0.68 + 0.03 * upT;
+            this.parts.torso.rotation.x = -0.16 * upT;
+            this.parts.leftLeg.rotation.x = 0.04 * upT;
+            this.parts.rightLeg.rotation.x = 0.04 * upT;
+            this.parts.leftArm.rotation.x = -1.65 * upT;
+            this.parts.rightArm.rotation.x = -1.65 * upT;
+          } else if (progress < 0.65) {
+            const downT = (progress - 0.30) / 0.35;
+            this.parts.pelvis.position.y = 0.71 - 0.22 * downT;
+            this.parts.torso.rotation.x = -0.16 + 0.88 * downT;
+            this.parts.leftLeg.rotation.x = 0.04 - 0.60 * downT;
+            this.parts.rightLeg.rotation.x = 0.04 - 0.60 * downT;
+            this.parts.leftArm.rotation.x = -1.65 + 1.25 * downT;
+            this.parts.rightArm.rotation.x = -1.65 + 1.25 * downT;
+          } else {
+            const recT = (progress - 0.65) / 0.35;
+            this.parts.pelvis.position.y = 0.49 + 0.19 * recT;
+            this.parts.torso.rotation.x = 0.72 * (1 - recT);
+            this.parts.leftLeg.rotation.x = -0.56 * (1 - recT);
+            this.parts.rightLeg.rotation.x = -0.56 * (1 - recT);
+            this.parts.leftArm.rotation.x = -0.40 * (1 - recT);
+            this.parts.rightArm.rotation.x = -0.40 * (1 - recT);
+          }
+        } else {
+          // Acción genérica de inclinación y agachado (sembrar / cosechar / regar)
+          const phase = Math.sin(progress * Math.PI);
+          this.parts.pelvis.position.y = 0.68 - 0.24 * phase;
+          this.parts.torso.rotation.x = 0.72 * phase;
+          this.parts.leftLeg.rotation.x = -0.55 * phase;
+          this.parts.rightLeg.rotation.x = -0.55 * phase;
+          this.parts.leftArm.rotation.x = -1.15 * phase;
+          this.parts.rightArm.rotation.x = -1.15 * phase;
+        }
+
         if (this._actionTimer <= 0) {
           this._isPlayingAction = false;
+          if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
         }
       } else if (isMoving) {
         const legAmplitude = sprinting ? 0.85 : 0.50;
