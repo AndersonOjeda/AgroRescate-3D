@@ -93,7 +93,7 @@ export class PlayerController {
     this.cameraHeight = 2.2;
     this.cameraPitch = 0.25; // Ángulo vertical (inclinación)
     this.cameraYaw = 0;      // Ángulo horizontal
-    this.minPitch = -0.15;   // Evita atravesar el suelo
+    this.minPitch = -1.05;   // Permite mirar al cielo y cenit sin atravesar el suelo
     this.maxPitch = 1.25;
 
     // Velocidades
@@ -424,10 +424,12 @@ export class PlayerController {
    * @param {string} [animName='action'] 'action' | 'hoe' | 'plant' | 'harvest' | 'tired'
    * @returns {boolean}
    */
-  playActionAnimation(animName = 'action') {
+  playActionAnimation(animName = 'action', duration = null) {
     const BASE_DURATIONS = { hoe: 1.80, plant: 1.40, harvest: 1.60, tired: 2.40, compost: 1.80, action: 0.75 };
     const isLabor = animName === 'hoe' || animName === 'plant' || animName === 'harvest';
-    const effort = isLabor ? this.getEffortMultiplier() : 1;
+    const effort = Number.isFinite(duration) && duration > 0
+      ? duration / (BASE_DURATIONS[animName] ?? 0.75)
+      : isLabor ? this.getEffortMultiplier() : 1;
     this._actionDuration = (BASE_DURATIONS[animName] ?? 0.75) * effort;
     this._actionTimer = this._actionDuration;
     this.currentAnimName = animName;
@@ -942,16 +944,12 @@ export class PlayerController {
     this.obstacles.push(obstacle);
   }
 
-  setObstacles(obstacles) {
-    this.obstacles = Array.isArray(obstacles) ? obstacles : [];
-  }
-
   /**
    * Configura dinámicamente la lista de obstáculos y límites según el escenario activo
    */
   setObstacles(obstacles, bounds) {
-    if (Array.isArray(obstacles) && obstacles.length > 0) {
-      this.obstacles = obstacles;
+    if (Array.isArray(obstacles)) {
+      this.obstacles = [...obstacles];
     }
     if (bounds) {
       this.bounds = bounds;
@@ -972,6 +970,7 @@ export class PlayerController {
     // 2. Obstáculos sólidos (cajas y paredes)
     for (let i = 0; i < this.obstacles.length; i++) {
       const obs = this.obstacles[i];
+      if (obs.walkable && obs.height <= 0.4) continue;
       if (obs.type === 'box') {
         const minX = obs.minX - this.radius;
         const maxX = obs.maxX + this.radius;
@@ -1031,6 +1030,7 @@ export class PlayerController {
     // 2. Obstáculos y paredes de la finca
     for (let i = 0; i < this.obstacles.length; i++) {
       const obs = this.obstacles[i];
+      if (obs.walkable && obs.height <= 0.4) continue;
       if (obs.type === 'box') {
         if (
           x >= obs.minX - this.radius &&
@@ -1057,7 +1057,19 @@ export class PlayerController {
   /**
    * Actualización por cuadro con delta time
    */
+  getGroundHeight(x = this.position.x, z = this.position.z) {
+    let height = 0;
+    for (const obs of this.obstacles) {
+      if (obs.walkable && obs.height <= 0.4 && x >= obs.minX && x <= obs.maxX && z >= obs.minZ && z <= obs.maxZ) height = Math.max(height, obs.height);
+    }
+    return height;
+  }
+
   update(delta) {
+    if (this._stepPoseRestore) {
+      for (const [bone, quaternion] of this._stepPoseRestore) bone.quaternion.copy(quaternion);
+      this._stepPoseRestore = null;
+    }
     // Si estamos en modo OrbitControls, la cámara es libre y el avatar permanece en reposo
     if (this.cameraMode === 'orbit') {
       if (this.orbitControls) {
@@ -1074,8 +1086,9 @@ export class PlayerController {
       return;
     }
 
-    const sprinting = this.isSprinting || this.isTouchSprinting;
-    const baseSpeed = (sprinting ? this.runSpeed : this.walkSpeed) * (1 - this.fatigue * (sprinting ? 0.35 : 0.2));
+    const sprinting = (this.isSprinting || this.isTouchSprinting) && this.getGroundHeight() === 0;
+    const onBed = this.getGroundHeight() > 0;
+    const baseSpeed = (sprinting && !onBed ? this.runSpeed : this.walkSpeed) * (onBed ? 0.75 : 1) * (1 - this.fatigue * (sprinting ? 0.35 : 0.2));
 
     // Calcular dirección frontal y lateral de la cámara en el plano XZ
     this._cameraForward.set(
@@ -1103,7 +1116,9 @@ export class PlayerController {
       this._moveDirection.addScaledVector(this._cameraRight, this.touchMove.x);
     }
 
-    const isMoving = this._moveDirection.lengthSq() > 0.0001;
+    let isMoving = this._moveDirection.lengthSq() > 0.0001;
+    const previousX = this.position.x;
+    const previousZ = this.position.z;
     const analogScale = !hasKeyboardInput && this.touchMove.magnitude > 0.05
       ? Math.max(0.35, this.touchMove.magnitude)
       : 1;
@@ -1112,26 +1127,29 @@ export class PlayerController {
     if (isMoving) {
       this._moveDirection.normalize();
 
-      const moveStep = speed * delta;
+      const moveStep = speed * Math.min(delta, 0.25);
       const dx = this._moveDirection.x * moveStep;
       const dz = this._moveDirection.z * moveStep;
 
       // Desplazamiento y resolución de colisión con deslizamiento por paredes (Wall Sliding)
-      const targetX = this.position.x + dx;
+      const steps = Math.max(1, Math.ceil(moveStep / (this.radius * 0.4)));
+      for (let step = 0; step < steps; step++) {
+      const targetX = this.position.x + dx / steps;
       if (!this.isColliding(targetX, this.position.z)) {
         this.position.x = targetX;
       }
 
-      const targetZ = this.position.z + dz;
+      const targetZ = this.position.z + dz / steps;
       if (!this.isColliding(this.position.x, targetZ)) {
         this.position.z = targetZ;
+      }
       }
 
       // Verificación estricta de límites y paredes
       this._resolvePenetration();
 
       // Suelo plano a nivel Y = 0 (los pies en Y=0)
-      this.position.y = 0;
+      // La altura se resuelve contra la superficie del terreno más abajo.
 
       // Rotar avatar suavemente hacia la dirección de avance
       const targetRotationY = Math.atan2(this._moveDirection.x, this._moveDirection.z);
@@ -1142,6 +1160,15 @@ export class PlayerController {
       this.rotationY += diff * Math.min(1, delta * 12);
     }
 
+    // Animar la distancia recorrida, no las teclas: evita patinar contra paredes.
+    const travelled = Math.hypot(this.position.x - previousX, this.position.z - previousZ);
+    isMoving = isMoving && travelled > 0.001;
+    this.movementRatio = Math.min(1, travelled / Math.max(0.001, speed * Math.min(delta, 0.25)));
+    const groundHeight = this.getGroundHeight();
+    if (groundHeight > (this._lastGroundHeight || 0) + 0.05) this._stepUpTime = 0.42;
+    this._lastGroundHeight = groundHeight;
+    this.position.y = THREE.MathUtils.damp(this.position.y, groundHeight, 16, Math.max(0, delta));
+    if (Math.abs(this.position.y - groundHeight) < 0.002) this.position.y = groundHeight;
     // Actualizar posición del mesh
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = this.rotationY;
@@ -1149,7 +1176,7 @@ export class PlayerController {
     // Cadencia de pisadas para sonido y partículas de polvo tanto en GLB como en respaldo
     if (isMoving) {
       const cycleSpeed = sprinting ? 12.5 : 8.0;
-      this.walkCycle += delta * cycleSpeed;
+      this.walkCycle += delta * cycleSpeed * this.movementRatio;
       const sinVal = Math.sin(this.walkCycle);
       if ((this.prevCycleSin <= 0 && sinVal > 0) || (this.prevCycleSin >= 0 && sinVal < 0)) {
         if (this.onFootstep) this.onFootstep();
@@ -1167,9 +1194,12 @@ export class PlayerController {
     if (this.mixer) {
       if (this.animations && !this._isPlayingAction) {
         const targetAnim = isMoving
-          ? (sprinting && this.animations.run ? 'run' : (this.animations.walk ? 'walk' : 'idle'))
+          ? (sprinting && !onBed && this.animations.run ? 'run' : (this.animations.walk ? 'walk' : 'idle'))
           : 'idle';
         this._fadeToAnimation(targetAnim, 0.16);
+        if (isMoving && this.activeAction) {
+          this.activeAction.setEffectiveTimeScale(Math.max(0.25, this.movementRatio));
+        }
       }
       this.mixer.update(delta);
     } else if (this.parts && this.parts.pelvis) {
@@ -1379,13 +1409,31 @@ export class PlayerController {
       }
     }
 
+    if (this._stepUpTime > 0 && !this._isPlayingAction) {
+      this._stepUpTime = Math.max(0, this._stepUpTime - delta);
+      const lift = Math.sin((1 - this._stepUpTime / 0.42) * Math.PI);
+      const thigh = this.rig?.bones?.find(bone => bone.name === 'leftThigh');
+      const shin = this.rig?.bones?.find(bone => bone.name === 'leftShin');
+      if (thigh && shin) {
+        this._stepPoseRestore = [[thigh, thigh.quaternion.clone()], [shin, shin.quaternion.clone()]];
+        thigh.rotateX(-0.85 * lift);
+        shin.rotateX(1.05 * lift);
+      } else if (this.parts?.leftLeg) {
+        this.parts.leftLeg.rotation.x -= 0.85 * lift;
+      }
+    }
     // Calcular posición de cámara en 3ra persona con esféricas
-    const horizDist = this.cameraDistance * Math.cos(this.cameraPitch);
-    const vertDist = this.cameraDistance * Math.sin(this.cameraPitch) + this.cameraHeight;
+    const isLookingUp = this.cameraPitch < 0;
+    const horizDist = isLookingUp
+      ? this.cameraDistance * Math.cos(this.cameraPitch * 0.55)
+      : this.cameraDistance * Math.cos(this.cameraPitch);
+    const vertDist = isLookingUp
+      ? Math.max(0.85, this.cameraHeight + this.cameraPitch * 1.25)
+      : this.cameraDistance * Math.sin(this.cameraPitch) + this.cameraHeight;
 
     this._desiredCameraPos.set(
       this.position.x + Math.sin(this.cameraYaw) * horizDist,
-      Math.max(0.6, this.position.y + vertDist), // Asegura que nunca atraviese el suelo
+      Math.max(0.85, this.position.y + vertDist), // Asegura que nunca atraviese el suelo
       this.position.z + Math.cos(this.cameraYaw) * horizDist
     );
 
@@ -1401,9 +1449,10 @@ export class PlayerController {
     }
 
     // Mirar hacia la cabeza del agricultor
+    const lookUpOffset = isLookingUp ? Math.tan(-this.cameraPitch) * horizDist : 0;
     this._cameraLookTarget.set(
       this.position.x,
-      this.position.y + 1.4,
+      this.position.y + 1.4 + lookUpOffset,
       this.position.z
     );
     this.camera.lookAt(this._cameraLookTarget);

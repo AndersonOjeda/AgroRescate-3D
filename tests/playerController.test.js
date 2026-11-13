@@ -258,6 +258,21 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
     expect(player._isPlayingAction).toBe(false);
   });
 
+  it('permite inclinar la cámara hacia arriba para ver el sol sin atravesar el suelo', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200);
+    const player = new PlayerController(camera, null, scene, { autoLoad: false });
+
+    expect(player.minPitch).toBeLessThanOrEqual(-1.0);
+    player.cameraPitch = -1.0;
+    for (let i = 0; i < 20; i++) {
+      player.update(0.05);
+    }
+
+    expect(camera.position.y).toBeGreaterThanOrEqual(0.85);
+    expect(player._cameraLookTarget.y).toBeGreaterThan(5.0);
+  });
+
   it('el rig GLB incluye clips realistas de siembra, cosecha y agotamiento', () => {
     const { root } = createHumanoidMockScene();
     prepareFarmerGlbModel(root, 2.1);
