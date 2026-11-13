@@ -422,6 +422,16 @@ async function bootstrap() {
   );
 
   // Sincronizar estado inicial del simulador con el HUD y los modelos 3D
+  // Las camas elevadas son sólidas: las labores se realizan desde el borde.
+  const bedObstacles = sceneCoords.plots.map(plot => {
+    const visual = farmEnv.cropPlots?.[plot.id];
+    const halfX = isGlb ? 6.5 : (visual?.width || 7) / 2 + 0.15;
+    const halfZ = isGlb ? 6.5 : (visual?.depth || 7) / 2 + 0.15;
+    return { id: `bed_${plot.id}`, type: 'box', minX: plot.x - halfX, maxX: plot.x + halfX, minZ: plot.z - halfZ, maxZ: plot.z + halfZ, height: 0.3 };
+  });
+  for (const obstacle of bedObstacles) player.addObstacle(obstacle);
+  physicsWorld.setObstacles([...player.obstacles]);
+  player._resolvePenetration();
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
@@ -1409,6 +1419,9 @@ async function bootstrap() {
     }
     if (!modals.isPaused) {
       // A. Actualizar jugador y cámara en tercera persona
+      player.obstacles = player.obstacles.filter(obstacle => !obstacle.dynamicCrate);
+      player.obstacles.push(...physicsWorld.getPlayerObstacles(player.position.y));
+      player._resolvePenetration();
       player.update(delta);
       if (interactionSystem.isHolding && player._moveDirection.lengthSq() > 0.0001) {
         interactionSystem.stopHold(true);
@@ -1425,7 +1438,8 @@ async function bootstrap() {
       if (!player._isAnyModalOpen()) skySystem.update(delta);
       hud.setDayPhase(skySystem.phaseName);
       weatherSystem.update(delta, {
-        preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning
+        preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning,
+        skySystem
       });
       const isNight = skySystem.phaseName === 'Noche';
       wildlifeSystem.update(delta, isNight);

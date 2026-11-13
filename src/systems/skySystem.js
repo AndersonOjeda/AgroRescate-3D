@@ -4,6 +4,7 @@ const DAY_SKY = new THREE.Color(0xa0d8ef);
 const SUNSET_SKY = new THREE.Color(0xf59e6b);
 const NIGHT_SKY = new THREE.Color(0x0b132b);
 const DAWN_SKY = new THREE.Color(0xfca58a);
+const PRE_DAWN_SKY = new THREE.Color(0x1e1b4b);
 
 const DAY_FOG = new THREE.Color(0xa0d8ef);
 const SUNSET_FOG = new THREE.Color(0xfdba74);
@@ -14,6 +15,8 @@ const DAY_CLOUD = new THREE.Color(0xffffff);
 const SUNSET_CLOUD = new THREE.Color(0xffd6ba);
 const NIGHT_CLOUD = new THREE.Color(0x334155);
 const DAWN_CLOUD = new THREE.Color(0xfde2e4);
+const RAIN_CLOUD = new THREE.Color(0x475569);
+const STORM_CLOUD = new THREE.Color(0x1e293b);
 
 const DAY_SUN = new THREE.Color(0xfff7e6);
 const SUNSET_SUN = new THREE.Color(0xff8c42);
@@ -40,11 +43,18 @@ export class SkySystem {
     this.cycleDuration = 3.8; // Segundos del ciclo rápido manual (dormir / botón avanzar)
     this.phaseName = 'Día';
 
-    // Ciclo natural continuo (Mañana -> Mediodía -> Tarde -> Noche)
+    // Ciclo natural continuo (Madrugada -> Mañana -> Mediodía -> Tarde -> Anochecer -> Noche)
     this.autoCycleEnabled = false;
     this.dayLengthSeconds = 48; // 48s reales = 1 día completo (12s por fase)
     this.timeOfDay = 0.08;      // 0..1 (0.00-0.25 Mañana, 0.25-0.50 Mediodía, 0.50-0.75 Tarde, 0.75-1.00 Noche)
     this.onDayComplete = null;
+
+    // Dinámica climática aplicada a nubes y disco solar
+    this.weatherOvercast = 0;
+    this.weatherStorminess = 0;
+    this.weatherWind = 0.2;
+    this._sunVisibility = 1;
+    this._cloudAccumElapsed = 0;
 
     // Colores temporales reutilizables (cero garbage collection en update)
     this._tmpSky = new THREE.Color();
@@ -64,6 +74,7 @@ export class SkySystem {
     this.skyGroup.name = 'sky_atmosphere';
     this.scene.add(this.skyGroup);
 
+    this._createSun();
     this._createClouds();
     this._createMoonAndStars();
   }
@@ -106,9 +117,34 @@ export class SkySystem {
         group: cloudGroup,
         speed: cfg.speed,
         baseY: cfg.y,
+        baseScale: cfg.scale,
         phase: cfg.x * 0.1
       });
     }
+  }
+
+  _createSun() {
+    const sunGeo = new THREE.IcosahedronGeometry(2.6, 1);
+    this.sunMaterial = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 1,
+      fog: false
+    });
+    this.sunMesh = new THREE.Mesh(sunGeo, this.sunMaterial);
+    this.sunMesh.position.set(25, 40, 20);
+    this.skyGroup.add(this.sunMesh);
+
+    const haloGeo = new THREE.IcosahedronGeometry(3.9, 1);
+    this.sunHaloMaterial = new THREE.MeshBasicMaterial({
+      color: 0xfde047,
+      transparent: true,
+      opacity: 0.26,
+      depthWrite: false,
+      fog: false
+    });
+    this.sunHaloMesh = new THREE.Mesh(haloGeo, this.sunHaloMaterial);
+    this.sunMesh.add(this.sunHaloMesh);
   }
 
   _createMoonAndStars() {
@@ -175,6 +211,16 @@ export class SkySystem {
   }
 
   /**
+   * Ajusta la acumulación, oscurecimiento y velocidad de las nubes según el clima actual.
+   * @param {{ overcast?: number, storminess?: number, wind?: number }} [dynamics]
+   */
+  setWeatherDynamics({ overcast = 0, storminess = 0, wind = 0.2 } = {}) {
+    this.weatherOvercast = THREE.MathUtils.clamp(overcast, 0, 1);
+    this.weatherStorminess = THREE.MathUtils.clamp(storminess, 0, 1);
+    this.weatherWind = THREE.MathUtils.clamp(wind, 0, 1.5);
+  }
+
+  /**
    * Inicia la transición animada Atardecer -> Noche -> Amanecer -> Día.
    */
   triggerDayNightCycle() {
@@ -183,18 +229,32 @@ export class SkySystem {
   }
 
   /**
-   * Actualiza el desplazamiento de nubes y el ciclo día/noche cada frame.
+   * Actualiza el desplazamiento de nubes, acumulación climática y el ciclo día/noche cada frame.
    * @param {number} delta
    */
   update(delta) {
-    // 1. Movimiento suave continuo de nubes
+    this._cloudAccumElapsed += Math.max(0, delta);
+    const windFactor = 1 + this.weatherOvercast * 0.75 + this.weatherStorminess * 1.15;
+    const cloudScaleBoost = 1 + this.weatherOvercast * 0.45 + this.weatherStorminess * 0.35;
+    const cloudDropY = this.weatherOvercast * 2.5 + this.weatherStorminess * 1.5;
+
+    // 1. Movimiento, acumulación y descenso suave de nubes
     for (let i = 0; i < this.clouds.length; i++) {
       const c = this.clouds[i];
-      c.group.position.x += c.speed * delta;
+      c.group.position.x += c.speed * windFactor * delta;
       if (c.group.position.x > 62) {
         c.group.position.x = -62;
       }
+      if (this.weatherOvercast > 0.001 || this.weatherStorminess > 0.001) {
+        const billow = Math.sin(this._cloudAccumElapsed * 0.8 + c.phase) * 0.22 * this.weatherOvercast;
+        c.group.position.y = c.baseY - cloudDropY + billow;
+        c.group.scale.setScalar(c.baseScale * cloudScaleBoost);
+      } else {
+        c.group.position.y = c.baseY;
+        c.group.scale.setScalar(c.baseScale);
+      }
     }
+    this.cloudMaterial.opacity = 0.90 + Math.min(0.08, this.weatherOvercast * 0.06 + this.weatherStorminess * 0.04);
 
     if (this.isTransitioning) {
       this.cycleProgress += delta / this.cycleDuration;
@@ -238,30 +298,44 @@ export class SkySystem {
    */
   _applyTimeOfDay(t) {
     if (t < 0.25) {
-      // MAÑANA (0.00 -> 0.25)
+      // MADRUGADA (0.00-0.08) -> MAÑANA (0.08-0.25)
       const u = t / 0.25;
       this.phaseName = 'Mañana';
-      const skyMix = Math.min(1, u / 0.4);
-      this._tmpSky.lerpColors(DAWN_SKY, DAY_SKY, skyMix);
-      this._tmpFog.lerpColors(DAWN_FOG, DAY_FOG, skyMix);
-      this._tmpCloud.lerpColors(DAWN_CLOUD, DAY_CLOUD, skyMix);
-      this._tmpSun.lerpColors(DAWN_SUN, DAY_SUN, skyMix);
+      if (t < 0.08) {
+        const dawnMix = t / 0.08;
+        this._tmpSky.lerpColors(PRE_DAWN_SKY, DAWN_SKY, dawnMix);
+        this._tmpFog.lerpColors(NIGHT_FOG, DAWN_FOG, dawnMix);
+        this._tmpCloud.lerpColors(NIGHT_CLOUD, DAWN_CLOUD, dawnMix);
+        this._tmpSun.lerpColors(MOON_COLOR, DAWN_SUN, dawnMix);
+        this._tmpHemi.lerpColors(NIGHT_HEMI_SKY, DAY_HEMI_SKY, dawnMix);
+      } else {
+        const morningMix = Math.min(1, (t - 0.08) / 0.14);
+        this._tmpSky.lerpColors(DAWN_SKY, DAY_SKY, morningMix);
+        this._tmpFog.lerpColors(DAWN_FOG, DAY_FOG, morningMix);
+        this._tmpCloud.lerpColors(DAWN_CLOUD, DAY_CLOUD, morningMix);
+        this._tmpSun.lerpColors(DAWN_SUN, DAY_SUN, morningMix);
+        this._tmpHemi.copy(DAY_HEMI_SKY);
+      }
 
       this._setEnvironmentColors(
         this._tmpSky,
         this._tmpFog,
         this._tmpCloud,
         this._tmpSun,
-        0.78 + 0.37 * u,
-        DAY_HEMI_SKY,
-        0.45 + 0.15 * u,
-        0.28 + 0.07 * u
+        0.52 + 0.65 * u,
+        this._tmpHemi,
+        0.34 + 0.26 * u,
+        0.24 + 0.11 * u
       );
+      const sunX = 46 - 30 * u;
+      const sunY = 4 + 32 * u;
+      const sunZ = 16 + 4 * u;
       if (this.sunLight) {
-        this.sunLight.position.set(36 - 20 * u, 14 + 22 * u, 18 + 2 * u);
+        this.sunLight.position.set(sunX, sunY, sunZ);
       }
-      const nightFade = Math.max(0, 1 - u / 0.2);
-      this._setNightVisibility(nightFade * 0.4, nightFade * 0.4);
+      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, Math.min(1, u / 0.18));
+      const nightFade = Math.max(0, 1 - u / 0.28);
+      this._setNightVisibility(nightFade * 0.55, nightFade * 0.65);
     } else if (t < 0.50) {
       // MEDIODÍA (0.25 -> 0.50)
       const u = (t - 0.25) / 0.25;
@@ -277,15 +351,19 @@ export class SkySystem {
         0.60 + 0.08 * zenith,
         0.35 + 0.04 * zenith
       );
+      const sunX = 16 - 28 * u;
+      const sunY = 36 + 10 * zenith;
+      const sunZ = 20;
       if (this.sunLight) {
-        this.sunLight.position.set(16 - 28 * u, 36 + 10 * zenith, 20);
+        this.sunLight.position.set(sunX, sunY, sunZ);
       }
+      this._updateSunVisual(sunX, sunY, sunZ, DAY_SUN, 1);
       this._setNightVisibility(0, 0);
     } else if (t < 0.75) {
-      // TARDE (0.50 -> 0.75)
+      // TARDE Y HORA DORADA (0.50 -> 0.75)
       const u = (t - 0.50) / 0.25;
       this.phaseName = 'Tarde';
-      const sunsetMix = Math.max(0, (u - 0.30) / 0.70);
+      const sunsetMix = Math.max(0, (u - 0.28) / 0.72);
       this._tmpSky.lerpColors(DAY_SKY, SUNSET_SKY, sunsetMix);
       this._tmpFog.lerpColors(DAY_FOG, SUNSET_FOG, sunsetMix);
       this._tmpCloud.lerpColors(DAY_CLOUD, SUNSET_CLOUD, sunsetMix);
@@ -296,17 +374,21 @@ export class SkySystem {
         this._tmpFog,
         this._tmpCloud,
         this._tmpSun,
-        1.15 - 0.65 * sunsetMix,
+        1.15 - 0.68 * sunsetMix,
         DAY_HEMI_SKY,
-        0.60 - 0.20 * sunsetMix,
-        0.35 - 0.10 * sunsetMix
+        0.60 - 0.22 * sunsetMix,
+        0.35 - 0.11 * sunsetMix
       );
+      const sunX = -12 - 34 * u;
+      const sunY = 36 - 31 * u;
+      const sunZ = 20 - 10 * u;
       if (this.sunLight) {
-        this.sunLight.position.set(-12 - 28 * u, 36 - 28 * u, 20 - 10 * u);
+        this.sunLight.position.set(sunX, sunY, sunZ);
       }
+      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, 1 - sunsetMix * 0.25);
       this._setNightVisibility(0, 0);
     } else {
-      // NOCHE (0.75 -> 1.00)
+      // ANOCHECER Y NOCHE (0.75 -> 1.00)
       const u = (t - 0.75) / 0.25;
       this.phaseName = 'Noche';
       if (u < 0.22) {
@@ -321,11 +403,12 @@ export class SkySystem {
           this._tmpFog,
           this._tmpCloud,
           this._tmpSun,
-          0.50 * (1 - k) + 0.42 * k,
+          0.47 * (1 - k) + 0.42 * k,
           this._tmpHemi,
-          0.40 - 0.18 * k,
-          0.25 - 0.05 * k
+          0.38 - 0.16 * k,
+          0.24 - 0.04 * k
         );
+        this._updateSunVisual(-46 - 8 * k, 5 - 12 * k, 10, SUNSET_SUN, Math.max(0, 1 - k * 1.4));
         this._setNightVisibility(k, k * 0.95);
       } else if (u < 0.85) {
         this._setEnvironmentColors(
@@ -338,29 +421,35 @@ export class SkySystem {
           0.22,
           0.20
         );
+        this._updateSunVisual(-52, -10, 10, SUNSET_SUN, 0);
         this._setNightVisibility(1, 0.95);
       } else {
-        // Pre-alba preparando el amanecer del siguiente día
+        // Pre-alba preparando la madrugada del siguiente día
         const k = (u - 0.85) / 0.15;
-        this._tmpSky.lerpColors(NIGHT_SKY, DAWN_SKY, k);
-        this._tmpFog.lerpColors(NIGHT_FOG, DAWN_FOG, k);
-        this._tmpCloud.lerpColors(NIGHT_CLOUD, DAWN_CLOUD, k);
-        this._tmpSun.lerpColors(MOON_COLOR, DAWN_SUN, k);
-        this._tmpHemi.lerpColors(NIGHT_HEMI_SKY, DAY_HEMI_SKY, k);
+        this._tmpSky.lerpColors(NIGHT_SKY, PRE_DAWN_SKY, k);
+        this._tmpFog.lerpColors(NIGHT_FOG, DAWN_FOG, k * 0.35);
+        this._tmpCloud.lerpColors(NIGHT_CLOUD, DAWN_CLOUD, k * 0.35);
+        this._tmpSun.lerpColors(MOON_COLOR, DAWN_SUN, k * 0.45);
+        this._tmpHemi.lerpColors(NIGHT_HEMI_SKY, DAY_HEMI_SKY, k * 0.35);
         this._setEnvironmentColors(
           this._tmpSky,
           this._tmpFog,
           this._tmpCloud,
           this._tmpSun,
-          0.42 + 0.36 * k,
+          0.42 + 0.10 * k,
           this._tmpHemi,
-          0.22 + 0.23 * k,
-          0.20 + 0.08 * k
+          0.22 + 0.12 * k,
+          0.20 + 0.04 * k
         );
-        this._setNightVisibility(1 - k * 0.6, (1 - k * 0.6) * 0.95);
+        this._updateSunVisual(48, -4 + 8 * k, 16, DAWN_SUN, k * 0.25);
+        this._setNightVisibility(1 - k * 0.45, (1 - k * 0.35) * 0.95);
       }
       if (this.sunLight) {
         this.sunLight.position.set(-22, 34, -22);
+      }
+      if (this.moonMesh) {
+        const moonArc = (u - 0.1) / 0.9;
+        this.moonMesh.position.set(-28 + Math.max(0, moonArc) * 18, 24 + Math.sin(Math.max(0, moonArc) * Math.PI) * 14, -22);
       }
     }
   }
@@ -512,6 +601,12 @@ export class SkySystem {
       this.scene.fog.color.copy(fog);
     }
     this.cloudMaterial.color.copy(cloud);
+    if (this.weatherOvercast > 0.01) {
+      this.cloudMaterial.color.lerp(RAIN_CLOUD, this.weatherOvercast * 0.72);
+    }
+    if (this.weatherStorminess > 0.01) {
+      this.cloudMaterial.color.lerp(STORM_CLOUD, this.weatherStorminess * 0.68);
+    }
 
     if (this.sunLight) {
       this.sunLight.color.copy(sunColor);
@@ -523,6 +618,20 @@ export class SkySystem {
     }
     if (this.ambientLight) {
       this.ambientLight.intensity = ambientIntensity;
+    }
+  }
+
+  _updateSunVisual(x, y, z, color, visibility) {
+    if (!this.sunMesh || !this.sunMaterial) return;
+    const weatherFade = 1 - Math.min(0.88, this.weatherOvercast * 0.6 + this.weatherStorminess * 0.45);
+    const alpha = THREE.MathUtils.clamp(visibility * weatherFade, 0, 1);
+    this.sunMesh.position.set(x * 1.35, Math.max(-10, y * 1.05), z * 1.35);
+    this.sunMaterial.color.copy(color);
+    this.sunMaterial.opacity = alpha;
+    this.sunMesh.visible = alpha > 0.02;
+    if (this.sunHaloMaterial) {
+      this.sunHaloMaterial.color.copy(color);
+      this.sunHaloMaterial.opacity = alpha * 0.28;
     }
   }
 

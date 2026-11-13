@@ -125,6 +125,43 @@ describe('SkySystem — Nubes 3D y Ciclo Día-Noche-Día', () => {
     expect(onDayComplete).toHaveBeenCalledTimes(1);
     expect(sky.phaseName).toBe('Mañana');
   });
+
+  it('anima el arco solar desde madrugada hasta anochecer y acumula/oscurece nubes con lluvia', () => {
+    const fixture = createSkyTestFixture();
+    const sky = new SkySystem(fixture);
+    sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.02 });
+
+    // Madrugada -> sol bajo al este
+    sky.update(0.01);
+    const dawnSunY = sky.sunMesh.position.y;
+    const dawnSunX = sky.sunMesh.position.x;
+
+    // Mediodía -> sol alto en el cenit
+    sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.38 });
+    sky.update(0.01);
+    expect(sky.sunMesh.position.y).toBeGreaterThan(dawnSunY);
+    expect(sky.sunMesh.position.x).toBeLessThan(dawnSunX);
+    expect(sky.sunMesh.visible).toBe(true);
+
+    // Noche profunda -> disco solar oculto bajo el horizonte
+    sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.85 });
+    sky.update(0.01);
+    expect(sky.sunMesh.visible).toBe(false);
+
+    // Clima lluvioso/tormenta -> nubes más grandes, más bajas y más oscuras
+    sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.35 });
+    sky.update(0.01);
+    const clearColorLum = sky.cloudMaterial.color.r + sky.cloudMaterial.color.g + sky.cloudMaterial.color.b;
+    const clearScale = sky.clouds[0].group.scale.x;
+    const clearY = sky.clouds[0].group.position.y;
+
+    sky.setWeatherDynamics({ overcast: 0.9, storminess: 0.8, wind: 1.0 });
+    sky.update(0.01);
+    const stormColorLum = sky.cloudMaterial.color.r + sky.cloudMaterial.color.g + sky.cloudMaterial.color.b;
+    expect(stormColorLum).toBeLessThan(clearColorLum);
+    expect(sky.clouds[0].group.scale.x).toBeGreaterThan(clearScale);
+    expect(sky.clouds[0].group.position.y).toBeLessThan(clearY);
+  });
 });
 
 describe('AudioSystem — Música de Fondo Relajante y Silencio', () => {

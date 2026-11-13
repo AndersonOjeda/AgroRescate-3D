@@ -114,6 +114,7 @@ export class WeatherSystem {
   }
 
   setWeather(weatherKey, immediate = false) {
+    if (weatherKey === 'flood') weatherKey = 'storm';
     const key = (weatherKey || 'clear').toLowerCase();
     if (!this.weatherPresets[key]) return;
     this.targetWeather = key;
@@ -143,14 +144,22 @@ export class WeatherSystem {
     // Interpolación suave hacia el clima objetivo
     const targetP = this.weatherPresets[this.targetWeather] || this.weatherPresets.clear;
     const lerpSpeed = 1 - Math.exp(-Math.max(0, delta) * 1.5);
+    const overcastTargets = { clear: 0, heatwave: 0, drought: 0.12, frost: 0.28, cloudy: 0.45, rain: 0.72, storm: 0.95 };
+    const stormTargets = { clear: 0, heatwave: 0, drought: 0, frost: 0, cloudy: 0.12, rain: 0.45, storm: 0.95 };
+    this._overcastBlend = THREE.MathUtils.lerp(this._overcastBlend || 0, overcastTargets[this.targetWeather] ?? 0, lerpSpeed);
+    this._stormBlend = THREE.MathUtils.lerp(this._stormBlend || 0, stormTargets[this.targetWeather] ?? 0, lerpSpeed);
+
+    if (options.skySystem && typeof options.skySystem.setWeatherDynamics === 'function') {
+      options.skySystem.setWeatherDynamics({
+        overcast: this._overcastBlend,
+        storminess: this._stormBlend,
+        wind: this.windIntensity
+      });
+    }
 
     if (options.preserveDayCycle) {
       // Cuando el ciclo Mañana/Mediodía/Tarde/Noche está activo, solo matizamos la atmósfera
       // para climas nublados/lluviosos sin borrar la noche ni el atardecer.
-      const overcastTargets = { clear: 0, drought: 0.12, frost: 0.28, cloudy: 0.42, rain: 0.62, storm: 0.80 };
-      const targetOvercast = overcastTargets[this.targetWeather] ?? 0;
-      this._overcastBlend = THREE.MathUtils.lerp(this._overcastBlend || 0, targetOvercast, lerpSpeed);
-
       if (this._overcastBlend > 0.01) {
         if (this.scene.background && this.scene.background.isColor) {
           this.scene.background.lerp(targetP.sky, this._overcastBlend * 0.45);
