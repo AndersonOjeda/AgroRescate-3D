@@ -37,8 +37,14 @@ export class SkySystem {
 
     this.isTransitioning = false;
     this.cycleProgress = 0;
-    this.cycleDuration = 3.8; // Segundos del ciclo completo noche -> día
+    this.cycleDuration = 3.8; // Segundos del ciclo rápido manual (dormir / botón avanzar)
     this.phaseName = 'Día';
+
+    // Ciclo natural continuo (Mañana -> Mediodía -> Tarde -> Noche)
+    this.autoCycleEnabled = false;
+    this.dayLengthSeconds = 48; // 48s reales = 1 día completo (12s por fase)
+    this.timeOfDay = 0.08;      // 0..1 (0.00-0.25 Mañana, 0.25-0.50 Mediodía, 0.50-0.75 Tarde, 0.75-1.00 Noche)
+    this.onDayComplete = null;
 
     // Colores temporales reutilizables (cero garbage collection en update)
     this._tmpSky = new THREE.Color();
@@ -148,6 +154,27 @@ export class SkySystem {
   }
 
   /**
+   * Activa o desactiva el ciclo natural continuo (Mañana -> Mediodía -> Tarde -> Noche).
+   * @param {boolean} enabled
+   * @param {{ dayLengthSeconds?: number, startTimeOfDay?: number, onDayComplete?: Function }} [options]
+   */
+  setAutoCycle(enabled, options = {}) {
+    this.autoCycleEnabled = Boolean(enabled);
+    if (typeof options.dayLengthSeconds === 'number' && options.dayLengthSeconds > 0) {
+      this.dayLengthSeconds = options.dayLengthSeconds;
+    }
+    if (typeof options.startTimeOfDay === 'number') {
+      this.timeOfDay = ((options.startTimeOfDay % 1) + 1) % 1;
+    }
+    if (typeof options.onDayComplete === 'function') {
+      this.onDayComplete = options.onDayComplete;
+    }
+    if (this.autoCycleEnabled && !this.isTransitioning) {
+      this._applyTimeOfDay(this.timeOfDay);
+    }
+  }
+
+  /**
    * Inicia la transición animada Atardecer -> Noche -> Amanecer -> Día.
    */
   triggerDayNightCycle() {
@@ -169,17 +196,173 @@ export class SkySystem {
       }
     }
 
-    if (!this.isTransitioning) return;
+    if (this.isTransitioning) {
+      this.cycleProgress += delta / this.cycleDuration;
+      if (this.cycleProgress >= 1) {
+        this.cycleProgress = 1;
+        this.isTransitioning = false;
+        this.timeOfDay = 0.08;
+        if (this.autoCycleEnabled) {
+          this._applyTimeOfDay(this.timeOfDay);
+        } else {
+          this._applyDayState();
+        }
+        return;
+      }
 
-    this.cycleProgress += delta / this.cycleDuration;
-    if (this.cycleProgress >= 1) {
-      this.cycleProgress = 1;
-      this.isTransitioning = false;
-      this._applyDayState();
+      this._applyCycleAtProgress(this.cycleProgress);
       return;
     }
 
-    this._applyCycleAtProgress(this.cycleProgress);
+    // 2. Avance continuo del reloj solar (Mañana -> Mediodía -> Tarde -> Noche)
+    if (this.autoCycleEnabled) {
+      this.timeOfDay += Math.max(0, delta) / this.dayLengthSeconds;
+      if (this.timeOfDay >= 1) {
+        this.timeOfDay -= Math.floor(this.timeOfDay);
+        this._applyTimeOfDay(this.timeOfDay);
+        if (this.onDayComplete) {
+          this.onDayComplete();
+        }
+      } else {
+        this._applyTimeOfDay(this.timeOfDay);
+      }
+    }
+  }
+
+  /**
+   * Aplica iluminación, cielo, sol, luna y estrellas según la hora continua del día (0..1):
+   * - 0.00 .. 0.25: Mañana (amanecer rosado hacia mañana fresca)
+   * - 0.25 .. 0.50: Mediodía (sol cenital brillante)
+   * - 0.50 .. 0.75: Tarde (luz cálida hacia atardecer andino)
+   * - 0.75 .. 1.00: Noche (ocaso hacia noche estrellada y pre-alba)
+   */
+  _applyTimeOfDay(t) {
+    if (t < 0.25) {
+      // MAÑANA (0.00 -> 0.25)
+      const u = t / 0.25;
+      this.phaseName = 'Mañana';
+      const skyMix = Math.min(1, u / 0.4);
+      this._tmpSky.lerpColors(DAWN_SKY, DAY_SKY, skyMix);
+      this._tmpFog.lerpColors(DAWN_FOG, DAY_FOG, skyMix);
+      this._tmpCloud.lerpColors(DAWN_CLOUD, DAY_CLOUD, skyMix);
+      this._tmpSun.lerpColors(DAWN_SUN, DAY_SUN, skyMix);
+
+      this._setEnvironmentColors(
+        this._tmpSky,
+        this._tmpFog,
+        this._tmpCloud,
+        this._tmpSun,
+        0.78 + 0.37 * u,
+        DAY_HEMI_SKY,
+        0.45 + 0.15 * u,
+        0.28 + 0.07 * u
+      );
+      if (this.sunLight) {
+        this.sunLight.position.set(36 - 20 * u, 14 + 22 * u, 18 + 2 * u);
+      }
+      const nightFade = Math.max(0, 1 - u / 0.2);
+      this._setNightVisibility(nightFade * 0.4, nightFade * 0.4);
+    } else if (t < 0.50) {
+      // MEDIODÍA (0.25 -> 0.50)
+      const u = (t - 0.25) / 0.25;
+      this.phaseName = 'Mediodía';
+      const zenith = Math.sin(u * Math.PI); // Pico al centro del mediodía
+      this._setEnvironmentColors(
+        DAY_SKY,
+        DAY_FOG,
+        DAY_CLOUD,
+        DAY_SUN,
+        1.15 + 0.20 * zenith,
+        DAY_HEMI_SKY,
+        0.60 + 0.08 * zenith,
+        0.35 + 0.04 * zenith
+      );
+      if (this.sunLight) {
+        this.sunLight.position.set(16 - 28 * u, 36 + 10 * zenith, 20);
+      }
+      this._setNightVisibility(0, 0);
+    } else if (t < 0.75) {
+      // TARDE (0.50 -> 0.75)
+      const u = (t - 0.50) / 0.25;
+      this.phaseName = 'Tarde';
+      const sunsetMix = Math.max(0, (u - 0.30) / 0.70);
+      this._tmpSky.lerpColors(DAY_SKY, SUNSET_SKY, sunsetMix);
+      this._tmpFog.lerpColors(DAY_FOG, SUNSET_FOG, sunsetMix);
+      this._tmpCloud.lerpColors(DAY_CLOUD, SUNSET_CLOUD, sunsetMix);
+      this._tmpSun.lerpColors(DAY_SUN, SUNSET_SUN, sunsetMix);
+
+      this._setEnvironmentColors(
+        this._tmpSky,
+        this._tmpFog,
+        this._tmpCloud,
+        this._tmpSun,
+        1.15 - 0.65 * sunsetMix,
+        DAY_HEMI_SKY,
+        0.60 - 0.20 * sunsetMix,
+        0.35 - 0.10 * sunsetMix
+      );
+      if (this.sunLight) {
+        this.sunLight.position.set(-12 - 28 * u, 36 - 28 * u, 20 - 10 * u);
+      }
+      this._setNightVisibility(0, 0);
+    } else {
+      // NOCHE (0.75 -> 1.00)
+      const u = (t - 0.75) / 0.25;
+      this.phaseName = 'Noche';
+      if (u < 0.22) {
+        const k = u / 0.22;
+        this._tmpSky.lerpColors(SUNSET_SKY, NIGHT_SKY, k);
+        this._tmpFog.lerpColors(SUNSET_FOG, NIGHT_FOG, k);
+        this._tmpCloud.lerpColors(SUNSET_CLOUD, NIGHT_CLOUD, k);
+        this._tmpSun.lerpColors(SUNSET_SUN, MOON_COLOR, k);
+        this._tmpHemi.lerpColors(DAY_HEMI_SKY, NIGHT_HEMI_SKY, k);
+        this._setEnvironmentColors(
+          this._tmpSky,
+          this._tmpFog,
+          this._tmpCloud,
+          this._tmpSun,
+          0.50 * (1 - k) + 0.42 * k,
+          this._tmpHemi,
+          0.40 - 0.18 * k,
+          0.25 - 0.05 * k
+        );
+        this._setNightVisibility(k, k * 0.95);
+      } else if (u < 0.85) {
+        this._setEnvironmentColors(
+          NIGHT_SKY,
+          NIGHT_FOG,
+          NIGHT_CLOUD,
+          MOON_COLOR,
+          0.42,
+          NIGHT_HEMI_SKY,
+          0.22,
+          0.20
+        );
+        this._setNightVisibility(1, 0.95);
+      } else {
+        // Pre-alba preparando el amanecer del siguiente día
+        const k = (u - 0.85) / 0.15;
+        this._tmpSky.lerpColors(NIGHT_SKY, DAWN_SKY, k);
+        this._tmpFog.lerpColors(NIGHT_FOG, DAWN_FOG, k);
+        this._tmpCloud.lerpColors(NIGHT_CLOUD, DAWN_CLOUD, k);
+        this._tmpSun.lerpColors(MOON_COLOR, DAWN_SUN, k);
+        this._tmpHemi.lerpColors(NIGHT_HEMI_SKY, DAY_HEMI_SKY, k);
+        this._setEnvironmentColors(
+          this._tmpSky,
+          this._tmpFog,
+          this._tmpCloud,
+          this._tmpSun,
+          0.42 + 0.36 * k,
+          this._tmpHemi,
+          0.22 + 0.23 * k,
+          0.20 + 0.08 * k
+        );
+        this._setNightVisibility(1 - k * 0.6, (1 - k * 0.6) * 0.95);
+      }
+      if (this.sunLight) {
+        this.sunLight.position.set(-22, 34, -22);
+      }
+    }
   }
 
   _applyCycleAtProgress(p) {

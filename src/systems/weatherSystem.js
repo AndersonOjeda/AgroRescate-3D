@@ -137,25 +137,45 @@ export class WeatherSystem {
     this.rainMat.opacity = p.rain ? 0.75 : 0.0;
   }
 
-  update(delta) {
+  update(delta, options = {}) {
     this.weatherTime += delta;
 
     // Interpolación suave hacia el clima objetivo
     const targetP = this.weatherPresets[this.targetWeather] || this.weatherPresets.clear;
     const lerpSpeed = 1 - Math.exp(-Math.max(0, delta) * 1.5);
 
-    if (this.scene.background && this.scene.background.isColor) {
-      this.scene.background.lerp(targetP.sky, lerpSpeed);
-    }
-    if (this.scene.fog && this.scene.fog.color) {
-      this.scene.fog.color.lerp(targetP.fog, lerpSpeed);
-    }
-    if (this.sunLight) {
-      this.sunLight.color.lerp(targetP.sun, lerpSpeed);
-      this.sunLight.intensity = THREE.MathUtils.lerp(this.sunLight.intensity, targetP.sunIntensity, lerpSpeed);
-    }
-    if (this.ambientLight) {
-      this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, targetP.ambientIntensity, lerpSpeed);
+    if (options.preserveDayCycle) {
+      // Cuando el ciclo Mañana/Mediodía/Tarde/Noche está activo, solo matizamos la atmósfera
+      // para climas nublados/lluviosos sin borrar la noche ni el atardecer.
+      const overcastTargets = { clear: 0, drought: 0.12, frost: 0.28, cloudy: 0.42, rain: 0.62, storm: 0.80 };
+      const targetOvercast = overcastTargets[this.targetWeather] ?? 0;
+      this._overcastBlend = THREE.MathUtils.lerp(this._overcastBlend || 0, targetOvercast, lerpSpeed);
+
+      if (this._overcastBlend > 0.01) {
+        if (this.scene.background && this.scene.background.isColor) {
+          this.scene.background.lerp(targetP.sky, this._overcastBlend * 0.45);
+        }
+        if (this.scene.fog && this.scene.fog.color) {
+          this.scene.fog.color.lerp(targetP.fog, this._overcastBlend * 0.50);
+        }
+        if (this.sunLight) {
+          this.sunLight.intensity *= (1 - this._overcastBlend * 0.55);
+        }
+      }
+    } else {
+      if (this.scene.background && this.scene.background.isColor) {
+        this.scene.background.lerp(targetP.sky, lerpSpeed);
+      }
+      if (this.scene.fog && this.scene.fog.color) {
+        this.scene.fog.color.lerp(targetP.fog, lerpSpeed);
+      }
+      if (this.sunLight) {
+        this.sunLight.color.lerp(targetP.sun, lerpSpeed);
+        this.sunLight.intensity = THREE.MathUtils.lerp(this.sunLight.intensity, targetP.sunIntensity, lerpSpeed);
+      }
+      if (this.ambientLight) {
+        this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, targetP.ambientIntensity, lerpSpeed);
+      }
     }
     this.windIntensity = THREE.MathUtils.lerp(this.windIntensity, targetP.wind, lerpSpeed);
 

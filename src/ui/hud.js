@@ -94,6 +94,7 @@ export class HUD {
 
     this.modeSelector = d.getElementById('mode-selector');
     this.hudDay = d.getElementById('hud-day');
+    this.hudDayPhase = d.getElementById('hud-day-phase');
     this.hudWater = d.getElementById('hud-water');
     this.meterWater = d.getElementById('meter-water');
     this.hudSoil = d.getElementById('hud-soil');
@@ -685,7 +686,7 @@ export class HUD {
       () => this._handleAdvanceDay(),
       'primary'
     );
-    btnAdvance.title = 'Avanzar 1 Día (Tecla Espacio)';
+    btnAdvance.title = 'Adelantar 1 Día';
 
     actionsGrid.appendChild(btnPrepare);
     actionsGrid.appendChild(btnPlant);
@@ -1457,6 +1458,27 @@ export class HUD {
     const state = initializeFarm(mode);
     this.updateFarmState(state);
     this.showToast(`Modo cambiado a: ${MODE_LABELS[mode] || mode}`, 'info');
+  }
+
+  /**
+   * Actualiza la fase del día en el HUD (Mañana, Mediodía, Tarde, Noche).
+   * @param {string} phaseName
+   */
+  setDayPhase(phaseName) {
+    if (!this.hudDayPhase || !phaseName) return;
+    const icons = {
+      'Mañana': '🌅 Mañana',
+      'Mediodía': '☀️ Mediodía',
+      'Tarde': '🌇 Tarde',
+      'Noche': '🌙 Noche',
+      'Amanecer': '🌅 Amanecer',
+      'Atardecer': '🌇 Atardecer',
+      'Día': '☀️ Día'
+    };
+    const nextText = icons[phaseName] || phaseName;
+    if (this.hudDayPhase.textContent !== nextText) {
+      this.hudDayPhase.textContent = nextText;
+    }
   }
 
   async _handleAdvanceDay() {

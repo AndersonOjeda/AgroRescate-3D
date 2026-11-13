@@ -91,6 +91,40 @@ describe('SkySystem — Nubes 3D y Ciclo Día-Noche-Día', () => {
     expect(fixture.sunLight.intensity).toBe(1.2);
     expect(fixture.scene.background.getHex()).toBe(0xa0d8ef);
   });
+
+  it('recorre de forma continua Mañana -> Mediodía -> Tarde -> Noche y dispara onDayComplete al amanecer', () => {
+    const fixture = createSkyTestFixture();
+    const sky = new SkySystem(fixture);
+    const onDayComplete = vi.fn();
+
+    sky.setAutoCycle(true, {
+      dayLengthSeconds: 40,
+      startTimeOfDay: 0.05,
+      onDayComplete
+    });
+
+    expect(sky.phaseName).toBe('Mañana');
+
+    // Avanzar a Mediodía (+10s => 0.30)
+    sky.update(10);
+    expect(sky.phaseName).toBe('Mediodía');
+    expect(fixture.sunLight.intensity).toBeGreaterThanOrEqual(1.15);
+
+    // Avanzar a Tarde (+10s => 0.55)
+    sky.update(10);
+    expect(sky.phaseName).toBe('Tarde');
+
+    // Avanzar a Noche (+10s => 0.80)
+    sky.update(10);
+    expect(sky.phaseName).toBe('Noche');
+    expect(sky.moonMesh.visible).toBe(true);
+    expect(sky.starsPoints.visible).toBe(true);
+
+    // Completar la noche (+10s => >= 1.00): vuelve a Mañana y llama onDayComplete
+    sky.update(10);
+    expect(onDayComplete).toHaveBeenCalledTimes(1);
+    expect(sky.phaseName).toBe('Mañana');
+  });
 });
 
 describe('AudioSystem — Música de Fondo Relajante y Silencio', () => {

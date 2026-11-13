@@ -1137,7 +1137,9 @@ async function bootstrap() {
   });
 
   farmAdapter.on('dayAdvanced', async ({ result }) => {
-    skySystem.triggerDayNightCycle();
+    if (!naturalDayAdvanceInFlight) {
+      skySystem.triggerDayNightCycle();
+    }
     const state = result?.state || (await farmAdapter.getState());
     if (state?.currentWeather?.id) {
       weatherSystem.setWeather(state.currentWeather.id);
@@ -1195,8 +1197,28 @@ async function bootstrap() {
     });
   }
 
-  // Botón y tecla [Espacio] para Avanzar Día
+  // Ciclo continuo Mañana -> Mediodía -> Tarde -> Noche (48s por día virtual)
   let advanceDayPending = false;
+  let naturalDayAdvanceInFlight = false;
+  skySystem.setAutoCycle(true, {
+    dayLengthSeconds: 48,
+    startTimeOfDay: 0.08,
+    onDayComplete: async () => {
+      const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+      if (inMenu || naturalDayAdvanceInFlight || advanceDayPending || modals.isPaused) return;
+      naturalDayAdvanceInFlight = true;
+      try {
+        const res = await farmAdapter.advanceDay();
+        if (res?.success && !player._isAnyModalOpen()) {
+          hud.showToast(`🌅 Nuevo amanecer: ${res.message}`, 'info', 3500);
+        }
+      } finally {
+        naturalDayAdvanceInFlight = false;
+      }
+    }
+  });
+
+  // Botón del HUD para Avanzar Día (sin atajo de Espacio para dejar al jugador a merced del tiempo y clima)
   const triggerAdvanceDay = async () => {
     if (advanceDayPending || modals.isPaused || player._isAnyModalOpen()) return;
     advanceDayPending = true;
@@ -1261,7 +1283,7 @@ async function bootstrap() {
     hud.btnToggleGui.addEventListener('click', () => debugGui.toggle && debugGui.toggle());
   }
 
-  // Atajos de teclado globales en partida (F caja física, R lluvia, Espacio avanzar día)
+  // Atajos de teclado globales en partida (F caja física, R lluvia)
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') {
       physicsWorld.dropDemoCrate(player.getPosition());
@@ -1269,12 +1291,6 @@ async function bootstrap() {
     } else if (e.code === 'KeyR') {
       const raining = particleSystem.toggleRain();
       hud.showToast(raining ? '🌧️ Lluvia ambiental' : '☀️ Clima despejado', 'info', 1800);
-    } else if (e.code === 'Space') {
-      if (e.repeat || modals.isPaused || player._isAnyModalOpen()) return;
-      const tag = e.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      e.preventDefault();
-      triggerAdvanceDay();
     }
   });
 
@@ -1302,11 +1318,14 @@ async function bootstrap() {
       // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
       physicsWorld.step(delta);
 
-      // C. Actualizar atmósfera (nubes + ciclo día/noche + clima dinámico), fauna (mariposas/abejas/luciérnagas), molino, gallina guía y partículas
+      // C. Actualizar atmósfera (nubes + ciclo continuo Mañana/Mediodía/Tarde/Noche + clima dinámico), fauna, molino, gallina guía y partículas
+      const isInMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+      skySystem.autoCycleEnabled = !isInMenu;
       skySystem.update(delta);
-      if (!skySystem.isTransitioning) {
-        weatherSystem.update(delta);
-      }
+      hud.setDayPhase(skySystem.phaseName);
+      weatherSystem.update(delta, {
+        preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning
+      });
       const isNight = skySystem.phaseName === 'Noche';
       wildlifeSystem.update(delta, isNight);
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
