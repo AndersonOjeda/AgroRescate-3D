@@ -66,7 +66,9 @@ async function bootstrap() {
   const player = new PlayerController(camera, canvas, scene);
   player.onFootstep = () => {
     audioSystem.playFootstep();
-    particleSystem.emitFootstepDust(player.getPosition());
+    if (!['rain', 'storm'].includes(weatherSystem.targetWeather)) {
+      particleSystem.emitFootstepDust(player.getPosition());
+    }
   };
 
   const touchControls = new TouchControls({
@@ -83,6 +85,7 @@ async function bootstrap() {
     }
   });
   hud.onPromptTap = () => interactionSystem.triggerInteraction();
+  interactionSystem.canInteract = () => !player._isAnyModalOpen();
 
   // 7. Adaptador del Simulador Agrícola, Misiones y Resultados
   const farmAdapter = new FarmAdapter();
@@ -720,8 +723,10 @@ async function bootstrap() {
         customDistance: sceneCoords.plotInteractDist,
         onHoldStart: async () => {
           const currentState = await farmAdapter.getState();
+          if (!interactionSystem.isHolding || interactionSystem.holdingInteractable?.id !== `interact_${p.id}`) return;
           const curPlot = currentState.plots[p.id];
           const info = getPlotActionInfo(curPlot, p.name);
+          player.faceWorkTarget(p);
 
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < 20) {
@@ -747,13 +752,14 @@ async function bootstrap() {
           }
         },
         onHoldCancel: () => {
-          player._fadeToAnimation('idle', 0.2);
+          player.cancelActionAnimation();
         },
         onInteract: async () => {
           audioSystem.playClick();
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
           const info = getPlotActionInfo(curPlot, p.name);
+          player.faceWorkTarget(p);
 
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < 20) {
@@ -825,13 +831,21 @@ async function bootstrap() {
     id: 'interact_compost',
     name: 'Compostera Orgánica',
     position: { x: sceneCoords.compost.x, y: 0.5, z: sceneCoords.compost.z },
-    actionText: 'Presiona E para aplicar abono orgánico',
+    actionText: 'Mantén E para repartir abono orgánico',
+    holdDuration: 1.8,
+    onHoldStart: () => {
+      player.faceWorkTarget(sceneCoords.compost);
+      player.playActionAnimation('compost');
+    },
+    onHoldCancel: () => player.cancelActionAnimation(),
     onInteract: async () => {
       audioSystem.playClick();
       const res = await farmAdapter.applyCompost();
       if (res.success) {
         hud.showToast(res.message, 'success');
         audioSystem.playSuccess();
+      } else {
+        hud.showToast(res.message, 'warning');
       }
     }
   });
@@ -851,16 +865,17 @@ async function bootstrap() {
   });
 
   // E2. Casa Campesina (Hogar, Descanso Familiar y Sabiduría Campesina)
-  const houseCoords = isGlb ? { x: 7.3, y: 0.8, z: 9.4 } : { x: -16, y: 0.8, z: -14 };
+  // Acceso exterior, fuera de la colisión del edificio.
+  const houseCoords = isGlb ? { x: 7.3, y: 0.8, z: 6.2 } : { x: -15.1, y: 0.8, z: -9.4 };
   interactionSystem.register({
     id: 'interact_house',
     name: 'Casa Campesina (Hogar y Descanso)',
     position: { x: houseCoords.x, y: houseCoords.y, z: houseCoords.z },
     customDistance: isGlb ? 4.0 : 3.5,
-    actionText: 'Presiona E para descansar en casa (agua de panela)',
+    actionText: 'E · Casa rural: recuperar fuerzas, revisar cultivos y dormir',
     onInteract: () => {
       audioSystem.playClick();
-      player.playActionAnimation();
+      player.cancelActionAnimation();
       modals.openFarmerHouse();
     }
   });
@@ -1278,6 +1293,9 @@ async function bootstrap() {
     if (!modals.isPaused) {
       // A. Actualizar jugador y cámara en tercera persona
       player.update(delta);
+      if (interactionSystem.isHolding && player._moveDirection.lengthSq() > 0.0001) {
+        interactionSystem.stopHold(true);
+      }
       const pPos = player.getPosition();
       physicsWorld.updatePlayerPosition(pPos);
 

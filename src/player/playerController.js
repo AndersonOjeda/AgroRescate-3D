@@ -273,7 +273,7 @@ export class PlayerController {
           this.mixer.update(0);
 
           this.mixer.addEventListener('finished', (event) => {
-            const laborKeys = ['action', 'hoe', 'plant', 'harvest'];
+            const laborKeys = ['action', 'hoe', 'plant', 'harvest', 'compost'];
             const finishedLabor = laborKeys.some((k) => event.action === this.animations[k]);
             if (finishedLabor) {
               if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
@@ -328,6 +328,20 @@ export class PlayerController {
     } else {
       this.mesh.add(this.hoeToolMesh);
     }
+  }
+
+  cancelActionAnimation() {
+    this._isPlayingAction = false;
+    this._pendingTired = false;
+    this._actionTimer = 0;
+    if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
+    if (this.parts?.torso) this.parts.torso.scale.y = 1;
+    this._fadeToAnimation('idle', 0.2);
+  }
+
+  faceWorkTarget(target) {
+    this.rotationY = Math.atan2(target.x - this.position.x, target.z - this.position.z);
+    this.mesh.rotation.y = this.rotationY;
   }
 
   _fadeToAnimation(name, duration = 0.16) {
@@ -411,7 +425,7 @@ export class PlayerController {
    * @returns {boolean}
    */
   playActionAnimation(animName = 'action') {
-    const BASE_DURATIONS = { hoe: 1.80, plant: 1.40, harvest: 1.60, tired: 2.40, action: 0.75 };
+    const BASE_DURATIONS = { hoe: 1.80, plant: 1.40, harvest: 1.60, tired: 2.40, compost: 1.80, action: 0.75 };
     const isLabor = animName === 'hoe' || animName === 'plant' || animName === 'harvest';
     const effort = isLabor ? this.getEffortMultiplier() : 1;
     this._actionDuration = (BASE_DURATIONS[animName] ?? 0.75) * effort;
@@ -872,7 +886,9 @@ export class PlayerController {
       'help-modal',
       'about-modal',
       'results-modal',
-      'report-modal'
+      'report-modal',
+      'farmer-house-modal',
+      'warehouse-store-modal'
     ];
     return modalIds.some((id) => {
       const el = document.getElementById(id);

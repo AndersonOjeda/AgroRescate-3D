@@ -171,4 +171,48 @@ describe('AudioSystem — Música de fondo (/audio/bgm.mp3)', () => {
     warnSpy.mockRestore();
     footstepSpy.mockRestore();
   });
+
+  it('controla por separado el volumen general, de música y de efectos de sonido', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const originalAudio = globalThis.Audio;
+    globalThis.Audio = class FakeHtmlAudio {
+      constructor(src) {
+        this.src = src;
+        this.loop = false;
+        this.preload = '';
+        this.volume = 1;
+        this.paused = true;
+        this.play = vi.fn(() => Promise.resolve());
+        this.pause = vi.fn();
+        this.addEventListener = vi.fn();
+      }
+    };
+
+    try {
+      const camera = new THREE.PerspectiveCamera();
+      const audioSystem = new AudioSystem(camera);
+      const sfxSpy = vi.spyOn(audioSystem.globalSuccess, 'setVolume');
+
+      expect(audioSystem.setMusicVolume(0.8)).toBe(0.8);
+      expect(audioSystem.getMusicVolume()).toBe(0.8);
+      expect(audioSystem.setSfxVolume(0.5)).toBe(0.5);
+      expect(audioSystem.getSfxVolume()).toBe(0.5);
+
+      // Acota entre 0 y 1
+      expect(audioSystem.setMusicVolume(1.5)).toBe(1.0);
+      expect(audioSystem.setSfxVolume(-0.2)).toBe(0.0);
+
+      // Al ajustar el volumen general a 0.5, música y efectos escalan proporcionalmente
+      audioSystem.setMusicVolume(0.8);
+      audioSystem.setSfxVolume(0.6);
+      sfxSpy.mockClear();
+      audioSystem.setMasterVolume(0.5);
+
+      expect(audioSystem.musicElement.volume).toBeCloseTo(0.4, 3);
+      expect(sfxSpy).toHaveBeenCalledWith(expect.closeTo(0.7 * 0.6 * 0.5, 3));
+    } finally {
+      globalThis.Audio = originalAudio;
+      warnSpy.mockRestore();
+    }
+  });
 });

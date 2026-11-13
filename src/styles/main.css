@@ -965,6 +965,23 @@ kbd {
   margin: 14px 0 18px;
 }
 
+.pause-controls .setting-item {
+  justify-content: space-between;
+}
+
+.pause-controls .setting-item span {
+  min-width: 148px;
+}
+
+.pause-controls .setting-item input[type="range"] {
+  flex: 1;
+}
+
+.pause-controls .setting-item strong {
+  min-width: 42px;
+  text-align: right;
+}
+
 .pause-actions,
 .results-actions {
   display: flex;

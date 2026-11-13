@@ -34,6 +34,20 @@ function createWeatherFixture() {
 }
 
 describe('WeatherSystem — Clima Dinámico y Lluvia Ligada a Cámara', () => {
+  it('mantiene gotas bajo la cámara y transiciones acotadas tras un frame largo', () => {
+    const fixture = createWeatherFixture();
+    fixture.camera.position.y = 10;
+    const weather = new WeatherSystem(fixture);
+    weather.setWeather('rain');
+    weather.update(2);
+    expect(weather.rainMat.opacity).toBeGreaterThan(0);
+    expect(weather.rainMat.opacity).toBeLessThanOrEqual(0.65);
+    weather.rainPositions[0] = 0;
+    weather.rainPositions[1] = 2;
+    weather.rainPositions[2] = 0;
+    weather._updateRainDrops(0);
+    expect(weather.rainPositions[1]).toBe(2);
+  });
   it('inicializa con clima claro y buffer de 550 gotas optimizadas', () => {
     const fixture = createWeatherFixture();
     const weather = new WeatherSystem(fixture);

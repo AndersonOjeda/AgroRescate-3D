@@ -15,6 +15,7 @@ export class AudioSystem {
     this.isAudioUnlocked = false;
     this.isMuted = false;
     this.masterVolume = 1.0;
+    this.sfxVolume = 1.0;
 
     // Audio Posicional (Bomba de agua / Riego)
     this.positionalWater = new THREE.PositionalAudio(this.listener);
@@ -391,7 +392,8 @@ export class AudioSystem {
       if (this.footstepAudio.isPlaying) {
         this.footstepAudio.stop();
       }
-      this.footstepAudio.setVolume(0.26 + Math.random() * 0.12);
+      const sfxScale = this.masterVolume * this.sfxVolume;
+      this.footstepAudio.setVolume((0.26 + Math.random() * 0.12) * sfxScale);
       this.footstepAudio.playbackRate = 0.95 + Math.random() * 0.15;
       this.footstepAudio.play();
     }
@@ -420,8 +422,9 @@ export class AudioSystem {
         osc.frequency.setValueAtTime(145, now);
         osc.frequency.exponentialRampToValueAtTime?.(42, now + 0.14);
       }
+      const sfxScale = this.masterVolume * this.sfxVolume;
       if (gain.gain?.setValueAtTime) {
-        gain.gain.setValueAtTime(0.48 * this.masterVolume, now);
+        gain.gain.setValueAtTime(0.48 * sfxScale, now);
         gain.gain.exponentialRampToValueAtTime?.(0.001, now + 0.18);
       }
       osc.connect(gain);
@@ -441,7 +444,7 @@ export class AudioSystem {
         noise.buffer = noiseBuffer;
         const noiseGain = ctx.createGain();
         if (noiseGain.gain?.setValueAtTime) {
-          noiseGain.gain.setValueAtTime(0.22 * this.masterVolume, now);
+          noiseGain.gain.setValueAtTime(0.22 * sfxScale, now);
           noiseGain.gain.exponentialRampToValueAtTime?.(0.001, now + 0.08);
         }
         noise.connect(noiseGain);
@@ -482,7 +485,7 @@ export class AudioSystem {
         osc.frequency.exponentialRampToValueAtTime(chirp.endHz, t0 + chirp.dur);
 
         gain.gain.setValueAtTime(0.001, t0);
-        gain.gain.linearRampToValueAtTime(0.16, t0 + 0.015);
+        gain.gain.linearRampToValueAtTime(0.16 * this.masterVolume * this.sfxVolume, t0 + 0.015);
         gain.gain.exponentialRampToValueAtTime(0.001, t0 + chirp.dur);
 
         osc.connect(gain);
@@ -513,7 +516,7 @@ export class AudioSystem {
       utter.lang = 'es-ES';
       utter.rate = 1.04;
       utter.pitch = 1.15;
-      utter.volume = 0.85;
+      utter.volume = Math.max(0, Math.min(1, 0.85 * this.masterVolume * this.sfxVolume));
       const voices = typeof synth.getVoices === 'function' ? synth.getVoices() : [];
       const esVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
       if (esVoice) utter.voice = esVoice;
@@ -550,32 +553,73 @@ export class AudioSystem {
   }
 
   /**
-   * Ajusta el volumen maestro del sistema de audio (0.0 a 1.0).
+   * Aplica los volúmenes efectivos de música y efectos combinados con el volumen general.
+   */
+  _applyAudioVolumes() {
+    const musicEff = Math.max(0, Math.min(1, this.musicVolume * this.masterVolume));
+    const sfxEff = Math.max(0, Math.min(1, this.sfxVolume * this.masterVolume));
+
+    if (typeof this.listener?.setMasterVolume === 'function') {
+      this.listener.setMasterVolume(this.masterVolume);
+    }
+    if (this.musicElement) {
+      this.musicElement.volume = musicEff;
+    }
+    if (this.ambientMusic) {
+      this.ambientMusic.setVolume(musicEff);
+    }
+    if (this.positionalWater) this.positionalWater.setVolume(0.85 * sfxEff);
+    if (this.globalSuccess) this.globalSuccess.setVolume(0.7 * sfxEff);
+    if (this.globalClick) this.globalClick.setVolume(0.4 * sfxEff);
+    if (this.ambientAudio) this.ambientAudio.setVolume(0.08 * sfxEff);
+  }
+
+  /**
+   * Ajusta el volumen general (maestro) del sistema de audio (0.0 a 1.0).
    * @param {number} volume
    */
   setMasterVolume(volume) {
     const clamped = Math.max(0, Math.min(1, Number(volume)));
     if (!Number.isFinite(clamped)) return this.masterVolume;
     this.masterVolume = clamped;
-
-    if (typeof this.listener?.setMasterVolume === 'function') {
-      this.listener.setMasterVolume(clamped);
-    }
-    if (this.musicElement) {
-      this.musicElement.volume = this.musicVolume * clamped;
-    }
-    if (this.ambientMusic) {
-      this.ambientMusic.setVolume(this.musicVolume * clamped);
-    }
-    if (this.positionalWater) this.positionalWater.setVolume(0.85 * clamped);
-    if (this.globalSuccess) this.globalSuccess.setVolume(0.7 * clamped);
-    if (this.globalClick) this.globalClick.setVolume(0.4 * clamped);
-    if (this.ambientAudio) this.ambientAudio.setVolume(0.08 * clamped);
+    this._applyAudioVolumes();
     return this.masterVolume;
   }
 
   getMasterVolume() {
     return this.masterVolume;
+  }
+
+  /**
+   * Ajusta el volumen de la música de fondo (0.0 a 1.0).
+   * @param {number} volume
+   */
+  setMusicVolume(volume) {
+    const clamped = Math.max(0, Math.min(1, Number(volume)));
+    if (!Number.isFinite(clamped)) return this.musicVolume;
+    this.musicVolume = clamped;
+    this._applyAudioVolumes();
+    return this.musicVolume;
+  }
+
+  getMusicVolume() {
+    return this.musicVolume;
+  }
+
+  /**
+   * Ajusta el volumen de los efectos de sonido y ambiente (0.0 a 1.0).
+   * @param {number} volume
+   */
+  setSfxVolume(volume) {
+    const clamped = Math.max(0, Math.min(1, Number(volume)));
+    if (!Number.isFinite(clamped)) return this.sfxVolume;
+    this.sfxVolume = clamped;
+    this._applyAudioVolumes();
+    return this.sfxVolume;
+  }
+
+  getSfxVolume() {
+    return this.sfxVolume;
   }
 
   /**
@@ -595,7 +639,7 @@ export class AudioSystem {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, start);
         gain.gain.setValueAtTime(0.001, start);
-        gain.gain.exponentialRampToValueAtTime(0.14 * this.masterVolume, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.14 * this.masterVolume * this.sfxVolume, start + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, start + 0.28);
         osc.connect(gain);
         gain.connect(ctx.destination);

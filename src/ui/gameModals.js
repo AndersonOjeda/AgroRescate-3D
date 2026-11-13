@@ -54,9 +54,18 @@ export class GameModalsController {
 
     this.settingVolume = g('setting-volume');
     this.settingVolumeVal = g('setting-volume-val');
+    this.settingMusic = g('setting-music');
+    this.settingMusicVal = g('setting-music-val');
+    this.settingSfx = g('setting-sfx');
+    this.settingSfxVal = g('setting-sfx-val');
     this.settingQuality = g('setting-quality');
+
     this.pauseVolume = g('pause-volume');
     this.pauseVolumeVal = g('pause-volume-val');
+    this.pauseMusic = g('pause-music');
+    this.pauseMusicVal = g('pause-music-val');
+    this.pauseSfx = g('pause-sfx');
+    this.pauseSfxVal = g('pause-sfx-val');
     this.pauseQuality = g('pause-quality');
 
     this.resultsSummaryGrid = g('results-summary-grid');
@@ -131,26 +140,96 @@ export class GameModalsController {
     // Casa Campesina
     document.getElementById('btn-close-house')?.addEventListener('click', () => this.closeFarmerHouse());
     document.getElementById('btn-house-continue')?.addEventListener('click', () => this.closeFarmerHouse());
-    document.getElementById('btn-house-sleep')?.addEventListener('click', async () => {
-      this.closeFarmerHouse({ relock: false });
-      const restRes = await this.farmAdapter.restAtFarmerHouse();
-      const advanceRes = await this.farmAdapter.advanceDay();
-      this.audioSystem?.playSuccess();
-      this.hud?.showToast(restRes.message || 'Descansaste en casa y amaneció un nuevo día', 'success', 5000);
-      this._relockIfPlaying();
-    });
+    const houseAction = async (sleep) => {
+      if (this.houseActionPending) return;
+      this.houseActionPending = true;
+      const buttons = ['btn-house-rest', 'btn-house-sleep'].map(id => document.getElementById(id));
+      buttons.forEach(button => { if (button) button.disabled = true; });
+      try {
+        if (sleep) {
+          const advance = await this.farmAdapter.advanceDay();
+          if (!advance.success) { this.hud?.showToast(advance.message, 'warning'); return; }
+        }
+        const result = await this.farmAdapter.restAtFarmerHouse();
+        this.hud?.showToast(sleep ? 'Amaneció un nuevo día. Revisa el clima y las parcelas antes de salir.' : result.message, 'success', 5000);
+        this.audioSystem?.playSuccess();
+        await this.openFarmerHouse();
+      } catch {
+        this.hud?.showToast('No se pudo completar el descanso. Inténtalo otra vez.', 'warning');
+      } finally {
+        this.houseActionPending = false;
+        buttons.forEach(button => { if (button) button.disabled = false; });
+      }
+    };
+    document.getElementById('btn-house-rest')?.addEventListener('click', () => houseAction(false));
+    document.getElementById('btn-house-sleep')?.addEventListener('click', () => houseAction(true));
 
-    // Volumen y Calidad gráfica sincronizados entre menú y pausa
-    const syncVolume = (raw) => {
-      const pct = Math.max(0, Math.min(100, Number(raw)));
+    // Volumen (General, Música, Efectos) y Calidad gráfica sincronizados entre menú y pausa
+    const STORAGE_KEY = 'agrorescate_settings_v1';
+    const saveSettings = (patch) => {
+      try {
+        if (typeof localStorage === 'undefined') return;
+        const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...prev, ...patch }));
+      } catch {
+        // Ignorar si el almacenamiento local está restringido
+      }
+    };
+
+    const syncMasterVolume = (raw) => {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(raw))));
+      if (!Number.isFinite(pct)) return;
       this.audioSystem?.setMasterVolume(pct / 100);
       if (this.settingVolume) this.settingVolume.value = String(pct);
       if (this.pauseVolume) this.pauseVolume.value = String(pct);
       if (this.settingVolumeVal) this.settingVolumeVal.textContent = `${pct}%`;
       if (this.pauseVolumeVal) this.pauseVolumeVal.textContent = `${pct}%`;
+      saveSettings({ masterPct: pct });
     };
-    this.settingVolume?.addEventListener('input', (e) => syncVolume(e.target.value));
-    this.pauseVolume?.addEventListener('input', (e) => syncVolume(e.target.value));
+
+    const syncMusicVolume = (raw) => {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(raw))));
+      if (!Number.isFinite(pct)) return;
+      this.audioSystem?.setMusicVolume(pct / 100);
+      if (this.settingMusic) this.settingMusic.value = String(pct);
+      if (this.pauseMusic) this.pauseMusic.value = String(pct);
+      if (this.settingMusicVal) this.settingMusicVal.textContent = `${pct}%`;
+      if (this.pauseMusicVal) this.pauseMusicVal.textContent = `${pct}%`;
+      saveSettings({ musicPct: pct });
+    };
+
+    const syncSfxVolume = (raw) => {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(raw))));
+      if (!Number.isFinite(pct)) return;
+      this.audioSystem?.setSfxVolume(pct / 100);
+      if (this.settingSfx) this.settingSfx.value = String(pct);
+      if (this.pauseSfx) this.pauseSfx.value = String(pct);
+      if (this.settingSfxVal) this.settingSfxVal.textContent = `${pct}%`;
+      if (this.pauseSfxVal) this.pauseSfxVal.textContent = `${pct}%`;
+      saveSettings({ sfxPct: pct });
+    };
+
+    this.settingVolume?.addEventListener('input', (e) => syncMasterVolume(e.target.value));
+    this.pauseVolume?.addEventListener('input', (e) => syncMasterVolume(e.target.value));
+    this.settingMusic?.addEventListener('input', (e) => syncMusicVolume(e.target.value));
+    this.pauseMusic?.addEventListener('input', (e) => syncMusicVolume(e.target.value));
+    this.settingSfx?.addEventListener('input', (e) => syncSfxVolume(e.target.value));
+    this.pauseSfx?.addEventListener('input', (e) => syncSfxVolume(e.target.value));
+    // Reproducir un toque de prueba al soltar el deslizador de efectos
+    this.settingSfx?.addEventListener('change', () => this.audioSystem?.playClick());
+    this.pauseSfx?.addEventListener('change', () => this.audioSystem?.playClick());
+
+    // Restaurar ajustes guardados si existen
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (typeof saved.masterPct === 'number') syncMasterVolume(saved.masterPct);
+        if (typeof saved.musicPct === 'number') syncMusicVolume(saved.musicPct);
+        if (typeof saved.sfxPct === 'number') syncSfxVolume(saved.sfxPct);
+      }
+    } catch {
+      // Ignorar errores de parseo
+    }
 
     const applyQuality = (q) => {
       if (this.settingQuality) this.settingQuality.value = q;
@@ -442,15 +521,28 @@ export class GameModalsController {
    */
   async openFarmerHouse() {
     if (!this.houseModal) return;
+    this.player?.unlock();
     const state = await this.farmAdapter.getState();
 
     const energyEl = document.getElementById('house-energy-val');
     const dayEl = document.getElementById('house-day-val');
     const budgetEl = document.getElementById('house-budget-val');
-    if (energyEl) energyEl.textContent = `${state.farmerEnergy || 100}%`;
+    if (energyEl) energyEl.textContent = `${state.farmerEnergy ?? 100}%`;
     if (dayEl) dayEl.textContent = `Día ${state.day}`;
     if (budgetEl) budgetEl.textContent = formatCOP(state.budget, { withCurrency: true });
 
+    const weatherEl = document.getElementById('house-weather');
+    if (weatherEl) weatherEl.textContent = (state.currentWeather?.name || 'Clima despejado') + ': ' + (state.currentWeather?.description || '');
+    const choresEl = document.getElementById('house-chores');
+    if (choresEl) {
+      choresEl.replaceChildren();
+      for (const plot of Object.values(state.plots)) {
+        const item = document.createElement('li');
+        const task = !plot.isPrepared ? 'Preparar la tierra' : !plot.isPlanted ? 'Sembrar' : plot.daysGrown >= plot.daysToMature ? 'Cosechar' : plot.moisture < 40 ? 'Revisar el riego' : 'Vigilar el crecimiento';
+        item.textContent = (plot.cropName || plot.id) + ': ' + task + ' · humedad ' + plot.moisture + '%';
+        choresEl.appendChild(item);
+      }
+    }
     this.houseModal.classList.remove('hidden');
   }
 

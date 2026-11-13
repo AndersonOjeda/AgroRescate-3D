@@ -43,9 +43,19 @@
         </div>
         <div class="welcome-settings-bar">
           <label class="setting-item">
-            <span>🔊 Volumen:</span>
+            <span>🔊 General:</span>
             <input id="setting-volume" type="range" min="0" max="100" value="100" />
             <strong id="setting-volume-val">100%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🎵 Música:</span>
+            <input id="setting-music" type="range" min="0" max="100" value="45" />
+            <strong id="setting-music-val">45%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🔔 Efectos:</span>
+            <input id="setting-sfx" type="range" min="0" max="100" value="100" />
+            <strong id="setting-sfx-val">100%</strong>
           </label>
           <label class="setting-item">
             <span>🖥️ Calidad gráfica:</span>
@@ -364,9 +374,19 @@
         </div>
         <div class="pause-controls">
           <label class="setting-item">
-            <span>🔊 Volumen maestro:</span>
+            <span>🔊 Volumen general:</span>
             <input id="pause-volume" type="range" min="0" max="100" value="100" />
             <strong id="pause-volume-val">100%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🎵 Música de fondo:</span>
+            <input id="pause-music" type="range" min="0" max="100" value="45" />
+            <strong id="pause-music-val">45%</strong>
+          </label>
+          <label class="setting-item">
+            <span>🔔 Efectos de sonido:</span>
+            <input id="pause-sfx" type="range" min="0" max="100" value="100" />
+            <strong id="pause-sfx-val">100%</strong>
           </label>
           <label class="setting-item">
             <span>🖥️ Calidad gráfica:</span>
@@ -440,14 +460,18 @@
         </div>
         <p class="report-intro">Tras una jornada de arduo trabajo en el campo, el campesino regresa a su casa humilde a tomar agua de panela con queso y reponer fuerzas para el nuevo día.</p>
         <div class="house-content-box">
+          <p id="house-weather" aria-live="polite"></p>
+          <h3>Labores pendientes</h3>
+          <ul id="house-chores"></ul>
           <blockquote id="house-quote" class="farmer-quote">«Tierra que da de comer, merece que la aprendas a querer.»</blockquote>
           <div class="house-stats">
-            <div><strong>⚡ Energía campesina:</strong> <span id="house-energy-val">100%</span> (Recuperada)</div>
+            <div><strong>⚡ Energía campesina:</strong> <span id="house-energy-val">100%</span></div>
             <div><strong>📅 Día en curso:</strong> <span id="house-day-val">Día 1</span></div>
             <div><strong>💰 Saldo familiar:</strong> <span id="house-budget-val">$55.000 COP</span></div>
           </div>
         </div>
         <div class="results-actions">
+          <button id="btn-house-rest" type="button" class="hud-btn">☕ Recuperar fuerzas sin avanzar el día</button>
           <button id="btn-house-sleep" type="button" class="btn-primary">🌙 Descansar y Avanzar al Siguiente Día</button>
           <button id="btn-house-continue" type="button" class="hud-btn">Salir al Corredor</button>
         </div>

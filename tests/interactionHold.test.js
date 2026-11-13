@@ -4,6 +4,29 @@ import { InteractionSystem } from '../src/systems/interactionSystem.js';
 import { FarmSimulation } from '../src/simulation/farmSimulation.js';
 
 describe('InteractionSystem — Esfuerzo Físico Campesino (Hold [E])', () => {
+  it('no permite saltarse el esfuerzo mediante la interacción directa ni reiniciarlo', () => {
+    const sys = new InteractionSystem();
+    const done = vi.fn();
+    sys.register({ id: 'labor', name: 'Faena', position: { x: 0, z: 0 }, holdDuration: 2, onInteract: done });
+    sys.update(new THREE.Vector3());
+    sys.triggerInteraction();
+    expect(done).not.toHaveBeenCalled();
+    sys.update(new THREE.Vector3(), 1);
+    sys.startHold();
+    expect(sys.holdTimer).toBe(1);
+    sys.canInteract = () => false;
+    sys.update(new THREE.Vector3(), 2);
+    expect(sys.isHolding).toBe(false);
+    expect(done).not.toHaveBeenCalled();
+  });
+
+  it('permite cancelar desde onHoldStart sin publicar un progreso fantasma', () => {
+    const sys = new InteractionSystem();
+    sys.register({ id: 'labor', position: { x: 0, z: 0 }, holdDuration: 2, onHoldStart: () => sys.stopHold(true) });
+    sys.update(new THREE.Vector3());
+    expect(sys.startHold()).toBe(false);
+    expect(sys.holdingInteractable).toBeNull();
+  });
   it('ejecuta inmediatamente las interacciones instantáneas (holdDuration: 0)', () => {
     const sys = new InteractionSystem();
     const onInteract = vi.fn();

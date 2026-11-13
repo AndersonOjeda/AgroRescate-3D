@@ -142,7 +142,7 @@ export class WeatherSystem {
 
     // Interpolación suave hacia el clima objetivo
     const targetP = this.weatherPresets[this.targetWeather] || this.weatherPresets.clear;
-    const lerpSpeed = delta * 1.5;
+    const lerpSpeed = 1 - Math.exp(-Math.max(0, delta) * 1.5);
 
     if (this.scene.background && this.scene.background.isColor) {
       this.scene.background.lerp(targetP.sky, lerpSpeed);
@@ -161,7 +161,7 @@ export class WeatherSystem {
 
     // Lluvia ligada a la cámara
     const targetRainOpacity = targetP.rain ? (this.targetWeather === 'storm' ? 0.95 : 0.65) : 0.0;
-    this.rainMat.opacity = THREE.MathUtils.lerp(this.rainMat.opacity, targetRainOpacity, lerpSpeed * 2);
+    this.rainMat.opacity = THREE.MathUtils.lerp(this.rainMat.opacity, targetRainOpacity, 1 - Math.exp(-Math.max(0, delta) * 3));
 
     if (this.rainMat.opacity > 0.02) {
       this._updateRainDrops(delta);
@@ -188,7 +188,7 @@ export class WeatherSystem {
       pos[idx] += windX * delta;
 
       // Si cae debajo del suelo relativo a la cámara, reubicar arriba
-      if (pos[idx + 1] < camPos.y - 1.5) {
+      if (pos[idx + 1] < 0 || Math.abs(pos[idx] - camPos.x) > 14 || Math.abs(pos[idx + 2] - camPos.z) > 14) {
         pos[idx] = camPos.x + (Math.random() - 0.5) * 24;
         pos[idx + 1] = camPos.y + 10 + Math.random() * 5;
         pos[idx + 2] = camPos.z + (Math.random() - 0.5) * 24;

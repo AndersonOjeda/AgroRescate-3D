@@ -21,6 +21,7 @@ export class InteractionSystem {
     this.holdingInteractable = null;
     this.onHoldProgress = null; // (progress 0..1, interactable, isCancelled)
 
+    this.canInteract = () => true;
     this._lastTime = null;
     this._setupKeyListener();
   }
@@ -94,6 +95,7 @@ export class InteractionSystem {
       }
     });
 
+    window.addEventListener('blur', () => this.stopHold(true));
     window.addEventListener('keyup', (e) => {
       if (e.code === 'KeyE') {
         this.stopHold(true);
@@ -105,7 +107,7 @@ export class InteractionSystem {
    * Inicia el proceso de mantener presionado o ejecuta de inmediato si no requiere esfuerzo.
    */
   startHold() {
-    if (!this.currentInteractable || !this.currentInteractable.enabled) return false;
+    if (!this.canInteract() || this.isHolding || !this.currentInteractable || !this.currentInteractable.enabled) return false;
 
     // Si la interacción es instantánea (diálogo Rudy, tienda, casa, bomba)
     if (!this.currentInteractable.holdDuration || this.currentInteractable.holdDuration <= 0) {
@@ -121,6 +123,7 @@ export class InteractionSystem {
     if (this.holdingInteractable.onHoldStart) {
       this.holdingInteractable.onHoldStart(this.holdingInteractable);
     }
+    if (!this.isHolding) return false;
     if (this.onHoldProgress) {
       this.onHoldProgress(0, this.holdingInteractable, false);
     }
@@ -150,6 +153,8 @@ export class InteractionSystem {
    * Ejecuta la interacción con el objeto enfocado actualmente.
    */
   triggerInteraction() {
+    if (!this.canInteract()) return;
+    if (this.currentInteractable?.holdDuration > 0) return this.startHold();
     if (this.currentInteractable && this.currentInteractable.enabled) {
       if (this.currentInteractable.onInteract) {
         this.currentInteractable.onInteract(this.currentInteractable);
@@ -167,6 +172,14 @@ export class InteractionSystem {
     const dt = delta !== null ? delta : (this._lastTime ? Math.min(0.1, (now - this._lastTime) / 1000) : 0.016);
     this._lastTime = now;
 
+    if (!this.canInteract()) {
+      this.stopHold(true);
+      if (this.currentInteractable) {
+        this.currentInteractable = null;
+        this.onPromptChange?.(null);
+      }
+      return;
+    }
     let closestItem = null;
     let closestDistSq = Infinity;
 

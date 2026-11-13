@@ -1025,7 +1025,17 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
     ])
   ]);
 
+  // Abonar: tomar del costal junto a la cintura y esparcir con un arco lateral.
+  const compostT = [0, 0.35, 0.7, 1.1, 1.45, 1.8];
+  const compostClip = new THREE.AnimationClip('compost', 1.8, [
+    makeQuatTrack('spine', compostT, [[0.02,0,0],[0.2,-0.2,0],[0.15,0,0],[0.2,0.35,0],[0.12,0.15,0],[0.02,0,0]]),
+    makeQuatTrack('rightUpperArm', compostT, [[-0.04,0,1.11],[-0.5,0.2,0.9],[-0.8,0.1,0.8],[-1.1,-0.3,0.45],[-0.6,0,0.9],[-0.04,0,1.11]]),
+    makeQuatTrack('rightForeArm', compostT, [[0,0.32,0],[0,1.5,0],[0,1.2,0],[0,0.3,0],[0,0.6,0],[0,0.32,0]]),
+    makeQuatTrack('leftUpperArm', compostT, [[-0.04,0,-1.11],[-0.5,0,-0.95],[-0.5,0,-0.95],[-0.5,0,-0.95],[-0.4,0,-1],[-0.04,0,-1.11]]),
+    makeQuatTrack('leftForeArm', compostT, [[0,-0.32,0],[0,-1.3,0],[0,-1.3,0],[0,-1.3,0],[0,-1,0],[0,-0.32,0]])
+  ]);
   return {
+    compost: compostClip,
     idle: idleClip,
     walk: walkClip,
     run: runClip,
@@ -1089,6 +1099,7 @@ export function applyProceduralFarmerRig(modelRoot) {
   const mixer = new THREE.AnimationMixer(skinnedMesh);
 
   const actions = {
+    compost: mixer.clipAction(clips.compost),
     idle: mixer.clipAction(clips.idle),
     walk: mixer.clipAction(clips.walk),
     run: mixer.clipAction(clips.run),
@@ -1102,7 +1113,7 @@ export function applyProceduralFarmerRig(modelRoot) {
   actions.idle.setLoop(THREE.LoopRepeat, Infinity);
   actions.walk.setLoop(THREE.LoopRepeat, Infinity);
   actions.run.setLoop(THREE.LoopRepeat, Infinity);
-  for (const key of ['action', 'hoe', 'plant', 'harvest', 'tired']) {
+  for (const key of ['action', 'hoe', 'plant', 'harvest', 'tired', 'compost']) {
     actions[key].setLoop(THREE.LoopOnce, 1);
     actions[key].clampWhenFinished = true;
   }
