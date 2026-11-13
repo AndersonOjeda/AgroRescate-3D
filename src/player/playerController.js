@@ -59,6 +59,7 @@ export class PlayerController {
     this._actionDuration = 0.75;
     this.rig = null;
     this.hoeToolMesh = null;
+    this._cameraShake = 0;
 
     // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
     this.cameraMode = 'third-person';
@@ -339,7 +340,7 @@ export class PlayerController {
    * @returns {boolean}
    */
   playActionAnimation(animName = 'action') {
-    this._actionDuration = animName === 'hoe' ? 1.05 : 0.75;
+    this._actionDuration = animName === 'hoe' ? 1.80 : 0.75;
     this._actionTimer = this._actionDuration;
     this.currentAnimName = animName;
     const actionAnim = this.animations[animName] || this.animations.action;
@@ -1082,34 +1083,73 @@ export class PlayerController {
         const progress = Math.max(0, Math.min(1, 1 - this._actionTimer / this._actionDuration));
 
         if (this.currentAnimName === 'hoe') {
-          // Faena campesina rítmica de labranza con azada:
-          // 0.0 -> 0.30: Impulso (subir brazos con azada, torso se estira hacia atrás)
-          // 0.30 -> 0.65: Golpe descendente a la tierra (flexión de rodillas, torso se inclina con fuerza)
-          // 0.65 -> 1.0: Tirón de tierra hacia el campesino y regreso suave a postura erguida
-          if (progress < 0.30) {
-            const upT = progress / 0.30;
-            this.parts.pelvis.position.y = 0.68 + 0.03 * upT;
-            this.parts.torso.rotation.x = -0.16 * upT;
-            this.parts.leftLeg.rotation.x = 0.04 * upT;
-            this.parts.rightLeg.rotation.x = 0.04 * upT;
-            this.parts.leftArm.rotation.x = -1.65 * upT;
-            this.parts.rightArm.rotation.x = -1.65 * upT;
-          } else if (progress < 0.65) {
-            const downT = (progress - 0.30) / 0.35;
-            this.parts.pelvis.position.y = 0.71 - 0.22 * downT;
-            this.parts.torso.rotation.x = -0.16 + 0.88 * downT;
-            this.parts.leftLeg.rotation.x = 0.04 - 0.60 * downT;
-            this.parts.rightLeg.rotation.x = 0.04 - 0.60 * downT;
-            this.parts.leftArm.rotation.x = -1.65 + 1.25 * downT;
-            this.parts.rightArm.rotation.x = -1.65 + 1.25 * downT;
+          // Faena campesina rítmica de labranza con azada (2 golpes fluidos encadenados con desterronado):
+          // Golpe 1 (0.0 -> 0.48):
+          //   0.00 -> 0.24: Windup 1 (brazos en alto, torso hacia atrás con torsión, peso atrás)
+          //   0.24 -> 0.38: Strike 1 (impacto rápido descendente, rodillas dobladas, azada corta la tierra)
+          //   0.38 -> 0.48: Pull 1 (arrastre del terrón hacia el agricultor)
+          // Golpe 2 (0.48 -> 0.90):
+          //   0.48 -> 0.66: Windup 2 (segunda alzada fluida aprovechando la inercia del rebote)
+          //   0.66 -> 0.80: Strike 2 (segundo golpe profundo con todo el peso del cuerpo)
+          //   0.80 -> 0.90: Pull 2 (desterronado y apertura de surco)
+          // Recuperación (0.90 -> 1.0): regreso erguido a la posición neutra
+          if (progress < 0.24) {
+            const t = progress / 0.24;
+            this.parts.pelvis.position.y = 0.68 + 0.03 * t;
+            this.parts.torso.rotation.x = -0.16 * t;
+            this.parts.torso.rotation.y = 0.12 * t;
+            this.parts.leftLeg.rotation.x = 0.06 * t;
+            this.parts.rightLeg.rotation.x = -0.15 * t;
+            this.parts.leftArm.rotation.x = -1.70 * t;
+            this.parts.rightArm.rotation.x = -1.75 * t;
+          } else if (progress < 0.38) {
+            const t = (progress - 0.24) / 0.14;
+            this.parts.pelvis.position.y = 0.71 - 0.23 * t;
+            this.parts.torso.rotation.x = -0.16 + 0.94 * t;
+            this.parts.torso.rotation.y = 0.12 - 0.14 * t;
+            this.parts.leftLeg.rotation.x = 0.06 - 0.65 * t;
+            this.parts.rightLeg.rotation.x = -0.15 - 0.30 * t;
+            this.parts.leftArm.rotation.x = -1.70 + 1.35 * t;
+            this.parts.rightArm.rotation.x = -1.75 + 1.40 * t;
+          } else if (progress < 0.48) {
+            const t = (progress - 0.38) / 0.10;
+            this.parts.pelvis.position.y = 0.48 + 0.06 * t;
+            this.parts.torso.rotation.x = 0.78 - 0.14 * t;
+            this.parts.leftArm.rotation.x = -0.35 + 0.20 * t;
+            this.parts.rightArm.rotation.x = -0.35 + 0.20 * t;
+          } else if (progress < 0.66) {
+            const t = (progress - 0.48) / 0.18;
+            this.parts.pelvis.position.y = 0.54 + 0.18 * t;
+            this.parts.torso.rotation.x = 0.64 - 0.82 * t;
+            this.parts.torso.rotation.y = -0.02 + 0.16 * t;
+            this.parts.leftLeg.rotation.x = -0.59 + 0.65 * t;
+            this.parts.rightLeg.rotation.x = -0.45 + 0.30 * t;
+            this.parts.leftArm.rotation.x = -0.15 - 1.60 * t;
+            this.parts.rightArm.rotation.x = -0.15 - 1.65 * t;
+          } else if (progress < 0.80) {
+            const t = (progress - 0.66) / 0.14;
+            this.parts.pelvis.position.y = 0.72 - 0.26 * t;
+            this.parts.torso.rotation.x = -0.18 + 0.98 * t;
+            this.parts.torso.rotation.y = 0.14 - 0.16 * t;
+            this.parts.leftLeg.rotation.x = 0.06 - 0.68 * t;
+            this.parts.rightLeg.rotation.x = -0.15 - 0.32 * t;
+            this.parts.leftArm.rotation.x = -1.75 + 1.40 * t;
+            this.parts.rightArm.rotation.x = -1.80 + 1.45 * t;
+          } else if (progress < 0.90) {
+            const t = (progress - 0.80) / 0.10;
+            this.parts.pelvis.position.y = 0.46 + 0.08 * t;
+            this.parts.torso.rotation.x = 0.80 - 0.15 * t;
+            this.parts.leftArm.rotation.x = -0.35 + 0.20 * t;
+            this.parts.rightArm.rotation.x = -0.35 + 0.20 * t;
           } else {
-            const recT = (progress - 0.65) / 0.35;
-            this.parts.pelvis.position.y = 0.49 + 0.19 * recT;
-            this.parts.torso.rotation.x = 0.72 * (1 - recT);
-            this.parts.leftLeg.rotation.x = -0.56 * (1 - recT);
-            this.parts.rightLeg.rotation.x = -0.56 * (1 - recT);
-            this.parts.leftArm.rotation.x = -0.40 * (1 - recT);
-            this.parts.rightArm.rotation.x = -0.40 * (1 - recT);
+            const t = (progress - 0.90) / 0.10;
+            this.parts.pelvis.position.y = 0.54 + 0.14 * t;
+            this.parts.torso.rotation.x = 0.65 * (1 - t);
+            this.parts.torso.rotation.y = 0;
+            this.parts.leftLeg.rotation.x = -0.62 * (1 - t);
+            this.parts.rightLeg.rotation.x = -0.47 * (1 - t);
+            this.parts.leftArm.rotation.x = -0.15 * (1 - t);
+            this.parts.rightArm.rotation.x = -0.15 * (1 - t);
           }
         } else {
           // Acción genérica de inclinación y agachado (sembrar / cosechar / regar)
@@ -1171,6 +1211,14 @@ export class PlayerController {
     // Suavizado de cámara (lerp)
     this.camera.position.lerp(this._desiredCameraPos, Math.min(1, delta * 14));
 
+    // Sacudida cinemática de impacto físico (labranza con azada, golpes contra el suelo)
+    if (this._cameraShake > 0.0005) {
+      this.camera.position.x += (Math.random() - 0.5) * this._cameraShake;
+      this.camera.position.y += (Math.random() - 0.5) * this._cameraShake * 0.65;
+      this.camera.position.z += (Math.random() - 0.5) * this._cameraShake;
+      this._cameraShake = Math.max(0, this._cameraShake - delta * 3.2);
+    }
+
     // Mirar hacia la cabeza del agricultor
     this._cameraLookTarget.set(
       this.position.x,
@@ -1178,6 +1226,14 @@ export class PlayerController {
       this.position.z
     );
     this.camera.lookAt(this._cameraLookTarget);
+  }
+
+  /**
+   * Aplica un impulso cinemático de sacudida a la cámara para dar peso al impacto de herramientas.
+   * @param {number} [intensity=0.05]
+   */
+  applyCameraImpulse(intensity = 0.05) {
+    this._cameraShake = Math.min(0.20, (this._cameraShake || 0) + intensity);
   }
 
   getPosition() {

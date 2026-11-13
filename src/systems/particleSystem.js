@@ -284,6 +284,38 @@ export class ParticleSystem {
   }
 
   /**
+   * Genera partículas de impacto de terrones de tierra cuando la azada golpea el suelo
+   * @param {THREE.Vector3|{x:number, y:number, z:number}} pos Posición del jugador
+   * @param {{x:number, z:number}} [forward] Vector de dirección hacia el surco
+   */
+  emitSoilImpactParticles(pos, forward = null) {
+    if (!pos) return;
+    const count = 12;
+    const hitX = pos.x + (forward ? forward.x * 0.75 : 0);
+    const hitZ = pos.z + (forward ? forward.z * 0.75 : 0);
+
+    for (let k = 0; k < count; k++) {
+      const idx = this.dustIndex;
+      this.dustIndex = (this.dustIndex + 1) % this.dustCount;
+      const i3 = idx * 3;
+
+      this.dustPositions[i3] = hitX + (Math.random() - 0.5) * 0.28;
+      this.dustPositions[i3 + 1] = 0.05 + Math.random() * 0.12;
+      this.dustPositions[i3 + 2] = hitZ + (Math.random() - 0.5) * 0.28;
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.6 + Math.random() * 0.9;
+      this.dustVelocities[i3] = Math.cos(angle) * speed;
+      this.dustVelocities[i3 + 1] = 1.1 + Math.random() * 1.0; // Salto alto y parabólico de terrones
+      this.dustVelocities[i3 + 2] = Math.sin(angle) * speed;
+
+      this.dustLifetimes[idx] = 0;
+      this.dustMaxLifetimes[idx] = 0.45 + Math.random() * 0.25;
+      this.dustActive[idx] = 1;
+    }
+  }
+
+  /**
    * Actualización de partículas llamada en el bucle animate()
    * Reutiliza vectores y memoria pre-asignada sin crear objetos nuevos
    */

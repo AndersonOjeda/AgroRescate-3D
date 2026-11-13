@@ -207,4 +207,24 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
       globalThis.document = prevDocument;
     }
   });
+
+  it('ejecuta animación realista de labranza con azada (hoe, 1.80s) y sacudida de cámara', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200);
+    const player = new PlayerController(camera, null, scene, { autoLoad: false });
+
+    const hoeMesh = new THREE.Group();
+    player.setHoeTool(hoeMesh);
+
+    expect(player.playActionAnimation('hoe')).toBe(true);
+    expect(player.currentAnimName).toBe('hoe');
+    expect(player._actionDuration).toBe(1.80);
+    expect(hoeMesh.visible).toBe(true);
+
+    // Sacudida cinemática de impacto de azada
+    player.applyCameraImpulse(0.06);
+    expect(player._cameraShake).toBeCloseTo(0.06, 3);
+    player.update(0.1);
+    expect(player._cameraShake).toBeLessThan(0.06);
+  });
 });

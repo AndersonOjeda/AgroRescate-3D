@@ -67,4 +67,16 @@ describe('ParticleSystem — Riego por Aspersión y Pooling', () => {
     expect(particles.sprinklerPositions[particles.particlesPerSprinkler * 3 + 1]).toBeGreaterThan(0);
     expect(particles.sprinklerGeometry.attributes.position.array).toBe(initialBufferRef);
   });
+
+  it('emite partículas de terrones de tierra con emitSoilImpactParticles sin fuga de memoria', () => {
+    const scene = new THREE.Scene();
+    const particles = new ParticleSystem(scene);
+
+    particles.emitSoilImpactParticles({ x: 2, y: 0, z: -3 }, { x: 0, z: 1 });
+    expect(particles.dustActive.some(a => a === 1)).toBe(true);
+
+    // Simular actualización de física y caída
+    particles.update(0.05);
+    expect(particles.dustPositions[1]).not.toBe(-100);
+  });
 });

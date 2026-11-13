@@ -398,6 +398,63 @@ export class AudioSystem {
   }
 
   /**
+   * Reproduce el sonido contundente de la azada campesina golpeando y desterronando la tierra
+   */
+  playHoeImpact() {
+    if (this.isMuted) return;
+    this.unlockAudio();
+
+    const ctx = this.listener?.context;
+    if (!ctx || typeof ctx.createOscillator !== 'function' || typeof ctx.createGain !== 'function') {
+      this.playFootstep();
+      return;
+    }
+
+    try {
+      const now = ctx.currentTime || 0;
+      // 1. Golpe sordo y grave de contacto contra la tierra (Low thud)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      if (osc.frequency?.setValueAtTime) {
+        osc.frequency.setValueAtTime(145, now);
+        osc.frequency.exponentialRampToValueAtTime?.(42, now + 0.14);
+      }
+      if (gain.gain?.setValueAtTime) {
+        gain.gain.setValueAtTime(0.48 * this.masterVolume, now);
+        gain.gain.exponentialRampToValueAtTime?.(0.001, now + 0.18);
+      }
+      osc.connect(gain);
+      gain.connect(ctx.destination || this.listener.getInput());
+      osc.start(now);
+      osc.stop(now + 0.19);
+
+      // 2. Ruido sutil de raspado / corte de terrón
+      if (typeof ctx.createBuffer === 'function' && typeof ctx.createBufferSource === 'function') {
+        const bufferSize = Math.floor((ctx.sampleRate || 44100) * 0.08);
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate || 44100);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const noiseGain = ctx.createGain();
+        if (noiseGain.gain?.setValueAtTime) {
+          noiseGain.gain.setValueAtTime(0.22 * this.masterVolume, now);
+          noiseGain.gain.exponentialRampToValueAtTime?.(0.001, now + 0.08);
+        }
+        noise.connect(noiseGain);
+        noiseGain.connect(ctx.destination || this.listener.getInput());
+        noise.start(now);
+        noise.stop(now + 0.09);
+      }
+    } catch {
+      this.playFootstep();
+    }
+  }
+
+  /**
    * Reproduce un cacareo breve y amigable cuando habla Rudy, la gallina guía.
    */
   playChickenCluck() {

@@ -108,45 +108,89 @@ async function bootstrap() {
   });
   createNaturalHorizon(scene);
 
-  // Construir herramienta campesina (azada) para el personaje para labores de labranza
+  // Construir herramienta campesina detallada (azadón tradicional colombiano) para labores de labranza
   const createRusticHoeTool = () => {
     const group = new THREE.Group();
     group.name = 'player_hoe_tool';
 
-    // 1. Mango de madera rústico pulido (cilindro esbelto, 1.15m de largo)
-    const handleMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 1.15, 8), handleMat);
-    handle.position.y = 0.25; // Punto de agarre de la mano en y = 0
+    // 1. Mango de madera de guayabo pulido (1.20m de largo, con sutil veta y textura artesanal)
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x92400e }); // Madera ámbar natural
+    const gripWrapMat = new THREE.MeshLambertMaterial({ color: 0x451a03 }); // Encordado de cuero antideslizante
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.021, 1.20, 8), woodMat);
+    handle.position.y = 0.28;
     handle.castShadow = true;
     group.add(handle);
 
-    // 2. Casquillo metálico en la unión superior
-    const metalMat = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      roughness: 0.35,
-      metalness: 0.75
+    // Encordado/agarre de cuero en la zona donde toma la mano campesina
+    const gripWrap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.22, 8), gripWrapMat);
+    gripWrap.position.y = 0.12;
+    gripWrap.castShadow = true;
+    group.add(gripWrap);
+
+    // Pomo o remate redondeado en el extremo inferior del mango
+    const pommel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.018, 0.04, 8), woodMat);
+    pommel.position.y = -0.32;
+    pommel.castShadow = true;
+    group.add(pommel);
+
+    // 2. Virola o casquillo de acero forjado en la unión superior
+    const forgedIronMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.50,
+      metalness: 0.70
     });
-    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.024, 0.07, 8), metalMat);
-    collar.position.y = 0.80;
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.024, 0.08, 8), forgedIronMat);
+    collar.position.y = 0.84;
     collar.castShadow = true;
     group.add(collar);
 
-    // 3. Cuello forjado
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.10), metalMat);
-    neck.position.set(0, 0.81, 0.04);
-    neck.rotation.x = -0.35;
+    // Cuña de fijación de madera en el ojo del azadón
+    const wedge = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.02, 0.025), woodMat);
+    wedge.position.set(0, 0.88, 0);
+    group.add(wedge);
+
+    // 3. Cuello forjado acodado ("cuello de cisne" característico de azadones andinos)
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.06, 0.12), forgedIronMat);
+    neck.position.set(0, 0.85, 0.05);
+    neck.rotation.x = -0.38;
     neck.castShadow = true;
     group.add(neck);
 
-    // 4. Hoja forjada de azada tradicional (inclinada hacia la tierra para picar)
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.15, 0.014), metalMat);
-    blade.position.set(0, 0.76, 0.10);
-    blade.rotation.x = 1.35;
-    blade.castShadow = true;
-    group.add(blade);
+    // 4. Pala / Lámina del azadón con costilla de refuerzo y filo biselado brillante
+    // Cuerpo principal forjado
+    const bladeBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.014), forgedIronMat);
+    bladeBody.position.set(0, 0.78, 0.12);
+    bladeBody.rotation.x = 1.30;
+    bladeBody.castShadow = true;
+    group.add(bladeBody);
 
-    // Orientación natural respecto a la mano derecha
-    group.rotation.set(-1.15, 0.15, -0.25);
+    // Costilla dorsal de refuerzo estructural en la espalda de la lámina
+    const bladeRib = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.14, 0.012), forgedIronMat);
+    bladeRib.position.set(0, 0.79, 0.115);
+    bladeRib.rotation.x = 1.30;
+    group.add(bladeRib);
+
+    // Filo cortante biselado pulido (acero brillante afilado con lima de campo)
+    const edgeBevelMat = new THREE.MeshStandardMaterial({
+      color: 0xcfd8dc,
+      roughness: 0.18,
+      metalness: 0.88
+    });
+    const bladeEdge = new THREE.Mesh(new THREE.BoxGeometry(0.222, 0.03, 0.008), edgeBevelMat);
+    bladeEdge.position.set(0, 0.71, 0.14);
+    bladeEdge.rotation.x = 1.30;
+    bladeEdge.castShadow = true;
+    group.add(bladeEdge);
+
+    // Pátina ligera de tierra en el borde de corte
+    const soilPatinaMat = new THREE.MeshLambertMaterial({ color: 0x3d2314, transparent: true, opacity: 0.55 });
+    const soilPatina = new THREE.Mesh(new THREE.BoxGeometry(0.224, 0.02, 0.010), soilPatinaMat);
+    soilPatina.position.set(0, 0.72, 0.138);
+    soilPatina.rotation.x = 1.30;
+    group.add(soilPatina);
+
+    // Orientación natural ergonómica empuñada por la mano campesina
+    group.rotation.set(-1.18, 0.12, -0.22);
     group.scale.setScalar(0.85);
     return group;
   };
@@ -711,8 +755,11 @@ async function bootstrap() {
               return;
             }
             player.playActionAnimation('hoe');
-            particleSystem.emitFootstepDust(player.getPosition());
-            audioSystem.playFootstep();
+            const pos = player.getPosition();
+            const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+            particleSystem.emitSoilImpactParticles(pos, fwd);
+            audioSystem.playHoeImpact();
+            player.applyCameraImpulse(0.05);
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
               hud.showToast('🌾 ' + res.message, 'success');
@@ -901,9 +948,40 @@ async function bootstrap() {
     touchControls.setInteractable(item);
   };
 
-  // Conectar barra/anillo de progreso de faena física continua con el HUD
+  // Conectar barra/anillo de progreso de faena física continua con el HUD y efectos de impacto
+  let hoeStrike1Triggered = false;
+  let hoeStrike2Triggered = false;
+
   interactionSystem.onHoldProgress = (progress, item, isCancelled) => {
     hud.setHoldProgress(progress, item, isCancelled);
+
+    if (isCancelled || progress <= 0.05 || progress >= 1.0) {
+      hoeStrike1Triggered = false;
+      hoeStrike2Triggered = false;
+    }
+
+    // Si está labrando con la azada, sincronizar los dos impactos rítmicos contra la tierra
+    const isHoeing = item?.actionText?.toLowerCase().includes('labrar') || item?.actionText?.toLowerCase().includes('preparar');
+    if (!isCancelled && isHoeing) {
+      const pos = player.getPosition();
+      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+
+      // Impacto 1: Golpe descendente inicial contra el terrón (~28% del progreso)
+      if (!hoeStrike1Triggered && progress >= 0.28) {
+        hoeStrike1Triggered = true;
+        audioSystem.playHoeImpact();
+        particleSystem.emitSoilImpactParticles(pos, fwd);
+        player.applyCameraImpulse(0.045);
+      }
+
+      // Impacto 2: Segundo golpe potente encadenado (~74% del progreso)
+      if (!hoeStrike2Triggered && progress >= 0.74) {
+        hoeStrike2Triggered = true;
+        audioSystem.playHoeImpact();
+        particleSystem.emitSoilImpactParticles(pos, fwd);
+        player.applyCameraImpulse(0.065);
+      }
+    }
   };
 
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
@@ -930,7 +1008,11 @@ async function bootstrap() {
       if (!player._isPlayingAction) {
         player.playActionAnimation('hoe');
       }
-      particleSystem.emitFootstepDust(player.getPosition());
+      const pos = player.getPosition();
+      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+      particleSystem.emitSoilImpactParticles(pos, fwd);
+      audioSystem.playHoeImpact();
+      player.applyCameraImpulse(0.05);
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'soilPrepared' });
       hud.renderMission(missionManager.getSnapshot());
@@ -967,7 +1049,11 @@ async function bootstrap() {
   farmAdapter.on('compostApplied', ({ result }) => {
     if (result?.success) {
       player.playActionAnimation();
-      particleSystem.emitFootstepDust(player.getPosition());
+      const pos = player.getPosition();
+      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+      particleSystem.emitSoilImpactParticles(pos, fwd);
+      audioSystem.playHoeImpact();
+      player.applyCameraImpulse(0.05);
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'special', kind: 'compost' });
       hud.renderMission(missionManager.getSnapshot());

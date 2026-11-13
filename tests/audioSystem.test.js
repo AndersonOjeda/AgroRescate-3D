@@ -38,8 +38,8 @@ vi.mock('three', async () => {
             loop: false,
             loopStart: 0,
             loopEnd: 0,
-            detune: { value: 0 },
-            playbackRate: { value: 1 },
+            detune: { value: 0, setTargetAtTime: vi.fn() },
+            playbackRate: { value: 1, setTargetAtTime: vi.fn() },
             connect: vi.fn(),
             start: vi.fn(),
             stop: vi.fn()
@@ -156,5 +156,19 @@ describe('AudioSystem — Música de fondo (/audio/bgm.mp3)', () => {
     expect(audioSystem.setMasterVolume(2.0)).toBe(1.0);
     expect(audioSystem.setMasterVolume(-1.0)).toBe(0.0);
     warnSpy.mockRestore();
+  });
+
+  it('ejecuta sonido de impacto de azada contra la tierra (playHoeImpact)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const camera = new THREE.PerspectiveCamera();
+    const audioSystem = new AudioSystem(camera);
+
+    const footstepSpy = vi.spyOn(audioSystem, 'playFootstep');
+    audioSystem.unlockAudio();
+    audioSystem.playHoeImpact();
+    // En entorno mock con AudioListener sintetizado, ejecuta sin lanzar excepciones
+    expect(audioSystem.isAudioUnlocked).toBe(true);
+    warnSpy.mockRestore();
+    footstepSpy.mockRestore();
   });
 });
