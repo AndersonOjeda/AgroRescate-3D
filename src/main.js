@@ -26,7 +26,6 @@ import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
 import { PestVisualSystem } from './systems/pestVisualSystem.js';
 import { updatePestPanel } from './ui/pestPanel.js';
-import { getFarmNeed } from './gameplay/farmNeeds.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -44,7 +43,7 @@ async function bootstrap() {
   window.addEventListener('resize', () => handleResize(camera));
 
   // 2. HUD e Interfaces
-  const hud = new HUD({ collapsed: true });
+  const hud = new HUD();
   hud.updateLoadingProgress(10, 'Inicializando motor 3D y sistemas...');
 
   // 3. Físicas con Cannon-es
@@ -770,21 +769,21 @@ async function bootstrap() {
           }
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Estás exhausto! El campesino no tiene fuerzas para labrar. Descansa en la Casa Campesina con agua de panela.', 'warning', 4200);
+              hud.showToast('⚠️ ¡Estás exhausto! El campesino no tiene fuerzas para labrar. Descansa en la Casa Rural con agua de panela.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
             player.playActionAnimation('hoe');
           } else if (info.mode === 'plant') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Demasiado cansado para sembrar! Descansa en la Casa Campesina para recuperar energía.', 'warning', 4200);
+              hud.showToast('⚠️ ¡Demasiado cansado para sembrar! Descansa en la Casa Rural para recuperar energía.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
             player.playActionAnimation('plant');
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Campesina.', 'warning', 4200);
+              hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Rural.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
@@ -803,7 +802,7 @@ async function bootstrap() {
 
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Estás exhausto! Descansa en la Casa Campesina y tómate un agua de panela caliente.', 'warning', 4000);
+              hud.showToast('⚠️ ¡Estás exhausto! Descansa en la Casa Rural y tómate un agua de panela caliente.', 'warning', 4000);
               return;
             }
             // La animación e impactos ya ocurrieron durante la faena sostenida
@@ -816,7 +815,7 @@ async function bootstrap() {
             }
           } else if (info.mode === 'plant') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Estás sin energía para sembrar! Descansa en tu Casa Campesina.', 'warning', 4000);
+              hud.showToast('⚠️ ¡Estás sin energía para sembrar! Descansa en tu Casa Rural.', 'warning', 4000);
               return;
             }
             const res = await farmAdapter.plant(p.id);
@@ -828,11 +827,12 @@ async function bootstrap() {
             }
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
             if (currentState.farmerEnergy < info.energyCost) {
-              hud.showToast('⚠️ ¡Sin energía para cosechar! Descansa en tu Casa Campesina.', 'warning', 4000);
+              hud.showToast('⚠️ ¡Sin energía para cosechar! Descansa en tu Casa Rural.', 'warning', 4000);
               return;
             }
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
+              guideChicken.celebrate();
               hud.showToast('🧺 ' + res.message, 'success');
               audioSystem.playSuccess();
             } else {
@@ -911,19 +911,34 @@ async function bootstrap() {
     }
   });
 
-  // E2. Casa Campesina (Hogar, Descanso Familiar y Sabiduría Campesina)
-  // Acceso exterior, fuera de la colisión del edificio.
-  const houseCoords = isGlb ? { x: 7.3, y: 0.8, z: 6.2 } : { x: -15.1, y: 0.8, z: -9.4 };
-  modals.worldMenus = [
-    { kind: 'house', position: houseCoords, radius: 5 },
-    { kind: 'warehouse', position: sceneCoords.warehouse, radius: 5.2 }
-  ];
+  // E2. Casa Rural (Casa café al final del camino este: descanso, estadísticas de cultivos y dormir)
+  // Acceso exterior sobre el extremo del camino principal este-oeste, fuera de la colisión del edificio.
+  let houseCoords = isGlb ? { x: 18.4, y: 0.8, z: -0.5 } : { x: -15.1, y: 0.8, z: -9.4 };
+  if (isGlb && farmEnv?.glbRoot) {
+    let brownHouseNode = null;
+    farmEnv.glbRoot.traverse((node) => {
+      const clean = (node.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!brownHouseNode && clean.startsWith('fabconvertedmodel')) {
+        brownHouseNode = node;
+      }
+    });
+    if (brownHouseNode) {
+      const houseBox = new THREE.Box3().setFromObject(brownHouseNode);
+      if (!houseBox.isEmpty()) {
+        houseCoords = {
+          x: Number((houseBox.min.x - 0.9).toFixed(2)),
+          y: 0.8,
+          z: Number((((houseBox.min.z + houseBox.max.z) * 0.5)).toFixed(2))
+        };
+      }
+    }
+  }
   interactionSystem.register({
     id: 'interact_house',
-    name: 'Casa Campesina (Hogar y Descanso)',
+    name: 'Casa Rural (Hogar y Descanso)',
     position: { x: houseCoords.x, y: houseCoords.y, z: houseCoords.z },
-    customDistance: isGlb ? 4.0 : 3.5,
-    actionText: 'E · Casa rural: recuperar fuerzas, revisar cultivos y dormir',
+    customDistance: isGlb ? 4.2 : 3.5,
+    actionText: 'E · Casa Rural: descansar, revisar cultivos y cerrar los ojos',
     onInteract: () => {
       audioSystem.playClick();
       player.cancelActionAnimation();
@@ -1097,18 +1112,6 @@ async function bootstrap() {
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
     }
     hud.updateFarmState(state);
-    const need = getFarmNeed(state);
-    const needTitle = document.getElementById('need-title');
-    const needReason = document.getElementById('need-reason');
-    if (needTitle) needTitle.textContent = need.title;
-    if (needReason) needReason.textContent = need.reason;
-    const active = state.plots[state.activePlotId];
-    for (const key of ['moisture', 'fertility', 'health']) {
-      const bar = document.getElementById(`player-crop-${key}`);
-      if (bar) { bar.value = active[key]; bar.title = `${active.name}: ${Math.round(active[key])}%`; }
-      const value = document.getElementById(`player-crop-${key}-value`);
-      if (value) value.textContent = `${Math.round(active[key])}%`;
-    }
     pestVisuals.sync(state);
     updatePestPanel(state);
 
@@ -1218,6 +1221,7 @@ async function bootstrap() {
   });
 
   farmAdapter.on('dayAdvanced', async ({ result }) => {
+    if (result?.slept) skySystem.timeOfDay = 0.08;
     if (['storm', 'flood', 'frost', 'heatwave'].includes(result?.state?.currentWeather?.id)) {
       const weather = result.state.currentWeather;
       hud.showToast(`${weather.icon} ${weather.name}: ${weather.description}`, 'warning', 8000);
@@ -1296,7 +1300,7 @@ async function bootstrap() {
     startTimeOfDay: 0.08,
     onDayComplete: async () => {
       const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
-      if (inMenu || naturalDayAdvanceInFlight || advanceDayPending || modals.houseActionPending) return;
+      if (inMenu || player._isAnyModalOpen() || naturalDayAdvanceInFlight || advanceDayPending || modals.isPaused) return;
       naturalDayAdvanceInFlight = true;
       try {
         const res = await farmAdapter.advanceDay();
@@ -1393,13 +1397,16 @@ async function bootstrap() {
   window.addEventListener('keydown', ensureAudioOnGesture);
 
   // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
+  let liveStatsElapsed = 0;
+  let liveStatsPending = false;
   gameLoop.addUpdateCallback((delta, fps) => {
-    const inStartMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
-    skySystem.autoCycleEnabled = !inStartMenu;
-    skySystem.update(delta);
-    hud.setDayPhase(skySystem.phaseName);
-    weatherSystem.update(delta, { preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning });
-    modals.updateWorldMenus(player.getPosition());
+    farmAdapter.simulation.timeOfDay = skySystem.timeOfDay;
+    liveStatsElapsed += delta;
+    if (liveStatsElapsed >= 0.25 && !liveStatsPending) {
+      liveStatsElapsed = 0;
+      liveStatsPending = true;
+      farmAdapter.getState().then(state => updatePestPanel(state)).catch(error => console.warn('No se pudo actualizar el tablero:', error)).finally(() => { liveStatsPending = false; });
+    }
     if (!modals.isPaused) {
       // A. Actualizar jugador y cámara en tercera persona
       player.update(delta);
@@ -1413,6 +1420,13 @@ async function bootstrap() {
       physicsWorld.step(delta);
 
       // C. Actualizar atmósfera (nubes + ciclo continuo Mañana/Mediodía/Tarde/Noche + clima dinámico), fauna, molino, gallina guía y partículas
+      const isInMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+      skySystem.autoCycleEnabled = !isInMenu;
+      if (!player._isAnyModalOpen()) skySystem.update(delta);
+      hud.setDayPhase(skySystem.phaseName);
+      weatherSystem.update(delta, {
+        preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning
+      });
       const isNight = skySystem.phaseName === 'Noche';
       wildlifeSystem.update(delta, isNight);
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
