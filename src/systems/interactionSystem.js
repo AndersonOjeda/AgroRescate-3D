@@ -12,6 +12,9 @@ export class InteractionSystem {
     this.onPromptChange = null;
     this.maxInteractionDistance = 3.8; // Distancia máxima para interactuar
     this.maxInteractionDistanceSq = this.maxInteractionDistance * this.maxInteractionDistance;
+    this.holdDurationMs = 1000;
+    this.isHolding = false;
+    this.onHoldProgress = null;
 
     this._setupKeyListener();
   }
@@ -61,7 +64,7 @@ export class InteractionSystem {
 
   _setupKeyListener() {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyE') {
+      if (e.code === 'KeyE' && !e.repeat) {
         this.triggerInteraction();
       }
     });
