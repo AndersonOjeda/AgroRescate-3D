@@ -1595,7 +1595,23 @@ body.is-touch-device .crosshair {
   overflow-y: auto;
 }
 
-.live-crop-dashboard { position: fixed; bottom: 96px; left: 16px; width: min(320px, 38vw); z-index: 100001; background: #0c1b20ed; border: 1px solid #52796a; border-radius: 12px; padding: 10px; pointer-events: none; box-shadow: 0 6px 24px #0005; }
+.live-crop-dashboard { position: fixed; bottom: 96px; left: 16px; width: min(320px, 38vw); z-index: 18; background: #0c1b20ed; border: 1px solid #52796a; border-radius: 12px; padding: 10px; pointer-events: none; box-shadow: 0 6px 24px #0005; }
+
+/* Ocultar tableros de juego mientras la pantalla de carga o inicio esté visible */
+#app:has(#loading-screen:not(.hidden)) .live-crop-dashboard,
+#app:has(#loading-screen:not(.hidden)) .hud-top,
+#app:has(#loading-screen:not(.hidden)) .hud-bottom,
+#app:has(#loading-screen:not(.hidden)) .mission-hud,
+#app:has(#loading-screen:not(.hidden)) .agro-hud-dock,
+#app:has(#loading-screen:not(.hidden)) .agro-rudy-bubble,
+#app:has(#start-overlay:not(.hidden)) .live-crop-dashboard,
+#app:has(#start-overlay:not(.hidden)) .hud-top,
+#app:has(#start-overlay:not(.hidden)) .hud-bottom,
+#app:has(#start-overlay:not(.hidden)) .mission-hud,
+#app:has(#start-overlay:not(.hidden)) .agro-hud-dock,
+#app:has(#start-overlay:not(.hidden)) .agro-rudy-bubble {
+  display: none !important;
+}
 .live-crop-heading { display: grid; gap: 3px; font-size: 12px; color: #a7f3d0; }
 .live-crop-heading span { font-size: 11px; color: #e2e8f0; }
 .sun-field-guide { font-size: 10px; color: #fde68a; display: block; max-width: 260px; line-height: 1.4; }
