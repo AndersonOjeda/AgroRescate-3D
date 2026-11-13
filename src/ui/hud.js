@@ -1617,7 +1617,7 @@ export class HUD {
    * Actualiza la fase del día en el HUD (Mañana, Mediodía, Tarde, Noche).
    * @param {string} phaseName
    */
-  setDayPhase(phaseName) {
+  setDayPhase(phaseName, formattedTime = '') {
     if (!phaseName) return;
     this.currentDayPhase = phaseName;
     if (!this.hudDayPhase) return;
@@ -1630,7 +1630,8 @@ export class HUD {
       'Atardecer': '🌇 Atardecer',
       'Día': '☀️ Día'
     };
-    const nextText = icons[phaseName] || phaseName;
+    const label = icons[phaseName] || phaseName;
+    const nextText = formattedTime ? `${label} · ${formattedTime}` : label;
     if (this.hudDayPhase.textContent !== nextText) {
       this.hudDayPhase.textContent = nextText;
     }

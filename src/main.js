@@ -422,12 +422,12 @@ async function bootstrap() {
   );
 
   // Sincronizar estado inicial del simulador con el HUD y los modelos 3D
-  // Las camas elevadas son sólidas: las labores se realizan desde el borde.
+  // Camas elevadas transitables con subida automática y marcha cuidadosa.
   const bedObstacles = sceneCoords.plots.map(plot => {
     const visual = farmEnv.cropPlots?.[plot.id];
     const halfX = isGlb ? 6.5 : (visual?.width || 7) / 2 + 0.15;
     const halfZ = isGlb ? 6.5 : (visual?.depth || 7) / 2 + 0.15;
-    return { id: `bed_${plot.id}`, type: 'box', minX: plot.x - halfX, maxX: plot.x + halfX, minZ: plot.z - halfZ, maxZ: plot.z + halfZ, height: 0.3 };
+    return { id: `bed_${plot.id}`, walkable: true, type: 'box', minX: plot.x - halfX, maxX: plot.x + halfX, minZ: plot.z - halfZ, maxZ: plot.z + halfZ, height: 0.3 };
   });
   for (const obstacle of bedObstacles) player.addObstacle(obstacle);
   physicsWorld.setObstacles([...player.obstacles]);
@@ -1436,7 +1436,8 @@ async function bootstrap() {
       const isInMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
       skySystem.autoCycleEnabled = !isInMenu;
       if (!player._isAnyModalOpen()) skySystem.update(delta);
-      hud.setDayPhase(skySystem.phaseName);
+      const clockInfo = skySystem.getClockInfo();
+      hud.setDayPhase(skySystem.phaseName, clockInfo.formatted);
       weatherSystem.update(delta, {
         preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning,
         skySystem

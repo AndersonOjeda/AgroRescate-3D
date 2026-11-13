@@ -131,14 +131,17 @@ describe('SkySystem — Nubes 3D y Ciclo Día-Noche-Día', () => {
     const sky = new SkySystem(fixture);
     sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.02 });
 
-    // Madrugada -> sol bajo al este
+    // Madrugada / Amanecer (06:00) -> sol bajo al este
+    sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.04 });
     sky.update(0.01);
+    expect(sky.getClockInfo().formatted).toBe('06:00');
     const dawnSunY = sky.sunMesh.position.y;
     const dawnSunX = sky.sunMesh.position.x;
 
-    // Mediodía -> sol alto en el cenit
+    // Mediodía (12:00) -> sol alto en el cenit
     sky.setAutoCycle(true, { dayLengthSeconds: 40, startTimeOfDay: 0.38 });
     sky.update(0.01);
+    expect(sky.getClockInfo().formatted).toBe('12:00');
     expect(sky.sunMesh.position.y).toBeGreaterThan(dawnSunY);
     expect(sky.sunMesh.position.x).toBeLessThan(dawnSunX);
     expect(sky.sunMesh.visible).toBe(true);

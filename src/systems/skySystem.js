@@ -124,7 +124,7 @@ export class SkySystem {
   }
 
   _createSun() {
-    const sunGeo = new THREE.IcosahedronGeometry(2.6, 1);
+    const sunGeo = new THREE.IcosahedronGeometry(3.4, 1);
     this.sunMaterial = new THREE.MeshBasicMaterial({
       color: 0xfef08a,
       transparent: true,
@@ -132,14 +132,14 @@ export class SkySystem {
       fog: false
     });
     this.sunMesh = new THREE.Mesh(sunGeo, this.sunMaterial);
-    this.sunMesh.position.set(25, 40, 20);
+    this.sunMesh.position.set(25, 40, -16);
     this.skyGroup.add(this.sunMesh);
 
-    const haloGeo = new THREE.IcosahedronGeometry(3.9, 1);
+    const haloGeo = new THREE.IcosahedronGeometry(5.4, 1);
     this.sunHaloMaterial = new THREE.MeshBasicMaterial({
       color: 0xfde047,
       transparent: true,
-      opacity: 0.26,
+      opacity: 0.30,
       depthWrite: false,
       fog: false
     });
@@ -290,13 +290,53 @@ export class SkySystem {
   }
 
   /**
+   * Convierte timeOfDay (0..1) en hora real del campo (05:00 a 05:00) y ángulo solar astronómico.
+   * 0.04 = 06:00 (amanecer en el Este), 0.38 = 12:00 (cenit), 0.72 = 18:00 (ocaso en el Oeste).
+   */
+  getClockInfo(t = this.timeOfDay) {
+    const norm = ((t % 1) + 1) % 1;
+    let totalHours;
+    if (norm < 0.04) {
+      totalHours = 5 + (norm / 0.04) * 1; // 05:00 -> 06:00
+    } else if (norm < 0.38) {
+      totalHours = 6 + ((norm - 0.04) / 0.34) * 6; // 06:00 -> 12:00
+    } else if (norm < 0.72) {
+      totalHours = 12 + ((norm - 0.38) / 0.34) * 6; // 12:00 -> 18:00
+    } else {
+      totalHours = 18 + ((norm - 0.72) / 0.28) * 11; // 18:00 -> 29:00 (05:00)
+    }
+
+    const wrapped = totalHours % 24;
+    const hours = Math.floor(wrapped);
+    const minutes = Math.floor((wrapped - hours) * 60);
+    const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+    let solarAngleRad;
+    if (norm < 0.04) {
+      solarAngleRad = -0.18 + (norm / 0.04) * 0.18;
+    } else if (norm <= 0.72) {
+      solarAngleRad = ((norm - 0.04) / 0.68) * Math.PI;
+    } else {
+      const nightU = (norm - 0.72) / 0.28;
+      solarAngleRad = Math.PI + nightU * 0.35;
+    }
+
+    return { hours, minutes, formatted, solarAngleRad };
+  }
+
+  /**
    * Aplica iluminación, cielo, sol, luna y estrellas según la hora continua del día (0..1):
-   * - 0.00 .. 0.25: Mañana (amanecer rosado hacia mañana fresca)
-   * - 0.25 .. 0.50: Mediodía (sol cenital brillante)
-   * - 0.50 .. 0.75: Tarde (luz cálida hacia atardecer andino)
-   * - 0.75 .. 1.00: Noche (ocaso hacia noche estrellada y pre-alba)
+   * - 0.00 .. 0.25: Mañana (madrugada/alba -> mañana fresca)
+   * - 0.25 .. 0.50: Mediodía (sol alto hacia el cenit)
+   * - 0.50 .. 0.75: Tarde (descenso hacia el oeste y hora dorada)
+   * - 0.75 .. 1.00: Noche (anochecer, arco lunar y madrugada)
    */
   _applyTimeOfDay(t) {
+    const { solarAngleRad } = this.getClockInfo(t);
+    const sunX = Math.cos(solarAngleRad) * 52;
+    const sunY = Math.sin(solarAngleRad) * 44;
+    const sunZ = -18 + Math.sin(solarAngleRad) * 4;
+
     if (t < 0.25) {
       // MADRUGADA (0.00-0.08) -> MAÑANA (0.08-0.25)
       const u = t / 0.25;
@@ -327,13 +367,10 @@ export class SkySystem {
         0.34 + 0.26 * u,
         0.24 + 0.11 * u
       );
-      const sunX = 46 - 30 * u;
-      const sunY = 4 + 32 * u;
-      const sunZ = 16 + 4 * u;
       if (this.sunLight) {
-        this.sunLight.position.set(sunX, sunY, sunZ);
+        this.sunLight.position.set(sunX * 0.75, Math.max(6, sunY), sunZ);
       }
-      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, Math.min(1, u / 0.18));
+      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, Math.min(1, Math.max(0, (t - 0.02) / 0.08)));
       const nightFade = Math.max(0, 1 - u / 0.28);
       this._setNightVisibility(nightFade * 0.55, nightFade * 0.65);
     } else if (t < 0.50) {
@@ -351,11 +388,8 @@ export class SkySystem {
         0.60 + 0.08 * zenith,
         0.35 + 0.04 * zenith
       );
-      const sunX = 16 - 28 * u;
-      const sunY = 36 + 10 * zenith;
-      const sunZ = 20;
       if (this.sunLight) {
-        this.sunLight.position.set(sunX, sunY, sunZ);
+        this.sunLight.position.set(sunX * 0.75, Math.max(12, sunY), sunZ);
       }
       this._updateSunVisual(sunX, sunY, sunZ, DAY_SUN, 1);
       this._setNightVisibility(0, 0);
@@ -379,13 +413,11 @@ export class SkySystem {
         0.60 - 0.22 * sunsetMix,
         0.35 - 0.11 * sunsetMix
       );
-      const sunX = -12 - 34 * u;
-      const sunY = 36 - 31 * u;
-      const sunZ = 20 - 10 * u;
       if (this.sunLight) {
-        this.sunLight.position.set(sunX, sunY, sunZ);
+        this.sunLight.position.set(sunX * 0.75, Math.max(6, sunY), sunZ);
       }
-      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, 1 - sunsetMix * 0.25);
+      const sunsetFade = t <= 0.72 ? 1 : Math.max(0, 1 - (t - 0.72) / 0.03);
+      this._updateSunVisual(sunX, sunY, sunZ, this._tmpSun, sunsetFade);
       this._setNightVisibility(0, 0);
     } else {
       // ANOCHECER Y NOCHE (0.75 -> 1.00)
@@ -408,7 +440,7 @@ export class SkySystem {
           0.38 - 0.16 * k,
           0.24 - 0.04 * k
         );
-        this._updateSunVisual(-46 - 8 * k, 5 - 12 * k, 10, SUNSET_SUN, Math.max(0, 1 - k * 1.4));
+        this._updateSunVisual(sunX, Math.max(-10, sunY), sunZ, SUNSET_SUN, 0);
         this._setNightVisibility(k, k * 0.95);
       } else if (u < 0.85) {
         this._setEnvironmentColors(
@@ -421,7 +453,7 @@ export class SkySystem {
           0.22,
           0.20
         );
-        this._updateSunVisual(-52, -10, 10, SUNSET_SUN, 0);
+        this._updateSunVisual(-52, -10, sunZ, SUNSET_SUN, 0);
         this._setNightVisibility(1, 0.95);
       } else {
         // Pre-alba preparando la madrugada del siguiente día
@@ -441,15 +473,15 @@ export class SkySystem {
           0.22 + 0.12 * k,
           0.20 + 0.04 * k
         );
-        this._updateSunVisual(48, -4 + 8 * k, 16, DAWN_SUN, k * 0.25);
+        this._updateSunVisual(52, -4, sunZ, DAWN_SUN, 0);
         this._setNightVisibility(1 - k * 0.45, (1 - k * 0.35) * 0.95);
       }
       if (this.sunLight) {
         this.sunLight.position.set(-22, 34, -22);
       }
       if (this.moonMesh) {
-        const moonArc = (u - 0.1) / 0.9;
-        this.moonMesh.position.set(-28 + Math.max(0, moonArc) * 18, 24 + Math.sin(Math.max(0, moonArc) * Math.PI) * 14, -22);
+        const moonArc = Math.max(0, Math.min(1, u)) * Math.PI;
+        this.moonMesh.position.set(Math.cos(moonArc) * 46, Math.max(8, Math.sin(moonArc) * 38), -20);
       }
     }
   }
@@ -623,15 +655,15 @@ export class SkySystem {
 
   _updateSunVisual(x, y, z, color, visibility) {
     if (!this.sunMesh || !this.sunMaterial) return;
-    const weatherFade = 1 - Math.min(0.88, this.weatherOvercast * 0.6 + this.weatherStorminess * 0.45);
+    const weatherFade = 1 - Math.min(0.82, this.weatherOvercast * 0.55 + this.weatherStorminess * 0.40);
     const alpha = THREE.MathUtils.clamp(visibility * weatherFade, 0, 1);
-    this.sunMesh.position.set(x * 1.35, Math.max(-10, y * 1.05), z * 1.35);
+    this.sunMesh.position.set(x, Math.max(-10, y), z);
     this.sunMaterial.color.copy(color);
     this.sunMaterial.opacity = alpha;
     this.sunMesh.visible = alpha > 0.02;
     if (this.sunHaloMaterial) {
       this.sunHaloMaterial.color.copy(color);
-      this.sunHaloMaterial.opacity = alpha * 0.28;
+      this.sunHaloMaterial.opacity = alpha * 0.32;
     }
   }
 
