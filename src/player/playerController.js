@@ -58,6 +58,7 @@ export class PlayerController {
     this._actionTimer = 0;
     this._actionDuration = 0.75;
     this.rig = null;
+    this.hoeToolMesh = null;
 
     // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
     this.cameraMode = 'third-person';
@@ -265,11 +266,16 @@ export class PlayerController {
           this.mixer.update(0);
 
           this.mixer.addEventListener('finished', (event) => {
-            if (event.action === this.animations.action) {
+            if (event.action === this.animations.action || event.action === this.animations.hoe) {
               this._isPlayingAction = false;
+              if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
               this._fadeToAnimation('idle', 0.2);
             }
           });
+
+          if (this.hoeToolMesh && this.rig.bones && this.rig.bones[6]) {
+            this.rig.bones[6].add(this.hoeToolMesh);
+          }
         }
       }
 
@@ -280,7 +286,30 @@ export class PlayerController {
     }
   }
 
+  /**
+   * Conecta una herramienta (como la azada campesina) al antebrazo/mano derecha del personaje.
+   * @param {THREE.Object3D} toolGroup
+   */
+  setHoeTool(toolGroup) {
+    if (this.hoeToolMesh && this.hoeToolMesh.parent) {
+      this.hoeToolMesh.parent.remove(this.hoeToolMesh);
+    }
+    this.hoeToolMesh = toolGroup;
+    this.hoeToolMesh.visible = false;
+
+    if (this.rig && this.rig.bones && this.rig.bones[6]) {
+      this.rig.bones[6].add(this.hoeToolMesh);
+    } else if (this.parts && this.parts.rightArm) {
+      this.parts.rightArm.add(this.hoeToolMesh);
+    } else {
+      this.mesh.add(this.hoeToolMesh);
+    }
+  }
+
   _fadeToAnimation(name, duration = 0.16) {
+    if (this.hoeToolMesh && (name === 'idle' || name === 'walk' || name === 'run')) {
+      this.hoeToolMesh.visible = false;
+    }
     const nextAction = this.animations[name];
     if (!nextAction || this.currentAnimName === name) return;
 
@@ -299,15 +328,17 @@ export class PlayerController {
   }
 
   /**
-   * Reproduce la animación breve de trabajo agrícola (sembrar/regar/cosechar).
+   * Reproduce la animación breve de trabajo agrícola (sembrar/regar/cosechar/labranza).
+   * @param {string} [animName='action'] 'action' | 'hoe'
    * @returns {boolean}
    */
-  playActionAnimation() {
-    this._actionTimer = this._actionDuration;
-    const actionAnim = this.animations.action;
+  playActionAnimation(animName = 'action') {
+    this._actionTimer = animName === 'hoe' ? 1.2 : this._actionDuration;
+    const actionAnim = this.animations[animName] || this.animations.action;
     if (!actionAnim) {
       if (this.parts && this.parts.pelvis) {
         this._isPlayingAction = true;
+        if (animName === 'hoe' && this.hoeToolMesh) this.hoeToolMesh.visible = true;
         return true;
       }
       return false;
@@ -315,8 +346,14 @@ export class PlayerController {
 
     const prevAction = this.activeAction;
     this._isPlayingAction = true;
-    this.currentAnimName = 'action';
+    this.currentAnimName = animName;
     this.activeAction = actionAnim;
+
+    if (animName === 'hoe' && this.hoeToolMesh) {
+      this.hoeToolMesh.visible = true;
+    } else if (this.hoeToolMesh) {
+      this.hoeToolMesh.visible = false;
+    }
 
     actionAnim.enabled = true;
     actionAnim.reset();
@@ -1020,6 +1057,7 @@ export class PlayerController {
 
     if (isMoving && this._isPlayingAction) {
       this._isPlayingAction = false;
+      if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
     }
 
     if (this.mixer) {

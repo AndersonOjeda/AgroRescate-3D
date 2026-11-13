@@ -9,6 +9,8 @@ import { TriggerSystem } from './systems/triggerSystem.js';
 import { ParticleSystem } from './systems/particleSystem.js';
 import { AudioSystem } from './systems/audioSystem.js';
 import { SkySystem } from './systems/skySystem.js';
+import { WeatherSystem } from './systems/weatherSystem.js';
+import { WildlifeSystem } from './systems/wildlifeSystem.js';
 import { InteractionSystem } from './systems/interactionSystem.js';
 import { FarmLoader, collectGlbSceneObstacles } from './world/farmLoader.js';
 import { createNaturalHorizon } from './world/landscapeEnhancer.js';
@@ -49,10 +51,12 @@ async function bootstrap() {
   physicsWorld.createCrate({ id: 'crate_2', x: 13, y: 2.0, z: -6, mass: 5, color: 0xb45309 });
   physicsWorld.createCrate({ id: 'crate_3', x: 14, y: 1.0, z: -6, mass: 5, color: 0xd97706 });
 
-  // 4. Sistemas de Cielo, Partículas y Audio
-  const skySystem = new SkySystem({ scene, sunLight, hemiLight, ambientLight });
+  // 4. Sistemas de Cielo, Clima Atmosférico, Fauna y Audio
   const particleSystem = new ParticleSystem(scene);
   const audioSystem = new AudioSystem(camera);
+  const skySystem = new SkySystem({ scene, sunLight, hemiLight, ambientLight });
+  const weatherSystem = new WeatherSystem({ scene, camera, sunLight, hemiLight, ambientLight, particleSystem, audioSystem });
+  const wildlifeSystem = new WildlifeSystem(scene);
 
   // 5. Triggers e Interacciones
   const triggerSystem = new TriggerSystem();
@@ -103,6 +107,37 @@ async function bootstrap() {
     hud.updateLoadingProgress(percent, msg);
   });
   createNaturalHorizon(scene);
+
+  // Construir herramienta campesina (azada) para el personaje usando mallas del GLB o respaldo low-poly
+  const createHoeTool = (root) => {
+    const group = new THREE.Group();
+    group.name = 'player_hoe_tool';
+    const mango = root?.getObjectByName ? root.getObjectByName('azada_mango') : null;
+    const cabeza = root?.getObjectByName ? root.getObjectByName('azada_cabeza') : null;
+    if (mango && cabeza) {
+      const mClone = mango.clone();
+      const cClone = cabeza.clone();
+      mClone.position.set(0, 0, 0);
+      cClone.position.set(0, 0, 0);
+      group.add(mClone, cClone);
+      group.scale.setScalar(0.7);
+      group.rotation.set(-0.3, 0.4, 0.2);
+      group.position.set(0.05, -0.3, 0.2);
+    } else {
+      const handleMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
+      const metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.4, metalness: 0.5 });
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.0, 6), handleMat);
+      handle.position.y = 0.35;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.025), metalMat);
+      blade.position.set(0, 0.85, 0.03);
+      blade.rotation.x = 0.4;
+      group.add(handle, blade);
+      group.position.set(0.05, -0.3, 0.2);
+      group.rotation.set(-0.3, 0.4, 0.2);
+    }
+    return group;
+  };
+  player.setHoeTool(createHoeTool(farmEnv?.root));
 
   // Vincular las parcelas visuales con el adaptador agrícola (procedural o nodos de etapa en finca.glb)
   if (farmEnv && farmEnv.cropPlots) {
@@ -318,6 +353,9 @@ async function bootstrap() {
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
+  if (initialState.currentWeather?.id) {
+    weatherSystem.setWeather(initialState.currentWeather.id, true);
+  }
 
   // 9. CONFIGURACIÓN DE TRIGGERS
   // A. Trigger Radial: Alrededor de la Bomba de Agua (Vector3.distanceTo)
@@ -599,7 +637,7 @@ async function bootstrap() {
 
           if (!curPlot.isPlanted && !curPlot.isPrepared) {
             // Labranza campesina con animación de azada
-            player.playActionAnimation();
+            player.playActionAnimation('hoe');
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -814,7 +852,7 @@ async function bootstrap() {
   // Eventos de progreso de cultivo, misiones y animaciones
   farmAdapter.on('soilPrepared', ({ result }) => {
     if (result?.success) {
-      player.playActionAnimation();
+      player.playActionAnimation('hoe');
       particleSystem.emitFootstepDust(player.getPosition());
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'soilPrepared' });
@@ -900,6 +938,9 @@ async function bootstrap() {
   farmAdapter.on('dayAdvanced', async ({ result }) => {
     skySystem.triggerDayNightCycle();
     const state = result?.state || (await farmAdapter.getState());
+    if (state?.currentWeather?.id) {
+      weatherSystem.setWeather(state.currentWeather.id);
+    }
     missionManager.handleEvent({ type: 'dayAdvanced', state });
     const p = state?.plots?.[state.activePlotId];
     const ready = p && p.isPlanted && p.daysGrown >= p.daysToMature;
@@ -1057,8 +1098,13 @@ async function bootstrap() {
       // B. Paso de física fija de Cannon-es (world.step(1/60, delta, 3)) y sincronización de matrices
       physicsWorld.step(delta);
 
-      // C. Actualizar atmósfera (nubes + transición noche/día), entorno (molino), gallina guía, multimedia y partículas
+      // C. Actualizar atmósfera (nubes + ciclo día/noche + clima dinámico), fauna (mariposas/abejas/luciérnagas), molino, gallina guía y partículas
       skySystem.update(delta);
+      if (!skySystem.isTransitioning) {
+        weatherSystem.update(delta);
+      }
+      const isNight = skySystem.phaseName === 'Noche';
+      wildlifeSystem.update(delta, isNight);
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
         farmEnv.environment.update(delta);
       }
