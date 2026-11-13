@@ -54,20 +54,20 @@ export const GUIDE_STEPS = [
       'Atajos útiles: R alterna lluvia ambiental y F lanza una caja física donde estés parado.'
     ],
     spokenText:
-      'El día avanza de forma continua entre mañana, mediodía, tarde y noche, y el clima cambia tu finca. Usa la pestaña de Asesor IA cuando quieras que analice tus parcelas en vivo.'
+      'El día avanza de forma continua entre mañana, mediodía, tarde y noche, y el clima cambia tu finca. Mi asesor automático te avisará con viñetas y voz cuando cambie el clima o necesites actuar.'
   },
   {
     id: 'goals',
-    badge: 'Paso 4 · Rudy IA y Comparativa',
-    title: 'Consulta mi Asesor IA y analiza la Sostenibilidad',
-    body: 'Cambia a la pestaña "🧠 Asesor IA" arriba para preguntarme sobre riego, plagas, energía o qué hacer ahora mismo.',
+    badge: 'Paso 4 · Rudy IA Automático',
+    title: 'Recibe viñetas automáticas con voz y analiza la Sostenibilidad',
+    body: 'Rudy ahora funciona en modo automático: te lanza viñetas con recomendaciones de voz según tu modalidad, clima, presupuesto, energía y cultivos.',
     tips: [
       'Cuando mi marcador brille en rojo o ámbar, tengo una alerta urgente sobre tus cultivos.',
       'Abre 📊 Comparativa o 📊 Demo 3 Modos para evaluar rendimiento y ahorro hídrico.',
-      'Pulsa 🐔 Rudy en la barra inferior o acércate a mí con E cuando necesites ayuda.'
+      'Pulsa 🐔 Rudy en la barra inferior o acércate a mí con E para ver el diagnóstico o activar/pausar las viñetas.'
     ],
     spokenText:
-      'Cuando veas mi marcador brillar en ámbar o rojo, acércate para recibir alertas en vivo de mi Asesor I A. Mucho éxito trabajando la tierra.'
+      'Ahora funciono en modo automático: te daré recomendaciones en viñetas con voz según tu modalidad, clima, presupuesto y energía. Mucho éxito trabajando la tierra.'
   }
 ];
 

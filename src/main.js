@@ -97,6 +97,7 @@ async function bootstrap() {
   farmAdapter.simulation.enableRows();
   farmAdapter.setRequirePreparation(true);
   const missionManager = new MissionManager('precision');
+  let victoryShown = false;
   const resultsStore = new ResultsStore(typeof localStorage !== 'undefined' ? localStorage : null);
   const modals = new GameModalsController({
     renderer,
@@ -434,7 +435,7 @@ async function bootstrap() {
         const original = farmEnv.root.getObjectByName(`cultivo_${prefix}_etapa_${stage}`);
         if (original) original.visible = false;
       }
-      const visual = new CropPlot(scene, { id: plot.id, nombre: plot.name, x: plot.x, z: plot.z, width: 12.5, depth: 12.5, filas: 5, columnas: 5 });
+      const visual = new CropPlot(scene, { id: plot.id, nombre: plot.name, x: plot.x, z: plot.z, width: 12.5, depth: 12.5, filas: 5, columnas: index === 2 ? 6 : 5, modo: ['subsistence', 'precision', 'ecological'][index] });
       farmEnv.cropPlots ||= {};
       farmEnv.cropPlots[plot.id] = visual;
       farmAdapter.registerCropPlotVisual(plot.id, visual);
@@ -450,16 +451,16 @@ async function bootstrap() {
   for (const obstacle of bedObstacles) player.addObstacle(obstacle);
   const cropFootprints = sceneCoords.plots.flatMap((plot, plotIndex) => {
     const visual = farmEnv.cropPlots?.[plot.id];
-    const positions = isGlb
+    const positions = !visual?.plants && isGlb
       ? cropCoordinates.filter(c => c.parcela === ['parcela_subsistencia', 'parcela_precision', 'parcela_ecologica'][plotIndex]).flatMap(c => c.posiciones.map(a => ({ x: a[0], z: a[2] })))
       : (visual?.plants || []).map(plant => ({ x: visual.position.x + plant.group.position.x, z: visual.position.z + plant.group.position.z }));
-    return positions.map((position, index) => ({ ...position, plotId: plot.id, index, lastHit: -Infinity }));
+    return positions.map((position, index) => ({ ...position, plotId: plot.id, index: index % (visual?.cols || 5), rowIndex: Math.floor(index / (visual?.cols || 5)), lastHit: -Infinity }));
   });
   const flattenedMaterial = new THREE.MeshLambertMaterial({ color: 0x756334, side: THREE.DoubleSide });
   const flattenedGeometry = new THREE.CircleGeometry(0.23, 7);
   const updateTrampleMarks = state => {
     for (const point of cropFootprints) {
-      const hits = state.plots[point.plotId]?.trampledPlants?.[point.index] || 0;
+      const hits = state.plots[point.plotId]?.rows?.[point.rowIndex]?.trampledPlants?.[point.index] || 0;
       if (hits && !point.mark) {
         point.mark = new THREE.Mesh(flattenedGeometry, flattenedMaterial);
         point.mark.rotation.x = -Math.PI / 2;
@@ -471,7 +472,7 @@ async function bootstrap() {
   };
   const workTarget = plot => {
     const position = player.getPosition();
-    return cropFootprints.filter(p => p.plotId === plot.id).sort((a, b) => Math.hypot(a.x - position.x, a.z - position.z) - Math.hypot(b.x - position.x, b.z - position.z))[0] || plot;
+    return cropFootprints.filter(p => p.plotId === plot.id && p.rowIndex === farmAdapter.simulation.plots[plot.id].rowIndex).sort((a, b) => Math.hypot(a.x - position.x, a.z - position.z) - Math.hypot(b.x - position.x, b.z - position.z))[0] || plot;
   };
   physicsWorld.setObstacles([...player.obstacles]);
   player._resolvePenetration();
@@ -827,21 +828,21 @@ async function bootstrap() {
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('hoe');
+            player.playActionAnimation('hoe', info.holdDuration);
           } else if (info.mode === 'plant') {
             if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Demasiado cansado para sembrar! Descansa en la Casa Rural para recuperar energía.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('plant');
+            player.playActionAnimation('plant', info.holdDuration);
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
             if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Rural.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('harvest');
+            player.playActionAnimation('harvest', info.holdDuration);
           }
         },
         onHoldCancel: () => {
@@ -1036,6 +1037,25 @@ async function bootstrap() {
     );
   };
 
+  let rudyTalkTimeout = null;
+  let lastAutoRudyAt = 0;
+  let autoRudyAccumulator = 18; // dispara la primera viñeta pocos segundos después de iniciar
+
+  const maybeTriggerAutoRudyBubble = ({ force = false, speak = true } = {}) => {
+    if (!force && !hud.autoRudyEnabled) return null;
+    const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+    if (inMenu || hud.isChickenGuideOpen()) return null;
+    const now = performance.now();
+    if (!force && now - lastAutoRudyAt < 18000) return null;
+    lastAutoRudyAt = now;
+    autoRudyAccumulator = 0;
+    const bubble = hud.triggerAutoRudyBubble({ force, speak });
+    if (bubble) {
+      guideChicken.setAlertState(bubble.urgency || 'normal');
+    }
+    return bubble;
+  };
+
   hud.onRudySpeak = (spokenText) => {
     guideChicken.setTalked(true);
     guideChicken.setTalking(true);
@@ -1043,6 +1063,12 @@ async function bootstrap() {
     if (spokenText) {
       audioSystem.speakGuideText(spokenText);
     }
+    if (rudyTalkTimeout) clearTimeout(rudyTalkTimeout);
+    rudyTalkTimeout = setTimeout(() => {
+      if (!hud.isChickenGuideOpen()) {
+        guideChicken.setTalking(false);
+      }
+    }, 3600);
   };
 
   hud.onChickenVoiceToggle = (voiceEnabled, step) => {
@@ -1161,6 +1187,13 @@ async function bootstrap() {
 
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
   farmAdapter.on('stateChange', ({ state, action }) => {
+    if (action === 'initialize') { victoryShown = false; document.getElementById('farm-victory')?.classList.add('hidden'); }
+    if (state.goal?.complete && !victoryShown) {
+      victoryShown = true;
+      player.unlock();
+      document.getElementById('farm-victory')?.classList.remove('hidden');
+      audioSystem.playSuccess();
+    }
     const goal = document.getElementById('farm-goal');
     if (goal && state.goal) goal.textContent = state.goal.complete ? '🏆 ¡Finca próspera! Meta cumplida. Puedes seguir cultivando o consultar Resultados.' : `Meta: $${Math.round(state.goal.current).toLocaleString('es-CO')} / $${state.goal.target.toLocaleString('es-CO')} COP`;
     const goalBar = document.getElementById('farm-goal-progress');
@@ -1297,6 +1330,8 @@ async function bootstrap() {
     guideChicken.setAlertState(rudyAnalysis.urgency);
     if (hud.isChickenGuideOpen() && hud.chickenGuideTab === 'ai') {
       hud.refreshRudyAI({ speak: false });
+    } else {
+      maybeTriggerAutoRudyBubble({ force: rudyAnalysis.urgency === 'critical', speak: true });
     }
     missionManager.handleEvent({ type: 'dayAdvanced', state });
     const p = state?.plots?.[state.activePlotId];
@@ -1313,6 +1348,10 @@ async function bootstrap() {
   });
 
   // 11. BINDINGS DE BOTONES DEL HUD
+  document.getElementById('btn-victory-continue')?.addEventListener('click', () => {
+    document.getElementById('farm-victory').classList.add('hidden');
+    player.requestLock();
+  });
   // Selector de modo agrícola (resetea misiones al cambiar desde el HUD)
   if (hud.modeSelector) {
     hud.modeSelector.addEventListener('change', async (e) => {
@@ -1329,6 +1368,7 @@ async function bootstrap() {
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
       hud.showToast(`Modo cambiado a: ${mode.toUpperCase()}`, 'info');
       audioSystem.playSuccess();
+      setTimeout(() => maybeTriggerAutoRudyBubble({ force: true, speak: true }), 900);
     });
   }
 
@@ -1477,7 +1517,9 @@ async function bootstrap() {
         for (const bed of bedObstacles) {
           if (player.position.x >= bed.minX && player.position.x <= bed.maxX && player.position.z >= bed.minZ && player.position.z <= bed.maxZ) {
             const plotId = bed.id.replace('bed_', '');
-            const row = Math.max(0, Math.min(4, Math.floor((player.position.x - bed.minX) / (bed.maxX - bed.minX) * 5)));
+            const count = farmAdapter.simulation.plotRows[plotId].length;
+            const visual = farmEnv.cropPlots[plotId];
+            const row = Math.max(0, Math.min(count - 1, Math.round((player.position.z - visual.position.z + visual.depth / 2) / (visual.depth / (count + 1)) - 1)));
             if (farmAdapter.simulation.plots[plotId].rowIndex !== row) {
               farmAdapter.simulation.selectRow(plotId, row);
               const state = farmAdapter.simulation.getState();
@@ -1490,7 +1532,7 @@ async function bootstrap() {
       const contact = findTrampledPlant(cropFootprints, previousFootPosition, player.position);
       if (contact && performance.now() - contact.lastHit > 900 && !interactionSystem.isHolding) {
         contact.lastHit = performance.now();
-        farmAdapter.trampleCrop(contact.plotId, contact.index).then(result => {
+        farmAdapter.trampleCrop(contact.plotId, contact.index, contact.rowIndex).then(result => {
           if (result.success && performance.now() - (player._lastTrampleNotice || 0) > 3500) {
             player._lastTrampleNotice = performance.now();
             hud.showToast(result.message, 'warning', 3200);
@@ -1522,6 +1564,10 @@ async function bootstrap() {
         farmEnv.environment.update(delta);
       }
       guideChicken.update(delta, pPos);
+      autoRudyAccumulator += delta;
+      if (autoRudyAccumulator >= 22) {
+        maybeTriggerAutoRudyBubble({ force: false, speak: true });
+      }
       if (guideOpenedByProximity && hud.isChickenGuideOpen()) {
         const dx = pPos.x - guideChicken.position.x;
         const dz = pPos.z - guideChicken.position.z;

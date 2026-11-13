@@ -792,25 +792,144 @@
   background: rgba(16, 185, 129, 0.28);
 }
 
-.agro-guide-ai-form {
+.agro-guide-auto-status {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: #cbd5e1;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.agro-guide-auto-controls {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Viñeta automática de Rudy IA (con voz) */
+.agro-rudy-bubble {
+  position: absolute;
+  right: 18px;
+  bottom: 78px;
+  z-index: 33;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(14px);
+  border: 2px solid rgba(16, 185, 129, 0.7);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: #f8fafc;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.55), 0 0 22px rgba(16, 185, 129, 0.18);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  animation: rudyBubblePop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.agro-rudy-bubble.hidden {
+  display: none;
+}
+
+.agro-rudy-bubble.urgency-warning {
+  border-color: rgba(245, 158, 11, 0.85);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.58), 0 0 24px rgba(245, 158, 11, 0.24);
+}
+
+.agro-rudy-bubble.urgency-critical {
+  border-color: rgba(239, 68, 68, 0.9);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.62), 0 0 28px rgba(239, 68, 68, 0.28);
+}
+
+.agro-rudy-bubble-head {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
-.agro-guide-ai-input {
-  flex: 1;
-  min-width: 0;
-  background: rgba(2, 6, 23, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 9px;
-  padding: 7px 10px;
-  color: #f8fafc;
+.agro-rudy-bubble-speaker {
   font-size: 0.78rem;
+  font-weight: 800;
+  color: #fbbf24;
+  white-space: nowrap;
 }
 
-.agro-guide-ai-input:focus {
-  outline: none;
-  border-color: rgba(245, 158, 11, 0.75);
+.agro-rudy-bubble-cat {
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agro-rudy-bubble-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agro-rudy-bubble-icon-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.agro-rudy-bubble-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.agro-rudy-bubble-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.agro-rudy-bubble-msg {
+  margin: 0;
+  font-size: 0.79rem;
+  line-height: 1.4;
+  color: #e2e8f0;
+}
+
+.agro-rudy-bubble-tail {
+  position: absolute;
+  right: 28px;
+  bottom: -10px;
+  width: 16px;
+  height: 16px;
+  background: rgba(15, 23, 42, 0.94);
+  border-right: 2px solid inherit;
+  border-bottom: 2px solid inherit;
+  border-color: inherit;
+  transform: rotate(45deg);
+}
+
+@keyframes rudyBubblePop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 900px), (pointer: coarse) {

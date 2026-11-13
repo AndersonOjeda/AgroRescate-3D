@@ -14,7 +14,7 @@ import {
 } from '../simulation/farmSimulation.js';
 import { CROP_STAGES, EDUCATIONAL_DISCLAIMER, SIMULATION_MODES, formatCOP } from '../simulation/constants.js';
 import { GUIDE_STEPS } from '../world/guideChicken.js';
-import { analyzeFarmWithRudyAI, askRudyAI, RUDY_QUICK_QUESTIONS } from '../ai/rudyAdvisor.js';
+import { analyzeFarmWithRudyAI, askRudyAI, generateAutoRudyBubble } from '../ai/rudyAdvisor.js';
 
 const LIFECYCLE_STEPS = [
   { key: CROP_STAGES.UNPLANTED, label: 'Sin sembrar' },
@@ -58,11 +58,16 @@ export class HUD {
     this.chickenGuideIndex = 0;
     this.chickenGuideTab = 'guide';
     this.chickenVoiceEnabled = true;
+    this.autoRudyEnabled = true;
     this.currentDayPhase = 'Mañana';
     this.onChickenGuideStepChange = null;
     this.onChickenGuideClose = null;
     this.onChickenVoiceToggle = null;
+    this.onAutoRudyToggle = null;
     this.onRudySpeak = null;
+    this.onRudyBubbleShow = null;
+    this._rudyBubbleTimer = null;
+    this._rudyRecentKeys = [];
     this.onPromptTap = options.onPromptTap || null;
 
     if (!this.doc) return;
@@ -483,10 +488,15 @@ export class HUD {
   }
 
   destroy() {
+    if (this._rudyBubbleTimer) {
+      clearTimeout(this._rudyBubbleTimer);
+      this._rudyBubbleTimer = null;
+    }
     if (this.dockEl?.parentNode) this.dockEl.parentNode.removeChild(this.dockEl);
     if (this.harvestCardEl?.parentNode) this.harvestCardEl.parentNode.removeChild(this.harvestCardEl);
     if (this.demoModal?.parentNode) this.demoModal.parentNode.removeChild(this.demoModal);
     if (this.guideCardEl?.parentNode) this.guideCardEl.parentNode.removeChild(this.guideCardEl);
+    if (this.rudyBubbleEl?.parentNode) this.rudyBubbleEl.parentNode.removeChild(this.rudyBubbleEl);
   }
 
   _setupHelpModal() {
@@ -875,6 +885,7 @@ export class HUD {
     this.harvestCardEl = harvestCard;
     this.demoModal = demoModal;
     this._mountChickenGuide(host);
+    this._mountRudyBubble(host);
 
     this.panelRefs = {
       toggleBtn,
@@ -961,7 +972,7 @@ export class HUD {
     tabAiBtn.type = 'button';
     tabAiBtn.id = 'agro-guide-tab-ai';
     tabAiBtn.className = 'agro-guide-tab';
-    tabAiBtn.textContent = '🧠 Asesor IA (En vivo)';
+    tabAiBtn.textContent = '🤖 Asesor Automático';
     tabAiBtn.addEventListener('click', () => this.setChickenGuideTab('ai'));
 
     tabs.appendChild(tabGuideBtn);
@@ -983,50 +994,35 @@ export class HUD {
     aiBox.id = 'agro-guide-ai-box';
     aiBox.className = 'agro-guide-ai-box hidden';
 
-    const chips = d.createElement('div');
-    chips.className = 'agro-guide-ai-chips';
-    for (const q of RUDY_QUICK_QUESTIONS) {
-      const chip = d.createElement('button');
-      chip.type = 'button';
-      chip.className = 'agro-guide-chip';
-      chip.textContent = q.label;
-      chip.addEventListener('click', () => this.askRudy(q.query));
-      chips.appendChild(chip);
-    }
+    const autoStatus = d.createElement('p');
+    autoStatus.className = 'agro-guide-auto-status';
+    autoStatus.textContent =
+      'Rudy analiza en vivo tu modo agrícola, clima, presupuesto, energía y parcelas para darte recomendaciones en viñetas con voz.';
 
-    const aiForm = d.createElement('form');
-    aiForm.className = 'agro-guide-ai-form';
-    const aiInput = d.createElement('input');
-    aiInput.type = 'text';
-    aiInput.id = 'agro-guide-ai-input';
-    aiInput.className = 'agro-guide-ai-input';
-    aiInput.placeholder = 'Pregúntale a Rudy (ej. riego, plagas, energía, modos)…';
-    aiInput.ariaLabel = 'Pregunta para Rudy IA';
-    // Evita que WASD o E disparen controles del juego mientras se escribe
-    aiInput.addEventListener('keydown', (e) => e.stopPropagation());
-    aiInput.addEventListener('keyup', (e) => e.stopPropagation());
+    const autoControls = d.createElement('div');
+    autoControls.className = 'agro-guide-auto-controls';
 
-    const aiSubmit = d.createElement('button');
-    aiSubmit.type = 'submit';
-    aiSubmit.id = 'agro-guide-ai-submit';
-    aiSubmit.className = 'agro-guide-btn primary';
-    aiSubmit.textContent = 'Preguntar';
+    const autoToggleBtn = d.createElement('button');
+    autoToggleBtn.type = 'button';
+    autoToggleBtn.id = 'agro-guide-auto-toggle';
+    autoToggleBtn.className = 'agro-guide-btn voice-active';
+    autoToggleBtn.textContent = '🤖 Viñetas Auto: ON';
+    autoToggleBtn.addEventListener('click', () => this.toggleAutoRudy());
 
-    aiForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const question = aiInput.value.trim();
-      if (!question) {
-        this.refreshRudyAI({ speak: true });
-        return;
-      }
-      this.askRudy(question);
-      aiInput.value = '';
+    const autoNowBtn = d.createElement('button');
+    autoNowBtn.type = 'button';
+    autoNowBtn.id = 'agro-guide-auto-now';
+    autoNowBtn.className = 'agro-guide-btn primary';
+    autoNowBtn.textContent = '💬 Recomendar ahora';
+    autoNowBtn.addEventListener('click', () => {
+      this.refreshRudyAI({ speak: false });
+      this.triggerAutoRudyBubble({ force: true, speak: true });
     });
 
-    aiForm.appendChild(aiInput);
-    aiForm.appendChild(aiSubmit);
-    aiBox.appendChild(chips);
-    aiBox.appendChild(aiForm);
+    autoControls.appendChild(autoToggleBtn);
+    autoControls.appendChild(autoNowBtn);
+    aiBox.appendChild(autoStatus);
+    aiBox.appendChild(autoControls);
 
     const actions = d.createElement('div');
     actions.className = 'agro-guide-actions';
@@ -1088,13 +1084,149 @@ export class HUD {
       body,
       tips,
       aiBox,
-      aiInput,
+      autoToggleBtn,
+      autoNowBtn,
       voiceBtn,
       prevBtn,
       nextBtn,
       nav
     };
     this._renderChickenGuideStep();
+  }
+
+  _mountRudyBubble(host) {
+    const d = this.doc;
+    const bubble = d.createElement('aside');
+    bubble.id = 'agro-rudy-bubble';
+    bubble.className = 'agro-rudy-bubble hidden';
+    bubble.setAttribute?.('role', 'status');
+    bubble.setAttribute?.('aria-live', 'polite');
+
+    const head = d.createElement('div');
+    head.className = 'agro-rudy-bubble-head';
+
+    const speaker = d.createElement('div');
+    speaker.className = 'agro-rudy-bubble-speaker';
+    speaker.textContent = '🐔 Rudy IA';
+
+    const category = d.createElement('span');
+    category.id = 'agro-rudy-bubble-category';
+    category.className = 'agro-rudy-bubble-cat';
+    category.textContent = '🌱 Consejo';
+
+    const actions = d.createElement('div');
+    actions.className = 'agro-rudy-bubble-actions';
+
+    const voiceIconBtn = d.createElement('button');
+    voiceIconBtn.type = 'button';
+    voiceIconBtn.id = 'agro-rudy-bubble-voice';
+    voiceIconBtn.className = 'agro-rudy-bubble-icon-btn';
+    voiceIconBtn.textContent = this.chickenVoiceEnabled ? '🔊' : '🔇';
+    voiceIconBtn.title = 'Activar/silenciar voz de Rudy';
+    voiceIconBtn.addEventListener('click', () => this.toggleChickenVoice());
+
+    const closeBtn = d.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'agro-rudy-bubble-close';
+    closeBtn.className = 'agro-rudy-bubble-icon-btn';
+    closeBtn.textContent = '×';
+    closeBtn.title = 'Ocultar viñeta';
+    closeBtn.addEventListener('click', () => this.hideRudyBubble());
+
+    actions.appendChild(voiceIconBtn);
+    actions.appendChild(closeBtn);
+    head.appendChild(speaker);
+    head.appendChild(category);
+    head.appendChild(actions);
+
+    const title = d.createElement('div');
+    title.id = 'agro-rudy-bubble-title';
+    title.className = 'agro-rudy-bubble-title';
+
+    const msg = d.createElement('p');
+    msg.id = 'agro-rudy-bubble-msg';
+    msg.className = 'agro-rudy-bubble-msg';
+
+    const tail = d.createElement('div');
+    tail.className = 'agro-rudy-bubble-tail';
+
+    bubble.appendChild(head);
+    bubble.appendChild(title);
+    bubble.appendChild(msg);
+    bubble.appendChild(tail);
+    host.appendChild(bubble);
+
+    this.rudyBubbleEl = bubble;
+    this.rudyBubbleRefs = { category, title, msg, voiceIconBtn };
+  }
+
+  toggleAutoRudy(forceState) {
+    this.autoRudyEnabled = typeof forceState === 'boolean' ? forceState : !this.autoRudyEnabled;
+    if (this.guideRefs?.autoToggleBtn) {
+      this.guideRefs.autoToggleBtn.textContent = this.autoRudyEnabled
+        ? '🤖 Viñetas Auto: ON'
+        : '⏸️ Viñetas Auto: OFF';
+      this.guideRefs.autoToggleBtn.classList.toggle('voice-active', this.autoRudyEnabled);
+    }
+    if (!this.autoRudyEnabled) {
+      this.hideRudyBubble();
+    }
+    if (typeof this.onAutoRudyToggle === 'function') {
+      this.onAutoRudyToggle(this.autoRudyEnabled);
+    }
+    return this.autoRudyEnabled;
+  }
+
+  triggerAutoRudyBubble(options = {}) {
+    if (!options.force && !this.autoRudyEnabled) return null;
+    const bubble = generateAutoRudyBubble(this.lastState, this.currentDayPhase, {
+      recentKeys: this._rudyRecentKeys
+    });
+    if (!bubble) return null;
+
+    this._rudyRecentKeys.push(bubble.key);
+    if (this._rudyRecentKeys.length > 5) {
+      this._rudyRecentKeys.shift();
+    }
+    this.showRudyBubble(bubble, options);
+    return bubble;
+  }
+
+  showRudyBubble(bubble, options = {}) {
+    if (!this.rudyBubbleEl || !this.rudyBubbleRefs || !bubble) return;
+    const { category, title, msg, voiceIconBtn } = this.rudyBubbleRefs;
+    category.textContent = bubble.badge ? `${bubble.category} · ${bubble.badge}` : bubble.category || '🐔 Rudy';
+    title.textContent = bubble.title || '';
+    msg.textContent = bubble.message || '';
+    voiceIconBtn.textContent = this.chickenVoiceEnabled ? '🔊' : '🔇';
+
+    this.rudyBubbleEl.classList.remove('hidden', 'urgency-normal', 'urgency-warning', 'urgency-critical');
+    this.rudyBubbleEl.classList.add(`urgency-${bubble.urgency || 'normal'}`);
+
+    if (this._rudyBubbleTimer) {
+      clearTimeout(this._rudyBubbleTimer);
+    }
+    const durationMs = options.durationMs ?? 9000;
+    this._rudyBubbleTimer = setTimeout(() => {
+      this.hideRudyBubble();
+    }, durationMs);
+
+    if (options.speak !== false && this.chickenVoiceEnabled && bubble.spokenText && typeof this.onRudySpeak === 'function') {
+      this.onRudySpeak(bubble.spokenText);
+    }
+    if (typeof this.onRudyBubbleShow === 'function') {
+      this.onRudyBubbleShow(bubble);
+    }
+  }
+
+  hideRudyBubble() {
+    if (this._rudyBubbleTimer) {
+      clearTimeout(this._rudyBubbleTimer);
+      this._rudyBubbleTimer = null;
+    }
+    if (this.rudyBubbleEl) {
+      this.rudyBubbleEl.classList.add('hidden');
+    }
   }
 
   isChickenGuideOpen() {
@@ -1231,6 +1363,9 @@ export class HUD {
     if (this.guideRefs?.voiceBtn) {
       this.guideRefs.voiceBtn.textContent = this.chickenVoiceEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
       this.guideRefs.voiceBtn.classList.toggle('voice-active', this.chickenVoiceEnabled);
+    }
+    if (this.rudyBubbleRefs?.voiceIconBtn) {
+      this.rudyBubbleRefs.voiceIconBtn.textContent = this.chickenVoiceEnabled ? '🔊' : '🔇';
     }
     const step = this.chickenGuideSteps[this.chickenGuideIndex];
     if (typeof this.onChickenVoiceToggle === 'function') {

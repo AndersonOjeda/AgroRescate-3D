@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFarmWithRudyAI, askRudyAI, RUDY_QUICK_QUESTIONS } from '../src/ai/rudyAdvisor.js';
+import { analyzeFarmWithRudyAI, askRudyAI, generateAutoRudyBubble, RUDY_QUICK_QUESTIONS } from '../src/ai/rudyAdvisor.js';
 import { GuideChicken, GUIDE_STEPS } from '../src/world/guideChicken.js';
 
 function makeMockState(overrides = {}) {
@@ -120,5 +120,36 @@ describe('Rudy IA — Asesor Agronómico', () => {
     expect(chicken.celebrateTimer).toBeGreaterThan(0);
     chicken.update(0.1, { x: 1, z: 1 });
     expect(chicken.visualPivot.position.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it('genera viñetas automáticas con voz según modo, clima, presupuesto y energía, rotando sin repetir', () => {
+    const lowBudgetWeatherState = makeMockState({
+      mode: 'PRECISION',
+      budget: 8500,
+      farmerEnergy: 35,
+      currentWeather: { id: 'rainy', name: 'Lluvioso', description: 'Lluvia constante' }
+    });
+
+    const first = generateAutoRudyBubble(lowBudgetWeatherState, 'Tarde');
+    expect(first.key).toBe('energy:low:Tarde');
+    expect(first.spokenText).toContain('35 por ciento');
+
+    const second = generateAutoRudyBubble(lowBudgetWeatherState, 'Tarde', {
+      recentKeys: [first.key]
+    });
+    expect(second.key).toBe('weather:rainy');
+    expect(second.category).toContain('Clima');
+
+    const third = generateAutoRudyBubble(lowBudgetWeatherState, 'Tarde', {
+      recentKeys: [first.key, second.key]
+    });
+    expect(third.key).toBe('budget:low');
+    expect(third.category).toContain('Presupuesto');
+
+    const fourth = generateAutoRudyBubble(lowBudgetWeatherState, 'Tarde', {
+      recentKeys: [first.key, second.key, third.key]
+    });
+    expect(fourth.key).toBe('mode:PRECISION');
+    expect(fourth.message).toContain('Precisión IoT');
   });
 });
