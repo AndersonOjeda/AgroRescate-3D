@@ -54,7 +54,7 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
     expect(rig).toBeTruthy();
     expect(rig.bones.length).toBe(11);
     expect(rig.skinnedMesh.isSkinnedMesh).toBe(true);
-    expect(Object.keys(rig.actions)).toEqual(['idle', 'walk', 'run', 'action', 'hoe']);
+    expect(Object.keys(rig.actions)).toEqual(['idle', 'walk', 'run', 'action', 'hoe', 'plant', 'harvest', 'tired']);
 
     const weights = rig.skinnedMesh.geometry.attributes.skinWeight;
     for (let i = 0; i < weights.count; i++) {
@@ -226,5 +226,49 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
     expect(player._cameraShake).toBeCloseTo(0.06, 3);
     player.update(0.1);
     expect(player._cameraShake).toBeLessThan(0.06);
+  });
+
+  it('la fatiga ralentiza la faena, la marcha y dispara la pose de agotamiento', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200);
+    const player = new PlayerController(camera, null, scene, { autoLoad: false });
+
+    player.setFatigueFromEnergy(100);
+    expect(player.fatigue).toBe(0);
+    expect(player.getEffortMultiplier()).toBe(1);
+
+    player.setFatigueFromEnergy(10);
+    expect(player.fatigue).toBeGreaterThan(0.8);
+    expect(player.getEffortMultiplier()).toBeGreaterThan(1.25);
+
+    // Siembra más lenta por cansancio
+    player.playActionAnimation('plant');
+    expect(player._actionDuration).toBeGreaterThan(1.40);
+
+    // Al confirmarse la faena con poca energía queda pendiente la pose de agotamiento
+    expect(player.onLaborCompleted()).toBe(true);
+    player.update(player._actionDuration + 0.01);
+    expect(player.currentAnimName).toBe('tired');
+
+    // Caminar lo cancela
+    player.keys.forward = true;
+    player.update(0.05);
+    expect(player._isPlayingAction).toBe(false);
+  });
+
+  it('el rig GLB incluye clips realistas de siembra, cosecha y agotamiento', () => {
+    const { root } = createHumanoidMockScene();
+    prepareFarmerGlbModel(root, 2.1);
+    const rig = applyProceduralFarmerRig(root);
+    expect(rig.clips.plant.duration).toBeCloseTo(1.40, 2);
+    expect(rig.clips.harvest.duration).toBeCloseTo(1.60, 2);
+    expect(rig.clips.tired.duration).toBeCloseTo(2.40, 2);
+
+    // En la siembra el campesino se arrodilla (cadera baja)
+    const hips = rig.bones.find((b) => b.name === 'hips');
+    const restY = hips.position.y;
+    rig.actions.plant.play();
+    rig.mixer.update(0.45);
+    expect(hips.position.y).toBeLessThan(restY * 0.6);
   });
 });

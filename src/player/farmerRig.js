@@ -668,12 +668,372 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
     ])
   ]);
 
+  // 6. PLANT / SIEMBRA (1.40s): siembra a chuzo y mano, como se hace en la ladera colombiana.
+  //    - Rodilla derecha al suelo, pierna izquierda adelantada (postura de siembra en surco).
+  //    - Mano izquierda sostiene el morral/costal de semilla contra el vientre.
+  //    - Mano derecha abre el hueco (1er toque), deposita la semilla (2do toque) y tapa con la palma.
+  //    - Al final el campesino se endereza con un estirón de espalda (dolor lumbar real de la faena).
+  const plantT = [0, 0.25, 0.45, 0.62, 0.80, 0.98, 1.18, 1.40];
+  const plantClip = new THREE.AnimationClip('plant', 1.40, [
+    makePosTrack('hips', plantT, hipsRestPosition, [
+      [0, 0, 0],
+      [0, -0.19 * height, 0.02 * height],
+      [0, -0.21 * height, 0.03 * height],
+      [0, -0.20 * height, 0.03 * height],
+      [0, -0.21 * height, 0.03 * height],
+      [0, -0.20 * height, 0.02 * height],
+      [0, -0.04 * height, 0],
+      [0, 0, 0]
+    ]),
+    makeQuatTrack('spine', plantT, [
+      [0.02, 0, 0],
+      [0.55, 0.05, 0],
+      [0.70, 0.10, -0.04],
+      [0.62, 0.08, 0],
+      [0.72, 0.12, -0.04],
+      [0.60, 0.06, 0],
+      [-0.16, 0, 0],      // estirón de espalda adolorida
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('head', plantT, [
+      [0.02, 0, 0],
+      [0.38, 0, 0],
+      [0.48, 0.06, 0],
+      [0.42, 0, 0],
+      [0.50, 0.06, 0],
+      [0.40, 0, 0],
+      [-0.22, 0, 0],      // mirada al cielo al enderezarse
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('leftThigh', plantT, [
+      [-0.03, 0, 0.02],
+      [-1.05, 0, 0.08],
+      [-1.10, 0, 0.08],
+      [-1.08, 0, 0.08],
+      [-1.10, 0, 0.08],
+      [-1.05, 0, 0.08],
+      [-0.25, 0, 0.03],
+      [-0.03, 0, 0.02]
+    ]),
+    makeQuatTrack('leftShin', plantT, [
+      [0.06, 0, 0],
+      [1.25, 0, 0],
+      [1.32, 0, 0],
+      [1.30, 0, 0],
+      [1.32, 0, 0],
+      [1.25, 0, 0],
+      [0.30, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    makeQuatTrack('rightThigh', plantT, [
+      [-0.03, 0, -0.02],
+      [-0.15, 0, -0.04],
+      [-0.12, 0, -0.04],
+      [-0.12, 0, -0.04],
+      [-0.12, 0, -0.04],
+      [-0.15, 0, -0.04],
+      [-0.08, 0, -0.02],
+      [-0.03, 0, -0.02]
+    ]),
+    makeQuatTrack('rightShin', plantT, [
+      [0.06, 0, 0],
+      [1.55, 0, 0],      // rodilla al suelo
+      [1.62, 0, 0],
+      [1.60, 0, 0],
+      [1.62, 0, 0],
+      [1.55, 0, 0],
+      [0.35, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    // Brazo derecho: abre hueco, deposita semilla, tapa con la palma
+    makeQuatTrack('rightUpperArm', plantT, [
+      [-0.04, 0, 1.11],
+      [-0.85, 0.10, 0.85],
+      [-1.25, 0, 0.78],   // toque 1: abrir hueco
+      [-0.80, 0.15, 0.88],
+      [-1.30, 0, 0.76],   // toque 2: depositar semilla
+      [-1.10, -0.10, 0.82], // tapar con la palma
+      [-0.30, 0, 1.05],
+      [-0.04, 0, 1.11]
+    ]),
+    makeQuatTrack('rightForeArm', plantT, [
+      [0, 0.32, 0],
+      [0, 0.95, 0],
+      [0, 0.35, 0],
+      [0, 0.90, 0],
+      [0, 0.30, 0],
+      [0, 0.55, 0],
+      [0, 0.45, 0],
+      [0, 0.32, 0]
+    ]),
+    // Brazo izquierdo: sostiene el costal de semillas contra el vientre
+    makeQuatTrack('leftUpperArm', plantT, [
+      [-0.04, 0, -1.11],
+      [-0.55, 0, -0.95],
+      [-0.60, 0, -0.95],
+      [-0.58, 0, -0.95],
+      [-0.60, 0, -0.95],
+      [-0.55, 0, -0.95],
+      [-0.20, 0, -1.05],
+      [-0.04, 0, -1.11]
+    ]),
+    makeQuatTrack('leftForeArm', plantT, [
+      [0, -0.32, 0],
+      [0, -1.35, 0],
+      [0, -1.40, 0],
+      [0, -1.38, 0],
+      [0, -1.40, 0],
+      [0, -1.35, 0],
+      [0, -0.60, 0],
+      [0, -0.32, 0]
+    ])
+  ]);
+
+  // 7. HARVEST / COSECHA (1.60s): arrancar y echar al costal/canasto a la espalda.
+  //    - Agacharse, agarrar la mata con ambas manos.
+  //    - Jalón con temblor de esfuerzo (la raíz se resiste).
+  //    - Extensión de espalda para arrancar y giro de tronco para echar al canasto.
+  const harvT = [0, 0.30, 0.45, 0.55, 0.72, 0.90, 1.10, 1.32, 1.60];
+  const harvestClip = new THREE.AnimationClip('harvest', 1.60, [
+    makePosTrack('hips', harvT, hipsRestPosition, [
+      [0, 0, 0],
+      [0, -0.17 * height, 0.01 * height],
+      [0, -0.18 * height, 0],
+      [0, -0.17 * height, 0],   // temblor de esfuerzo
+      [0, -0.18 * height, 0],
+      [0, -0.06 * height, -0.01 * height], // arranque
+      [0.01 * height, 0.01 * height, 0],
+      [0, -0.02 * height, 0],
+      [0, 0, 0]
+    ]),
+    makeQuatTrack('spine', harvT, [
+      [0.02, 0, 0],
+      [0.80, 0, 0],
+      [0.74, 0.03, 0],
+      [0.80, -0.03, 0],
+      [0.74, 0.03, 0],
+      [0.25, 0, 0],
+      [-0.05, 0.55, -0.06],  // giro para echar al canasto
+      [0.10, 0.20, 0],
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('head', harvT, [
+      [0.02, 0, 0],
+      [0.30, 0, 0],
+      [0.20, 0, 0],
+      [0.28, 0, 0],
+      [0.18, 0, 0],
+      [0.05, 0, 0],
+      [-0.05, 0.40, 0],
+      [0.02, 0.10, 0],
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('leftThigh', harvT, [
+      [-0.03, 0, 0.02],
+      [-0.75, 0, 0.10],
+      [-0.78, 0, 0.10],
+      [-0.75, 0, 0.10],
+      [-0.78, 0, 0.10],
+      [-0.30, 0, 0.06],
+      [-0.08, 0, 0.04],
+      [-0.12, 0, 0.03],
+      [-0.03, 0, 0.02]
+    ]),
+    makeQuatTrack('leftShin', harvT, [
+      [0.06, 0, 0],
+      [1.20, 0, 0],
+      [1.24, 0, 0],
+      [1.20, 0, 0],
+      [1.24, 0, 0],
+      [0.50, 0, 0],
+      [0.10, 0, 0],
+      [0.18, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    makeQuatTrack('rightThigh', harvT, [
+      [-0.03, 0, -0.02],
+      [-0.75, 0, -0.10],
+      [-0.78, 0, -0.10],
+      [-0.75, 0, -0.10],
+      [-0.78, 0, -0.10],
+      [-0.30, 0, -0.06],
+      [-0.05, 0, -0.04],
+      [-0.10, 0, -0.03],
+      [-0.03, 0, -0.02]
+    ]),
+    makeQuatTrack('rightShin', harvT, [
+      [0.06, 0, 0],
+      [1.20, 0, 0],
+      [1.24, 0, 0],
+      [1.20, 0, 0],
+      [1.24, 0, 0],
+      [0.50, 0, 0],
+      [0.08, 0, 0],
+      [0.15, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    makeQuatTrack('rightUpperArm', harvT, [
+      [-0.04, 0, 1.11],
+      [-1.30, 0, 0.80],
+      [-1.20, 0, 0.82],
+      [-1.28, 0, 0.80],
+      [-1.18, 0, 0.82],
+      [-1.00, 0, 0.75],
+      [-1.70, 0.30, 0.45],  // brazo sobre el hombro, echa al canasto
+      [-0.60, 0, 0.95],
+      [-0.04, 0, 1.11]
+    ]),
+    makeQuatTrack('rightForeArm', harvT, [
+      [0, 0.32, 0],
+      [0, 0.40, 0],
+      [0, 0.70, 0],
+      [0, 0.45, 0],
+      [0, 0.75, 0],
+      [0, 1.20, 0],
+      [0, 1.45, 0],
+      [0, 0.60, 0],
+      [0, 0.32, 0]
+    ]),
+    makeQuatTrack('leftUpperArm', harvT, [
+      [-0.04, 0, -1.11],
+      [-1.30, 0, -0.80],
+      [-1.20, 0, -0.82],
+      [-1.28, 0, -0.80],
+      [-1.18, 0, -0.82],
+      [-1.00, 0, -0.75],
+      [-1.45, -0.20, -0.55],
+      [-0.55, 0, -0.98],
+      [-0.04, 0, -1.11]
+    ]),
+    makeQuatTrack('leftForeArm', harvT, [
+      [0, -0.32, 0],
+      [0, -0.40, 0],
+      [0, -0.70, 0],
+      [0, -0.45, 0],
+      [0, -0.75, 0],
+      [0, -1.20, 0],
+      [0, -1.30, 0],
+      [0, -0.60, 0],
+      [0, -0.32, 0]
+    ])
+  ]);
+
+  // 8. TIRED / AGOTAMIENTO (2.40s): manos en las rodillas, respiración agitada
+  //    y se seca el sudor de la frente con el antebrazo. Se reproduce tras la faena
+  //    cuando la energía del campesino es baja.
+  const tiredT = [0, 0.35, 0.70, 1.05, 1.40, 1.85, 2.40];
+  const tiredClip = new THREE.AnimationClip('tired', 2.40, [
+    makePosTrack('hips', tiredT, hipsRestPosition, [
+      [0, 0, 0],
+      [0, -0.06 * height, 0],
+      [0, -0.05 * height, 0],
+      [0, -0.065 * height, 0],
+      [0, -0.05 * height, 0],
+      [0, -0.01 * height, 0],
+      [0, 0, 0]
+    ]),
+    makeQuatTrack('spine', tiredT, [
+      [0.02, 0, 0],
+      [0.62, 0, 0],
+      [0.52, 0, 0],   // inhalación profunda
+      [0.64, 0, 0],   // exhalación
+      [0.52, 0, 0],
+      [-0.06, 0, 0],
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('head', tiredT, [
+      [0.02, 0, 0],
+      [0.10, 0, 0],
+      [-0.12, 0, 0],
+      [0.15, 0, 0],
+      [-0.10, 0, 0],
+      [-0.28, -0.10, 0], // cabeza atrás mientras se seca el sudor
+      [0.02, 0, 0]
+    ]),
+    makeQuatTrack('leftThigh', tiredT, [
+      [-0.03, 0, 0.02],
+      [-0.32, 0, 0.06],
+      [-0.30, 0, 0.06],
+      [-0.33, 0, 0.06],
+      [-0.30, 0, 0.06],
+      [-0.06, 0, 0.03],
+      [-0.03, 0, 0.02]
+    ]),
+    makeQuatTrack('leftShin', tiredT, [
+      [0.06, 0, 0],
+      [0.45, 0, 0],
+      [0.42, 0, 0],
+      [0.46, 0, 0],
+      [0.42, 0, 0],
+      [0.10, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    makeQuatTrack('rightThigh', tiredT, [
+      [-0.03, 0, -0.02],
+      [-0.32, 0, -0.06],
+      [-0.30, 0, -0.06],
+      [-0.33, 0, -0.06],
+      [-0.30, 0, -0.06],
+      [-0.06, 0, -0.03],
+      [-0.03, 0, -0.02]
+    ]),
+    makeQuatTrack('rightShin', tiredT, [
+      [0.06, 0, 0],
+      [0.45, 0, 0],
+      [0.42, 0, 0],
+      [0.46, 0, 0],
+      [0.42, 0, 0],
+      [0.10, 0, 0],
+      [0.06, 0, 0]
+    ]),
+    // Manos apoyadas en las rodillas, luego brazo derecho a la frente
+    makeQuatTrack('rightUpperArm', tiredT, [
+      [-0.04, 0, 1.11],
+      [-0.75, 0, 0.95],
+      [-0.72, 0, 0.95],
+      [-0.76, 0, 0.95],
+      [-0.72, 0, 0.95],
+      [-1.75, 0.35, 0.55], // antebrazo a la frente
+      [-0.04, 0, 1.11]
+    ]),
+    makeQuatTrack('rightForeArm', tiredT, [
+      [0, 0.32, 0],
+      [0, 0.20, 0],
+      [0, 0.22, 0],
+      [0, 0.20, 0],
+      [0, 0.22, 0],
+      [0, 2.05, 0],
+      [0, 0.32, 0]
+    ]),
+    makeQuatTrack('leftUpperArm', tiredT, [
+      [-0.04, 0, -1.11],
+      [-0.75, 0, -0.95],
+      [-0.72, 0, -0.95],
+      [-0.76, 0, -0.95],
+      [-0.72, 0, -0.95],
+      [-0.25, 0, -1.08],  // mano a la cintura
+      [-0.04, 0, -1.11]
+    ]),
+    makeQuatTrack('leftForeArm', tiredT, [
+      [0, -0.32, 0],
+      [0, -0.20, 0],
+      [0, -0.22, 0],
+      [0, -0.20, 0],
+      [0, -0.22, 0],
+      [0, -1.25, 0],
+      [0, -0.32, 0]
+    ])
+  ]);
+
   return {
     idle: idleClip,
     walk: walkClip,
     run: runClip,
     action: actionClip,
-    hoe: hoeClip
+    hoe: hoeClip,
+    plant: plantClip,
+    harvest: harvestClip,
+    tired: tiredClip
   };
 }
 
@@ -733,16 +1093,19 @@ export function applyProceduralFarmerRig(modelRoot) {
     walk: mixer.clipAction(clips.walk),
     run: mixer.clipAction(clips.run),
     action: mixer.clipAction(clips.action),
-    hoe: mixer.clipAction(clips.hoe)
+    hoe: mixer.clipAction(clips.hoe),
+    plant: mixer.clipAction(clips.plant),
+    harvest: mixer.clipAction(clips.harvest),
+    tired: mixer.clipAction(clips.tired)
   };
 
   actions.idle.setLoop(THREE.LoopRepeat, Infinity);
   actions.walk.setLoop(THREE.LoopRepeat, Infinity);
   actions.run.setLoop(THREE.LoopRepeat, Infinity);
-  actions.action.setLoop(THREE.LoopOnce, 1);
-  actions.action.clampWhenFinished = true;
-  actions.hoe.setLoop(THREE.LoopOnce, 1);
-  actions.hoe.clampWhenFinished = true;
+  for (const key of ['action', 'hoe', 'plant', 'harvest', 'tired']) {
+    actions[key].setLoop(THREE.LoopOnce, 1);
+    actions[key].clampWhenFinished = true;
+  }
 
   return {
     skinnedMesh,

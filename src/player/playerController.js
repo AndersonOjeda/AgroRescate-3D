@@ -61,6 +61,12 @@ export class PlayerController {
     this.hoeToolMesh = null;
     this._cameraShake = 0;
 
+    // Fatiga física del campesino (0 = descansado, 1 = agotado). Afecta velocidad de faena,
+    // velocidad al caminar, ritmo de respiración y dispara la animación de agotamiento.
+    this.fatigue = 0;
+    this._pendingTired = false;
+    this._lastLaborAnim = null;
+
     // Modo de cámara actual: 'third-person' (tercera persona) o 'orbit' (órbita libre con mouse)
     this.cameraMode = 'third-person';
 
@@ -267,10 +273,21 @@ export class PlayerController {
           this.mixer.update(0);
 
           this.mixer.addEventListener('finished', (event) => {
-            if (event.action === this.animations.action || event.action === this.animations.hoe) {
-              this._isPlayingAction = false;
+            const laborKeys = ['action', 'hoe', 'plant', 'harvest'];
+            const finishedLabor = laborKeys.some((k) => event.action === this.animations[k]);
+            if (finishedLabor) {
               if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
-              this._fadeToAnimation('idle', 0.2);
+              // Si quedó agotado tras la faena, se apoya en las rodillas y se seca el sudor
+              if (this._pendingTired && this.animations.tired) {
+                this._pendingTired = false;
+                this._playOnce('tired', 0.22);
+                return;
+              }
+              this._isPlayingAction = false;
+              this._fadeToAnimation('idle', 0.25);
+            } else if (event.action === this.animations.tired) {
+              this._isPlayingAction = false;
+              this._fadeToAnimation('idle', 0.35);
             }
           });
 
@@ -335,14 +352,74 @@ export class PlayerController {
   }
 
   /**
-   * Reproduce la animación breve de trabajo agrícola (sembrar/regar/cosechar/labranza).
-   * @param {string} [animName='action'] 'action' | 'hoe'
+   * Actualiza la fatiga del campesino a partir de su energía (0..100).
+   * @param {number} energy
+   */
+  setFatigueFromEnergy(energy) {
+    const e = Math.max(0, Math.min(100, Number(energy) || 0));
+    this.fatigue = Math.max(0, Math.min(1, (70 - e) / 70));
+    // Respiración más agitada en reposo cuando está cansado
+    if (this.animations?.idle?.setEffectiveTimeScale) {
+      this.animations.idle.setEffectiveTimeScale(1 + this.fatigue * 0.9);
+    }
+  }
+
+  /**
+   * Multiplicador de duración de la faena: un campesino cansado trabaja más despacio.
+   * 1.0 descansado → hasta 1.35 agotado.
+   */
+  getEffortMultiplier() {
+    return 1 + this.fatigue * 0.35;
+  }
+
+  /**
+   * Llamar cuando la simulación confirma que la faena terminó (ya con la energía descontada).
+   * Si el campesino quedó agotado, se detiene a recobrar el aliento.
+   */
+  onLaborCompleted() {
+    if (this.fatigue < 0.55) return false;
+    const laborPlaying = this._isPlayingAction &&
+      (this.currentAnimName === 'hoe' || this.currentAnimName === 'plant' || this.currentAnimName === 'harvest');
+    if (laborPlaying) {
+      this._pendingTired = true;
+    } else if (this.currentAnimName !== 'tired') {
+      this.playActionAnimation('tired');
+    }
+    return true;
+  }
+
+  /** Reproduce un clip LoopOnce sin las reglas de herramienta de labranza. */
+  _playOnce(name, fade = 0.15) {
+    const anim = this.animations[name];
+    if (!anim) return false;
+    const prev = this.activeAction;
+    this._isPlayingAction = true;
+    this.currentAnimName = name;
+    this.activeAction = anim;
+    anim.enabled = true;
+    anim.reset();
+    anim.setEffectiveTimeScale(1);
+    anim.setEffectiveWeight(1);
+    anim.play();
+    if (prev && prev !== anim) prev.crossFadeTo(anim, fade, false);
+    return true;
+  }
+
+  /**
+   * Reproduce la animación de trabajo agrícola.
+   * @param {string} [animName='action'] 'action' | 'hoe' | 'plant' | 'harvest' | 'tired'
    * @returns {boolean}
    */
   playActionAnimation(animName = 'action') {
-    this._actionDuration = animName === 'hoe' ? 1.80 : 0.75;
+    const BASE_DURATIONS = { hoe: 1.80, plant: 1.40, harvest: 1.60, tired: 2.40, action: 0.75 };
+    const isLabor = animName === 'hoe' || animName === 'plant' || animName === 'harvest';
+    const effort = isLabor ? this.getEffortMultiplier() : 1;
+    this._actionDuration = (BASE_DURATIONS[animName] ?? 0.75) * effort;
     this._actionTimer = this._actionDuration;
     this.currentAnimName = animName;
+    this._lastLaborAnim = isLabor ? animName : null;
+    // Tras una faena pesada con poca energía, el campesino se detiene a recobrar el aliento
+    this._pendingTired = isLabor && this.fatigue >= 0.55;
     const actionAnim = this.animations[animName] || this.animations.action;
     if (!actionAnim) {
       if (this.parts && this.parts.pelvis) {
@@ -365,7 +442,8 @@ export class PlayerController {
 
     actionAnim.enabled = true;
     actionAnim.reset();
-    actionAnim.setEffectiveTimeScale(1);
+    // Sincroniza el clip con la duración real de la faena (más lenta si está cansado)
+    actionAnim.setEffectiveTimeScale(1 / effort);
     actionAnim.setEffectiveWeight(1);
     actionAnim.play();
     if (prevAction && prevAction !== actionAnim) {
@@ -981,7 +1059,7 @@ export class PlayerController {
     }
 
     const sprinting = this.isSprinting || this.isTouchSprinting;
-    const baseSpeed = sprinting ? this.runSpeed : this.walkSpeed;
+    const baseSpeed = (sprinting ? this.runSpeed : this.walkSpeed) * (1 - this.fatigue * (sprinting ? 0.35 : 0.2));
 
     // Calcular dirección frontal y lateral de la cámara en el plano XZ
     this._cameraForward.set(
@@ -1065,7 +1143,9 @@ export class PlayerController {
 
     if (isMoving && this._isPlayingAction) {
       this._isPlayingAction = false;
+      this._pendingTired = false;
       if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
+      if (this.parts?.torso) this.parts.torso.scale.y = 1;
     }
 
     if (this.mixer) {
@@ -1151,8 +1231,85 @@ export class PlayerController {
             this.parts.leftArm.rotation.x = -0.15 * (1 - t);
             this.parts.rightArm.rotation.x = -0.15 * (1 - t);
           }
+        } else if (this.currentAnimName === 'plant') {
+          // Arrodillado en el surco: dos toques al suelo (hueco + semilla) y estirón de espalda
+          const P = this.parts;
+          if (progress < 0.84) {
+            const down = Math.min(1, progress / 0.18);
+            const pokes = progress > 0.18 ? Math.abs(Math.sin(((progress - 0.18) / 0.66) * Math.PI * 2)) : 0;
+            P.pelvis.position.y = 0.68 - 0.26 * down;
+            P.torso.rotation.x = 0.62 * down + 0.10 * pokes;
+            P.torso.rotation.y = 0;
+            P.leftLeg.rotation.x = -1.0 * down;
+            P.rightLeg.rotation.x = 0.35 * down;
+            P.leftArm.rotation.x = -0.65 * down;           // sostiene el costal
+            P.rightArm.rotation.x = -0.8 * down - 0.45 * pokes; // toca la tierra
+          } else {
+            const t = (progress - 0.84) / 0.16;
+            const stretch = Math.sin(t * Math.PI);
+            P.pelvis.position.y = 0.42 + 0.26 * t;
+            P.torso.rotation.x = 0.62 * (1 - t) - 0.22 * stretch; // estirón lumbar
+            P.leftLeg.rotation.x = -1.0 * (1 - t);
+            P.rightLeg.rotation.x = 0.35 * (1 - t);
+            P.leftArm.rotation.x = -0.65 * (1 - t);
+            P.rightArm.rotation.x = -1.25 * (1 - t);
+          }
+        } else if (this.currentAnimName === 'harvest') {
+          // Agacharse, jalón con temblor de esfuerzo, arrancar y echar al canasto
+          const P = this.parts;
+          if (progress < 0.56) {
+            const down = Math.min(1, progress / 0.19);
+            const tremble = progress > 0.19 ? Math.sin(progress * 90) * 0.035 : 0;
+            P.pelvis.position.y = 0.68 - 0.24 * down + tremble * 0.5;
+            P.torso.rotation.x = 0.78 * down + tremble;
+            P.torso.rotation.y = 0;
+            P.leftLeg.rotation.x = -0.6 * down;
+            P.rightLeg.rotation.x = -0.6 * down;
+            P.leftArm.rotation.x = -1.25 * down;
+            P.rightArm.rotation.x = -1.25 * down;
+          } else if (progress < 0.70) {
+            const t = (progress - 0.56) / 0.14;
+            P.pelvis.position.y = 0.44 + 0.25 * t;
+            P.torso.rotation.x = 0.78 - 0.85 * t;
+            P.torso.rotation.y = 0.55 * t;
+            P.leftLeg.rotation.x = -0.6 * (1 - t);
+            P.rightLeg.rotation.x = -0.6 * (1 - t);
+            P.leftArm.rotation.x = -1.25 - 0.3 * t;
+            P.rightArm.rotation.x = -1.25 - 0.55 * t; // sobre el hombro
+          } else {
+            const t = (progress - 0.70) / 0.30;
+            P.pelvis.position.y = 0.69 - 0.01 * (1 - t);
+            P.torso.rotation.x = -0.07 * (1 - t);
+            P.torso.rotation.y = 0.55 * (1 - t);
+            P.leftArm.rotation.x = -1.55 * (1 - t);
+            P.rightArm.rotation.x = -1.80 * (1 - t);
+          }
+        } else if (this.currentAnimName === 'tired') {
+          // Manos en las rodillas jadeando, luego se seca el sudor de la frente
+          const P = this.parts;
+          if (progress < 0.62) {
+            const down = Math.min(1, progress / 0.15);
+            const breath = Math.sin(progress * 28) * 0.06;
+            P.pelvis.position.y = 0.68 - 0.08 * down;
+            P.torso.rotation.x = (0.58 + breath) * down;
+            P.torso.scale.y = 1 + breath * 0.4;
+            P.leftLeg.rotation.x = -0.3 * down;
+            P.rightLeg.rotation.x = -0.3 * down;
+            P.leftArm.rotation.x = -0.7 * down;
+            P.rightArm.rotation.x = -0.7 * down;
+          } else {
+            const t = (progress - 0.62) / 0.38;
+            const wipe = Math.sin(t * Math.PI);
+            P.pelvis.position.y = 0.60 + 0.08 * t;
+            P.torso.rotation.x = 0.58 * (1 - t) - 0.08 * wipe;
+            P.torso.scale.y = 1;
+            P.leftLeg.rotation.x = -0.3 * (1 - t);
+            P.rightLeg.rotation.x = -0.3 * (1 - t);
+            P.leftArm.rotation.x = -0.7 * (1 - t);
+            P.rightArm.rotation.x = -0.7 * (1 - t) - 2.4 * wipe; // antebrazo a la frente
+          }
         } else {
-          // Acción genérica de inclinación y agachado (sembrar / cosechar / regar)
+          // Acción genérica de inclinación y agachado (regar / compostar)
           const phase = Math.sin(progress * Math.PI);
           this.parts.pelvis.position.y = 0.68 - 0.24 * phase;
           this.parts.torso.rotation.x = 0.72 * phase;
@@ -1163,8 +1320,16 @@ export class PlayerController {
         }
 
         if (this._actionTimer <= 0) {
-          this._isPlayingAction = false;
           if (this.hoeToolMesh) this.hoeToolMesh.visible = false;
+          if (this._pendingTired) {
+            this._pendingTired = false;
+            this.currentAnimName = 'tired';
+            this._actionDuration = 2.40;
+            this._actionTimer = 2.40;
+          } else {
+            this._isPlayingAction = false;
+            this.parts.torso.scale.y = 1;
+          }
         }
       } else if (isMoving) {
         const legAmplitude = sprinting ? 0.85 : 0.50;

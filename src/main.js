@@ -410,6 +410,9 @@ async function bootstrap() {
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
+  if (typeof initialState.farmerEnergy === 'number') {
+    player.setFatigueFromEnergy(initialState.farmerEnergy);
+  }
   if (initialState.currentWeather?.id) {
     weatherSystem.setWeather(initialState.currentWeather.id, true);
   }
@@ -663,33 +666,36 @@ async function bootstrap() {
   });
 
   // B. Parcelas Agrícolas: Labranza, Siembra y Cosecha con Esfuerzo Físico Campesino (Hold [E])
+  // Un campesino cansado tarda más en cada faena (la duración escala con la fatiga)
+  const effortHold = (base) => Math.round(base * player.getEffortMultiplier() * 100) / 100;
+
   const getPlotActionInfo = (plotState, plotName) => {
     if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, mode: 'none' };
     if (!plotState.isPlanted && !plotState.isPrepared) {
       return {
         actionText: `Mantén [E] para labrar la tierra en ${plotName} (Azada)`,
-        holdDuration: 1.8,
+        holdDuration: effortHold(1.8),
         mode: 'prepare'
       };
     }
     if (!plotState.isPlanted) {
       return {
         actionText: `Mantén [E] para sembrar ${plotState.cropName} (Surco a surco)`,
-        holdDuration: 1.4,
+        holdDuration: effortHold(1.4),
         mode: 'plant'
       };
     }
     if (plotState.daysGrown >= plotState.daysToMature) {
       return {
         actionText: `Mantén [E] para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`,
-        holdDuration: 1.6,
+        holdDuration: effortHold(1.6),
         mode: 'harvest'
       };
     }
     if (plotState.visualState === 4) {
       return {
         actionText: `Mantén [E] para desyerbar cultivo marchito`,
-        holdDuration: 1.2,
+        holdDuration: effortHold(1.2),
         mode: 'clean'
       };
     }
@@ -730,14 +736,14 @@ async function bootstrap() {
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('action');
+            player.playActionAnimation('plant');
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
             if (currentState.farmerEnergy < 15) {
               hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Campesina.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('action');
+            player.playActionAnimation('harvest');
           }
         },
         onHoldCancel: () => {
@@ -754,12 +760,7 @@ async function bootstrap() {
               hud.showToast('⚠️ ¡Estás exhausto! Descansa en la Casa Campesina y tómate un agua de panela caliente.', 'warning', 4000);
               return;
             }
-            player.playActionAnimation('hoe');
-            const pos = player.getPosition();
-            const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
-            particleSystem.emitSoilImpactParticles(pos, fwd);
-            audioSystem.playHoeImpact();
-            player.applyCameraImpulse(0.05);
+            // La animación e impactos ya ocurrieron durante la faena sostenida
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
               hud.showToast('🌾 ' + res.message, 'success');
@@ -772,7 +773,6 @@ async function bootstrap() {
               hud.showToast('⚠️ ¡Estás sin energía para sembrar! Descansa en tu Casa Campesina.', 'warning', 4000);
               return;
             }
-            player.playActionAnimation('action');
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
               hud.showToast('🌱 ' + res.message, 'success');
@@ -785,7 +785,6 @@ async function bootstrap() {
               hud.showToast('⚠️ ¡Sin energía para cosechar! Descansa en tu Casa Campesina.', 'warning', 4000);
               return;
             }
-            player.playActionAnimation('action');
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
               hud.showToast('🧺 ' + res.message, 'success');
@@ -951,6 +950,8 @@ async function bootstrap() {
   // Conectar barra/anillo de progreso de faena física continua con el HUD y efectos de impacto
   let hoeStrike1Triggered = false;
   let hoeStrike2Triggered = false;
+  let laborFx1 = false;
+  let laborFx2 = false;
 
   interactionSystem.onHoldProgress = (progress, item, isCancelled) => {
     hud.setHoldProgress(progress, item, isCancelled);
@@ -958,6 +959,29 @@ async function bootstrap() {
     if (isCancelled || progress <= 0.05 || progress >= 1.0) {
       hoeStrike1Triggered = false;
       hoeStrike2Triggered = false;
+      laborFx1 = false;
+      laborFx2 = false;
+    }
+
+    const text = item?.actionText?.toLowerCase() || '';
+    if (!isCancelled && text.includes('sembrar')) {
+      // Dos toques de la mano en la tierra: abrir el hueco y depositar la semilla
+      const pos = player.getPosition();
+      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+      const spot = { x: pos.x + fwd.x * 0.5, z: pos.z + fwd.z * 0.5 };
+      if (!laborFx1 && progress >= 0.32) { laborFx1 = true; particleSystem.emitFootstepDust(spot); audioSystem.playFootstep(); }
+      if (!laborFx2 && progress >= 0.57) { laborFx2 = true; particleSystem.emitFootstepDust(spot); }
+    } else if (!isCancelled && (text.includes('cosechar') || text.includes('desyerbar'))) {
+      // La raíz se resiste y luego sale con tierra
+      const pos = player.getPosition();
+      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
+      if (!laborFx1 && progress >= 0.30) { laborFx1 = true; player.applyCameraImpulse(0.02); }
+      if (!laborFx2 && progress >= 0.56) {
+        laborFx2 = true;
+        particleSystem.emitSoilImpactParticles(pos, { x: fwd.x * 0.6, z: fwd.z * 0.6 });
+        audioSystem.playFootstep();
+        player.applyCameraImpulse(0.035);
+      }
     }
 
     // Si está labrando con la azada, sincronizar los dos impactos rítmicos contra la tierra
@@ -992,6 +1016,11 @@ async function bootstrap() {
     }
     hud.updateFarmState(state);
 
+    // Sincronizar la fatiga física del campesino (afecta animaciones, ritmo y velocidad)
+    if (typeof state?.farmerEnergy === 'number') {
+      player.setFatigueFromEnergy(state.farmerEnergy);
+    }
+
     // Actualizar los textos de acción y tiempos de faena física de las parcelas
     plotsData.forEach(p => {
       const plotState = state.plots[p.id];
@@ -1005,14 +1034,8 @@ async function bootstrap() {
   // Eventos de progreso de cultivo, misiones y animaciones
   farmAdapter.on('soilPrepared', ({ result }) => {
     if (result?.success) {
-      if (!player._isPlayingAction) {
-        player.playActionAnimation('hoe');
-      }
-      const pos = player.getPosition();
-      const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
-      particleSystem.emitSoilImpactParticles(pos, fwd);
-      audioSystem.playHoeImpact();
-      player.applyCameraImpulse(0.05);
+      // Los golpes de azada (partículas, sonido, cámara) ya se dieron durante la faena
+      player.onLaborCompleted();
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'soilPrepared' });
       hud.renderMission(missionManager.getSnapshot());
@@ -1021,7 +1044,7 @@ async function bootstrap() {
 
   farmAdapter.on('cropPlanted', ({ result }) => {
     if (result?.success) {
-      player.playActionAnimation();
+      player.onLaborCompleted();
       modals.recordDecision(result.message);
       missionManager.handleEvent({ type: 'planted' });
       hud.renderMission(missionManager.getSnapshot());
@@ -1031,7 +1054,7 @@ async function bootstrap() {
 
   farmAdapter.on('harvested', async ({ result }) => {
     if (result?.success) {
-      player.playActionAnimation();
+      player.onLaborCompleted();
       modals.recordDecision(result.message);
       const state = result.state || (await farmAdapter.getState());
       modals.recordHarvest(state, result.report);
