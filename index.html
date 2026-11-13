@@ -177,10 +177,32 @@
           </select>
         </div>
         <div class="stat-divider"></div>
-        <div class="stat-group">
-          <span class="stat-label">DÍA</span>
-          <span id="hud-day" class="stat-value highlight">1</span>
-          <span id="hud-day-phase" class="stat-value-sub" title="Ciclo natural del día">🌅 Mañana</span>
+        <div class="stat-group stat-group-day">
+          <div class="day-text-col">
+            <span class="stat-label">DÍA</span>
+            <span id="hud-day" class="stat-value highlight">1</span>
+            <span id="hud-day-phase" class="stat-value-sub" title="Ciclo natural del día">🌅 Mañana</span>
+          </div>
+          <div id="hud-celestial-dial" class="celestial-dial" title="Reloj solar tipo Warcraft: Sol (madrugada) ↔ Mediodía ↔ Luna (noche)" aria-label="Indicador día y noche">
+            <svg viewBox="0 0 64 64" class="celestial-svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="celestial-day-grad" x1="0%" y1="50%" x2="100%" y2="50%">
+                  <stop offset="0%" stop-color="#f59e0b" />
+                  <stop offset="50%" stop-color="#38bdf8" />
+                  <stop offset="100%" stop-color="#818cf8" />
+                </linearGradient>
+              </defs>
+              <circle cx="32" cy="32" r="24" class="celestial-ring-bg" />
+              <path d="M 8 32 A 24 24 0 0 1 56 32" class="celestial-arc-day" stroke="url(#celestial-day-grad)" />
+              <path d="M 56 32 A 24 24 0 0 1 8 32" class="celestial-arc-night" />
+              <line x1="32" y1="5" x2="32" y2="11" class="celestial-noon-tick" />
+              <text x="8" y="35" text-anchor="middle" class="celestial-icon">☀️</text>
+              <text x="56" y="35" text-anchor="middle" class="celestial-icon">🌙</text>
+              <line id="hud-celestial-hand" x1="32" y1="32" x2="12" y2="32" class="celestial-hand" />
+              <circle id="hud-celestial-orb" cx="12" cy="32" r="4.5" class="celestial-orb" />
+              <circle cx="32" cy="32" r="2.5" class="celestial-pivot" />
+            </svg>
+          </div>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-group">
@@ -225,21 +247,29 @@
     <div id="hud-zone" class="hud-zone">
       <span class="zone-icon">📍</span>
       <span id="zone-name" class="zone-name">Finca Rural — Patio Central</span>
+      <span class="sun-field-guide" title="Referencia del reloj del juego: amanecer 06:00, mediodía 12:00 y ocaso 18:00. El tiempo está acelerado.">☀ Este: amanece · Alto: mediodía · Oeste: atardece</span>
     </div>
 
     <!-- Panel de Misión Guiada (Tutorial) -->
     <aside id="mission-hud" class="mission-hud">
+      <strong id="farm-goal">Meta: aumentar el saldo inicial en $100.000 COP</strong>
+      <progress id="farm-goal-progress" max="1" value="0" style="width:100%;accent-color:#fbbf24" aria-label="Progreso hacia una finca próspera"></progress>
+      <div class="farm-current-need"><strong id="need-title">Atiende tu parcela</strong><p id="need-reason">Las necesidades de la finca guían tu siguiente objetivo. El clima continúa durante las consultas.</p></div>
+      <div class="player-crop-bars" aria-label="Estado de la parcela seleccionada">
+        <label>💧 Humedad <span id="player-crop-moisture-value">—</span><progress id="player-crop-moisture" max="100" value="0"></progress></label>
+        <label>🌱 Fertilidad <span id="player-crop-fertility-value">—</span><progress id="player-crop-fertility" max="100" value="0"></progress></label>
+        <label>♥ Salud <span id="player-crop-health-value">—</span><progress id="player-crop-health" max="100" value="0"></progress></label>
+      </div>
       <div class="mission-hud-head">
         <span id="mission-title" class="mission-title">🎯 Misión 1: Preparar la finca</span>
         <span id="mission-progress" class="mission-progress">0/9</span>
       </div>
       <ul id="mission-tasks" class="mission-tasks"></ul>
       <div id="mission-harvest-status" class="mission-harvest-status">Estado cosecha: En espera</div>
-      <details class="pest-panel" open>
-        <summary>🐛 Vigilancia de plagas</summary>
-        <ul id="pest-status-list" aria-live="polite"></ul>
-        <p>Amarillo: foco activo · rojo: crítico · verde: control aplicado. Los focos altos se propagan al amanecer.</p>
-      </details>
+    </aside>
+    <aside class="live-crop-dashboard" aria-label="Cultivos en tiempo real">
+      <div class="live-crop-heading"><strong>Mis cultivos · En vivo</strong><span id="live-crop-weather"></span></div>
+      <ul id="pest-status-list"></ul>
     </aside>
 
     <div id="toast-container" class="toast-container"></div>
@@ -268,9 +298,6 @@
         </button>
         <button id="btn-toggle-sound" class="hud-btn" title="Activar/Silenciar Audio">
           <span id="sound-icon">🔊</span> Audio
-        </button>
-        <button id="btn-toggle-rain" class="hud-btn" title="Alternar Lluvia">
-          🌧️ Clima
         </button>
         <button id="btn-spawn-crate" class="hud-btn" title="Demostrar Físicas de Cannon-es">
           📦 Caída Física
@@ -373,7 +400,7 @@
     <div id="pause-modal" class="report-modal hidden">
       <div class="report-card pause-card">
         <div class="report-header">
-          <h2>⏸️ Simulación en Pausa</h2>
+          <h2>⚙️ Ajustes — el clima y los cultivos siguen activos</h2>
           <button id="btn-close-pause" class="btn-close" title="Reanudar">&times;</button>
         </div>
         <div class="pause-controls">
@@ -459,15 +486,13 @@
     <div id="farmer-house-modal" class="report-modal hidden">
       <div class="report-card house-card">
         <div class="report-header">
-          <h2>🏡 Hogar Campesino — Descanso y Familia</h2>
+          <h2>🏡 Casa Rural — Descanso y Cultivos</h2>
           <button id="btn-close-house" class="btn-close" title="Cerrar">&times;</button>
         </div>
         <p class="report-intro">Tras una jornada de arduo trabajo en el campo, el campesino regresa a su casa humilde a tomar agua de panela con queso y reponer fuerzas para el nuevo día.</p>
         <div class="house-content-box">
           <p id="house-weather" aria-live="polite"></p>
-          <h3>Labores pendientes</h3>
-          <ul id="house-chores"></ul>
-          <blockquote id="house-quote" class="farmer-quote">«Tierra que da de comer, merece que la aprendas a querer.»</blockquote>
+          <p id="house-crop-status">Consulta las barras y alertas de tus lotes en el tablero en vivo.</p>
           <div class="house-stats">
             <div><strong>⚡ Energía campesina:</strong> <span id="house-energy-val">100%</span></div>
             <div><strong>📅 Día en curso:</strong> <span id="house-day-val">Día 1</span></div>
@@ -475,7 +500,7 @@
           </div>
         </div>
         <div class="results-actions">
-          <button id="btn-house-rest" type="button" class="hud-btn">☕ Recuperar fuerzas sin avanzar el día</button>
+          <button id="btn-house-rest" type="button" class="hud-btn">☕ Comida o siesta · una vez por tarde</button>
           <button id="btn-house-sleep" type="button" class="btn-primary">🌙 Descansar y Avanzar al Siguiente Día</button>
           <button id="btn-house-continue" type="button" class="hud-btn">Salir al Corredor</button>
         </div>

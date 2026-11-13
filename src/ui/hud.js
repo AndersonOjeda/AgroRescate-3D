@@ -99,6 +99,8 @@ export class HUD {
     this.modeSelector = d.getElementById('mode-selector');
     this.hudDay = d.getElementById('hud-day');
     this.hudDayPhase = d.getElementById('hud-day-phase');
+    this.celestialHand = d.getElementById('hud-celestial-hand');
+    this.celestialOrb = d.getElementById('hud-celestial-orb');
     this.hudWater = d.getElementById('hud-water');
     this.meterWater = d.getElementById('meter-water');
     this.hudSoil = d.getElementById('hud-soil');
@@ -1617,23 +1619,39 @@ export class HUD {
    * Actualiza la fase del día en el HUD (Mañana, Mediodía, Tarde, Noche).
    * @param {string} phaseName
    */
-  setDayPhase(phaseName, formattedTime = '') {
+  setDayPhase(phaseName, formattedTime = '', clockInfo = null) {
     if (!phaseName) return;
     this.currentDayPhase = phaseName;
-    if (!this.hudDayPhase) return;
-    const icons = {
-      'Mañana': '🌅 Mañana',
-      'Mediodía': '☀️ Mediodía',
-      'Tarde': '🌇 Tarde',
-      'Noche': '🌙 Noche',
-      'Amanecer': '🌅 Amanecer',
-      'Atardecer': '🌇 Atardecer',
-      'Día': '☀️ Día'
-    };
-    const label = icons[phaseName] || phaseName;
-    const nextText = formattedTime ? `${label} · ${formattedTime}` : label;
-    if (this.hudDayPhase.textContent !== nextText) {
-      this.hudDayPhase.textContent = nextText;
+    if (this.hudDayPhase) {
+      const icons = {
+        'Mañana': '🌅 Mañana',
+        'Mediodía': '☀️ Mediodía',
+        'Tarde': '🌇 Tarde',
+        'Noche': '🌙 Noche',
+        'Amanecer': '🌅 Amanecer',
+        'Atardecer': '🌇 Atardecer',
+        'Día': '☀️ Día'
+      };
+      const label = icons[phaseName] || phaseName;
+      const nextText = formattedTime ? `${label} · ${formattedTime}` : label;
+      if (this.hudDayPhase.textContent !== nextText) {
+        this.hudDayPhase.textContent = nextText;
+      }
+    }
+
+    if (clockInfo && (this.celestialOrb || this.celestialHand)) {
+      const hourFloat = (clockInfo.hours ?? 6) + (clockInfo.minutes ?? 0) / 60;
+      const angle = Math.PI - ((hourFloat - 6) / 24) * Math.PI * 2;
+      const cx = (32 + Math.cos(angle) * 20).toFixed(2);
+      const cy = (32 - Math.sin(angle) * 20).toFixed(2);
+      this.celestialHand?.setAttribute?.('x2', cx);
+      this.celestialHand?.setAttribute?.('y2', cy);
+      this.celestialOrb?.setAttribute?.('cx', cx);
+      this.celestialOrb?.setAttribute?.('cy', cy);
+      const isNightHour = hourFloat >= 18 || hourFloat < 6;
+      const isSunsetHour = hourFloat >= 16 && hourFloat < 18;
+      const orbColor = isNightHour ? '#93c5fd' : isSunsetHour ? '#fb923c' : '#fbbf24';
+      this.celestialOrb?.style && (this.celestialOrb.style.fill = orbColor);
     }
   }
 

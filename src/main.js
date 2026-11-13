@@ -26,6 +26,8 @@ import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
 import { PestVisualSystem } from './systems/pestVisualSystem.js';
 import { updatePestPanel } from './ui/pestPanel.js';
+import { CropPlot } from './world/cropPlot.js';
+import { findTrampledPlant } from './gameplay/trampling.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -92,6 +94,7 @@ async function bootstrap() {
 
   // 7. Adaptador del Simulador Agrícola, Misiones y Resultados
   const farmAdapter = new FarmAdapter();
+  farmAdapter.simulation.enableRows();
   farmAdapter.setRequirePreparation(true);
   const missionManager = new MissionManager('precision');
   const resultsStore = new ResultsStore(typeof localStorage !== 'undefined' ? localStorage : null);
@@ -305,11 +308,13 @@ async function bootstrap() {
 
   // Cargar coordenadas interactivas reales del modelo GLB si está activo
   let interactivos = null;
+  let cropCoordinates = [];
   if (farmEnv?.type === 'glb') {
     try {
       const resp = await fetch('/models/finca.interactivos.json');
       if (resp.ok) {
         const json = await resp.json();
+        cropCoordinates = json.cultivos || [];
         interactivos = json?.interactivos || null;
       }
     } catch (err) {
@@ -422,6 +427,19 @@ async function bootstrap() {
   );
 
   // Sincronizar estado inicial del simulador con el HUD y los modelos 3D
+  if (isGlb) {
+    for (const [index, plot] of sceneCoords.plots.entries()) {
+      const prefix = ['subsistencia', 'precision', 'ecologica'][index];
+      for (let stage = 1; stage <= 3; stage++) {
+        const original = farmEnv.root.getObjectByName(`cultivo_${prefix}_etapa_${stage}`);
+        if (original) original.visible = false;
+      }
+      const visual = new CropPlot(scene, { id: plot.id, nombre: plot.name, x: plot.x, z: plot.z, width: 12.5, depth: 12.5, filas: 5, columnas: 5 });
+      farmEnv.cropPlots ||= {};
+      farmEnv.cropPlots[plot.id] = visual;
+      farmAdapter.registerCropPlotVisual(plot.id, visual);
+    }
+  }
   // Camas elevadas transitables con subida automática y marcha cuidadosa.
   const bedObstacles = sceneCoords.plots.map(plot => {
     const visual = farmEnv.cropPlots?.[plot.id];
@@ -430,6 +448,31 @@ async function bootstrap() {
     return { id: `bed_${plot.id}`, walkable: true, type: 'box', minX: plot.x - halfX, maxX: plot.x + halfX, minZ: plot.z - halfZ, maxZ: plot.z + halfZ, height: 0.3 };
   });
   for (const obstacle of bedObstacles) player.addObstacle(obstacle);
+  const cropFootprints = sceneCoords.plots.flatMap((plot, plotIndex) => {
+    const visual = farmEnv.cropPlots?.[plot.id];
+    const positions = isGlb
+      ? cropCoordinates.filter(c => c.parcela === ['parcela_subsistencia', 'parcela_precision', 'parcela_ecologica'][plotIndex]).flatMap(c => c.posiciones.map(a => ({ x: a[0], z: a[2] })))
+      : (visual?.plants || []).map(plant => ({ x: visual.position.x + plant.group.position.x, z: visual.position.z + plant.group.position.z }));
+    return positions.map((position, index) => ({ ...position, plotId: plot.id, index, lastHit: -Infinity }));
+  });
+  const flattenedMaterial = new THREE.MeshLambertMaterial({ color: 0x756334, side: THREE.DoubleSide });
+  const flattenedGeometry = new THREE.CircleGeometry(0.23, 7);
+  const updateTrampleMarks = state => {
+    for (const point of cropFootprints) {
+      const hits = state.plots[point.plotId]?.trampledPlants?.[point.index] || 0;
+      if (hits && !point.mark) {
+        point.mark = new THREE.Mesh(flattenedGeometry, flattenedMaterial);
+        point.mark.rotation.x = -Math.PI / 2;
+        point.mark.position.set(point.x, 0.32, point.z);
+        scene.add(point.mark);
+      }
+      if (point.mark) { point.mark.visible = hits > 0; point.mark.scale.setScalar(0.5 + hits * 0.2); }
+    }
+  };
+  const workTarget = plot => {
+    const position = player.getPosition();
+    return cropFootprints.filter(p => p.plotId === plot.id).sort((a, b) => Math.hypot(a.x - position.x, a.z - position.z) - Math.hypot(b.x - position.x, b.z - position.z))[0] || plot;
+  };
   physicsWorld.setObstacles([...player.obstacles]);
   player._resolvePenetration();
   const initialState = await farmAdapter.getState();
@@ -697,6 +740,7 @@ async function bootstrap() {
   const effortHold = (base) => Math.round(base * player.getEffortMultiplier() * 100) / 100;
 
   const getPlotActionInfo = (plotState, plotName) => {
+    if (plotState?.rowIndex !== undefined) plotName = plotState.name;
     if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, energyCost: 0, mode: 'none' };
     const lp = plotState.laborProfile || {};
     if (!plotState.isPlanted && !plotState.isPrepared) {
@@ -766,7 +810,7 @@ async function bootstrap() {
           if (!interactionSystem.isHolding || interactionSystem.holdingInteractable?.id !== `interact_${p.id}`) return;
           const curPlot = currentState.plots[p.id];
           const info = getPlotActionInfo(curPlot, p.name);
-          player.faceWorkTarget(p);
+          player.faceWorkTarget(workTarget(p));
 
           if (info.mode === 'pests') {
             const energy = info.energyCost;
@@ -808,7 +852,7 @@ async function bootstrap() {
           const currentState = await farmAdapter.getState();
           const curPlot = currentState.plots[p.id];
           const info = getPlotActionInfo(curPlot, p.name);
-          player.faceWorkTarget(p);
+          player.faceWorkTarget(workTarget(p));
 
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < info.energyCost) {
@@ -1117,6 +1161,11 @@ async function bootstrap() {
 
   // Escuchar cambios de estado del adaptador agrícola para refrescar el HUD y las opciones
   farmAdapter.on('stateChange', ({ state, action }) => {
+    const goal = document.getElementById('farm-goal');
+    if (goal && state.goal) goal.textContent = state.goal.complete ? '🏆 ¡Finca próspera! Meta cumplida. Puedes seguir cultivando o consultar Resultados.' : `Meta: $${Math.round(state.goal.current).toLocaleString('es-CO')} / $${state.goal.target.toLocaleString('es-CO')} COP`;
+    const goalBar = document.getElementById('farm-goal-progress');
+    if (goalBar && state.goal) goalBar.value = state.goal.progress;
+    updateTrampleMarks(state);
     if (action === 'initialize' && state?.mode) {
       missionManager.reset(state.mode);
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
@@ -1422,7 +1471,32 @@ async function bootstrap() {
       player.obstacles = player.obstacles.filter(obstacle => !obstacle.dynamicCrate);
       player.obstacles.push(...physicsWorld.getPlayerObstacles(player.position.y));
       player._resolvePenetration();
+      const previousFootPosition = { x: player.position.x, z: player.position.z };
       player.update(delta);
+      if (!interactionSystem.isHolding) {
+        for (const bed of bedObstacles) {
+          if (player.position.x >= bed.minX && player.position.x <= bed.maxX && player.position.z >= bed.minZ && player.position.z <= bed.maxZ) {
+            const plotId = bed.id.replace('bed_', '');
+            const row = Math.max(0, Math.min(4, Math.floor((player.position.x - bed.minX) / (bed.maxX - bed.minX) * 5)));
+            if (farmAdapter.simulation.plots[plotId].rowIndex !== row) {
+              farmAdapter.simulation.selectRow(plotId, row);
+              const state = farmAdapter.simulation.getState();
+              farmAdapter.syncVisuals(state);
+              farmAdapter.emit('stateChange', { state, action: 'selectRow' });
+            }
+          }
+        }
+      }
+      const contact = findTrampledPlant(cropFootprints, previousFootPosition, player.position);
+      if (contact && performance.now() - contact.lastHit > 900 && !interactionSystem.isHolding) {
+        contact.lastHit = performance.now();
+        farmAdapter.trampleCrop(contact.plotId, contact.index).then(result => {
+          if (result.success && performance.now() - (player._lastTrampleNotice || 0) > 3500) {
+            player._lastTrampleNotice = performance.now();
+            hud.showToast(result.message, 'warning', 3200);
+          }
+        });
+      }
       if (interactionSystem.isHolding && player._moveDirection.lengthSq() > 0.0001) {
         interactionSystem.stopHold(true);
       }
@@ -1437,7 +1511,7 @@ async function bootstrap() {
       skySystem.autoCycleEnabled = !isInMenu;
       if (!player._isAnyModalOpen()) skySystem.update(delta);
       const clockInfo = skySystem.getClockInfo();
-      hud.setDayPhase(skySystem.phaseName, clockInfo.formatted);
+      hud.setDayPhase(skySystem.phaseName, clockInfo.formatted, clockInfo);
       weatherSystem.update(delta, {
         preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning,
         skySystem
