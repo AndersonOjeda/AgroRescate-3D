@@ -50,7 +50,7 @@
   padding: 10px 11px;
   color: #f8fafc;
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.48);
-  max-height: calc(100vh - 220px);
+  max-height: calc(100vh - 370px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
