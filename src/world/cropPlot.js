@@ -42,6 +42,10 @@ export class CropPlot {
     this.setVisualState(0);
   }
 
+  setPestPressure(pressure) {
+    this.healthyMat.color.setHex(0x22c55e).lerp(new THREE.Color(0x9a762e), Math.min(0.75, (pressure || 0) / 125));
+  }
+
   _createPlotBase() {
     // Parcela de tierra fértil
     const baseGeo = new THREE.BoxGeometry(this.width, 0.15, this.depth);

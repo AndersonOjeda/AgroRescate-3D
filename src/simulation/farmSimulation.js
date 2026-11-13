@@ -22,6 +22,8 @@ import {
   syncPlotStageAndVisual
 } from './economy.js';
 
+import { advancePests, resetPests, PEST_CONTROL_ENERGY } from './pests.js';
+
 let activeSimulationInstance = null;
 
 /**
@@ -130,6 +132,7 @@ export class FarmSimulation {
         marketValuePerKg: tpl.marketValuePerKg,
         seedVariety: null
       };
+      resetPests(plot);
       syncPlotStageAndVisual(plot);
       this.plots[tpl.id] = plot;
     }
@@ -206,7 +209,8 @@ export class FarmSimulation {
     }
 
     let seedCost = plotCfg.seedCost !== undefined ? plotCfg.seedCost : chosenSeed.cost;
-    if (this.farmerEnergy < 15) {
+    const plantEnergy = plotCfg.laborProfile?.plantEnergy ?? 15;
+    if (this.farmerEnergy < plantEnergy) {
       return {
         success: false,
         message: '¡Demasiado cansado para sembrar! Descansa en la Casa Campesina con agua de panela para recuperar energía.',
@@ -243,8 +247,8 @@ export class FarmSimulation {
     target.waterAppliedL = 0;
     target.isWithered = false;
 
-    // Gasto de energía campesina al sembrar (15%)
-    this.consumeFarmerEnergy(15);
+    // Gasto de energía campesina al sembrar según modalidad agrícola
+    this.consumeFarmerEnergy(plantEnergy);
 
     const { projectedKg } = calculateProjectedYield(target, plotCfg);
     target.yieldKg = projectedKg;
@@ -268,7 +272,8 @@ export class FarmSimulation {
    * @param {number} amount
    */
   consumeFarmerEnergy(amount = 10) {
-    this.farmerEnergy = Math.max(0, Math.round(this.farmerEnergy - amount));
+    const heatEffort = this.currentWeather?.id === 'heatwave' ? 1.25 : 1;
+    this.farmerEnergy = Math.max(0, Math.round(this.farmerEnergy - amount * heatEffort));
     return this.farmerEnergy;
   }
 
@@ -633,7 +638,10 @@ export class FarmSimulation {
     if (target.isPlanted) return { success: false, message: `${target.name} ya tiene un cultivo sembrado` };
     if (target.isPrepared) return { success: false, message: `${target.name} ya está preparada` };
 
-    if (this.farmerEnergy < 20) {
+    const plotCfg = this._getPlotModeConfig(target);
+    const prepareEnergy = plotCfg.laborProfile?.prepareEnergy ?? 20;
+
+    if (this.farmerEnergy < prepareEnergy) {
       return {
         success: false,
         message: '¡No tienes fuerzas para labrar la tierra con la azada! Descansa en la Casa Campesina con agua de panela.',
@@ -642,7 +650,7 @@ export class FarmSimulation {
       };
     }
 
-    this.consumeFarmerEnergy(20);
+    this.consumeFarmerEnergy(prepareEnergy);
 
     target.isPrepared = true;
     target.stageLabel = 'Terreno preparado';
@@ -752,7 +760,7 @@ export class FarmSimulation {
     }
 
     // Al iniciar nuevo día, el campesino recupera algo de energía base (al menos 60 si durmió)
-    this.farmerEnergy = Math.max(this.farmerEnergy, 75);
+    this.farmerEnergy = Math.max(this.farmerEnergy, 35);
 
     // Riego automático en modalidad Precisión / Integral (solo lotes con sensor IoT) cuando la humedad baja del umbral
     if (this.modeConfig.supportsAutoIrrigation && this.autoIrrigationEnabled) {
@@ -799,6 +807,14 @@ export class FarmSimulation {
       }
     }
 
+    const pestAlerts = advancePests(this.plots, this.currentWeather.id);
+    for (const plot of Object.values(this.plots)) {
+      if (plot.isPlanted) {
+        plot.yieldKg = calculateProjectedYield(plot, this._getPlotModeConfig(plot)).projectedKg;
+        syncPlotStageAndVisual(plot);
+      }
+    }
+    pestAlerts.forEach(alert => this._recordEvent(`Día ${this.day}: ${alert}`));
     this._recomputeFarmSoilQuality();
     const snap = this.plots[this.activePlotId];
     this.dailyLog.push({ day: this.day, moisture: snap.moisture, fertility: snap.fertility, health: snap.health, waterReserve: this.waterReserve, budget: this.budget });
@@ -814,6 +830,7 @@ export class FarmSimulation {
       day: this.day,
       autoTriggered: Boolean(this.lastAutoAction),
       autoIrrigatedPlotIds,
+      pestAlerts,
       message,
       state: this.getState()
     };
@@ -849,16 +866,17 @@ export class FarmSimulation {
         waterUsedInPlot: target.waterAppliedL,
         day: this.day
       });
-      report.qualityGrade = 'Pérdida por sequía (D)';
+      report.qualityGrade = 'Cultivo perdido (D)';
       report.feedback = [
-        'El cultivo de lechuga se marchitó por falta de agua prolongada.',
-        'Recuerda vigilar la humedad del suelo y regar antes de bajar del 15%.'
+        'El cultivo se perdió por deterioro de salud o humedad crítica.',
+        'Vigila el agua y controla los focos de plaga antes de que se propaguen.'
       ];
 
       this.lastHarvest = report;
       this.harvestHistory.push(report);
 
       target.isPlanted = false;
+      resetPests(target);
       target.daysGrown = 0;
       target.health = 90;
       target.waterAppliedL = 0;
@@ -866,7 +884,7 @@ export class FarmSimulation {
       syncPlotStageAndVisual(target);
 
       const msg =
-        'El cultivo estaba deteriorado por sequía. Limpiaste la parcela sin ganancias.';
+        'El cultivo estaba deteriorado. Retiraste los restos y eliminaste el foco de plagas, sin ganancias.';
       this._recordEvent(`Día ${this.day}: ${msg}`);
 
       return {
@@ -887,7 +905,10 @@ export class FarmSimulation {
       };
     }
 
-    if (this.farmerEnergy < 15) {
+    const harvestCfg = this._getPlotModeConfig(target);
+    const harvestEnergy = harvestCfg.laborProfile?.harvestEnergy ?? 15;
+
+    if (this.farmerEnergy < harvestEnergy) {
       return {
         success: false,
         message: '¡Agotado para cosechar! Ve a descansar a la Casa Campesina y tómate un agua de panela.',
@@ -895,9 +916,7 @@ export class FarmSimulation {
         state: this.getState()
       };
     }
-    this.consumeFarmerEnergy(15);
-
-    const harvestCfg = this._getPlotModeConfig(target);
+    this.consumeFarmerEnergy(harvestEnergy);
     const { projectedKg, effectivePricePerKg } = calculateProjectedYield(
       target,
       harvestCfg
@@ -931,7 +950,9 @@ export class FarmSimulation {
         : harvestCfg.harvestFertilityDrain;
     target.fertility = Math.max(10, target.fertility - postHarvestDrain);
 
+    const healthySeedHarvest = target.health >= 80 && (target.pestPressure || 0) < 40;
     // Resetear cama de cultivo lista para un nuevo ciclo
+    resetPests(target);
     target.isPlanted = false;
     target.isPrepared = false;
     target.daysGrown = 0;
@@ -943,7 +964,7 @@ export class FarmSimulation {
 
     // Si la salud fue sobresaliente (>80%), el campesino obtiene semillas propias para el semillero
     let seedBonusMsg = '';
-    if (target.health >= 80) {
+    if (healthySeedHarvest) {
       this.ownSeedInventory += 1;
       seedBonusMsg = ' 🌾 ¡Cosecha limpia! Seleccionaste lechugas madre y obtuviste +1 semilla propia para tu semillero ($0 COP).';
     }
@@ -956,7 +977,7 @@ export class FarmSimulation {
       message: msg,
       earnings,
       harvestKg: projectedKg,
-      seedGained: target.health >= 80,
+      seedGained: healthySeedHarvest,
       ownSeedInventory: this.ownSeedInventory,
       stage: CROP_STAGES.HARVESTED,
       report,
@@ -1132,8 +1153,33 @@ export class FarmSimulation {
       harvestHistory: JSON.parse(JSON.stringify(this.harvestHistory)),
       recentEvents: [...this.recentEvents],
       disclaimer: EDUCATIONAL_DISCLAIMER,
-      plots: JSON.parse(JSON.stringify(this.plots))
+      plots: Object.fromEntries(
+        Object.entries(this.plots).map(([id, plot]) => [
+          id,
+          {
+            ...JSON.parse(JSON.stringify(plot)),
+            laborProfile: this._getPlotModeConfig(plot).laborProfile
+          }
+        ])
+      )
     };
+  }
+
+  controlPests(plotId) {
+    const plot = this.plots[plotId];
+    if (!plot?.isPlanted || plot.isWithered) return { success: false, message: 'No hay un cultivo vivo que cuidar. Retira los restos si está marchito.' };
+    if ((plot.pestPressure || 0) < 15) return { success: false, message: 'No hay un foco activo. Revisa de nuevo mañana.' };
+    if (plot.pestTreatedDay === this.day) return { success: false, message: 'Ya atendiste este lote hoy. Deja actuar el control y revisa mañana.' };
+    const required = this.currentWeather.id === 'heatwave' ? 15 : PEST_CONTROL_ENERGY;
+    if (this.farmerEnergy < required) return { success: false, message: `Necesitas ${required} de energía. Recupera fuerzas en la casa rural.` };
+    this.consumeFarmerEnergy(PEST_CONTROL_ENERGY);
+    plot.pestPressure = Math.max(0, plot.pestPressure - 55);
+    plot.pestProtectionDays = 2;
+    plot.pestTreatedDay = this.day;
+    plot.yieldKg = calculateProjectedYield(plot, this._getPlotModeConfig(plot)).projectedKg;
+    const message = `${plot.name}: retiraste insectos y hojas afectadas. Plaga ${plot.pestPressure}%; protección durante 2 días. El daño anterior no se borra.`;
+    this._recordEvent(`Día ${this.day}: ${message}`);
+    return { success: true, plotId, message, state: this.getState() };
   }
 
   _getTotalExpenses() {

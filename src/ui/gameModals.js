@@ -538,7 +538,7 @@ export class GameModalsController {
       choresEl.replaceChildren();
       for (const plot of Object.values(state.plots)) {
         const item = document.createElement('li');
-        const task = !plot.isPrepared ? 'Preparar la tierra' : !plot.isPlanted ? 'Sembrar' : plot.daysGrown >= plot.daysToMature ? 'Cosechar' : plot.moisture < 40 ? 'Revisar el riego' : 'Vigilar el crecimiento';
+        const task = plot.isWithered ? 'Retirar cultivo perdido' : !plot.isPrepared ? 'Preparar la tierra' : !plot.isPlanted ? 'Sembrar' : plot.daysGrown >= plot.daysToMature ? 'Cosechar hoy' : plot.pestPressure >= 15 ? `Controlar plaga (${plot.pestPressure}%)` : plot.moisture < 40 ? 'Revisar el riego' : 'Vigilar el crecimiento';
         item.textContent = (plot.cropName || plot.id) + ': ' + task + ' · humedad ' + plot.moisture + '%';
         choresEl.appendChild(item);
       }

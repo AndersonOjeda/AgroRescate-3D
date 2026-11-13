@@ -23,6 +23,8 @@ import { TouchControls } from './ui/touchControls.js';
 import { MissionManager } from './gameplay/missionManager.js';
 import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
+import { PestVisualSystem } from './systems/pestVisualSystem.js';
+import { updatePestPanel } from './ui/pestPanel.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -224,6 +226,14 @@ async function bootstrap() {
       });
 
       return {
+        setPestPressure(pressure) {
+          const tint = new THREE.Color(0x9a762e);
+          stageMeshes.forEach(({ node, originalColor }) => {
+            if (node.material?.color && originalColor && stages[0]?.scale.y !== 0.65) {
+              node.material.color.copy(originalColor).lerp(tint, Math.min(0.6, (pressure || 0) / 150));
+            }
+          });
+        },
         setVisualState(visualState) {
           const [s1, s2, s3] = stages;
           if (s1) s1.visible = visualState >= 1;
@@ -403,6 +413,7 @@ async function bootstrap() {
         ]
       };
 
+  const pestVisuals = new PestVisualSystem(scene, sceneCoords.plots, sceneCoords.emitterSpread);
   // Alinear emisores de partículas de riego con las coordenadas reales de las parcelas
   particleSystem.setEmitters(
     sceneCoords.plots.map((p) => ({ x: p.x, y: 1.4, z: p.z })),
@@ -413,6 +424,8 @@ async function bootstrap() {
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
   hud.updateFarmState(initialState);
+  pestVisuals.sync(initialState);
+  updatePestPanel(initialState);
   if (typeof initialState.farmerEnergy === 'number') {
     player.setFatigueFromEnergy(initialState.farmerEnergy);
   }
@@ -673,38 +686,53 @@ async function bootstrap() {
   const effortHold = (base) => Math.round(base * player.getEffortMultiplier() * 100) / 100;
 
   const getPlotActionInfo = (plotState, plotName) => {
-    if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, mode: 'none' };
+    if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, energyCost: 0, mode: 'none' };
+    const lp = plotState.laborProfile || {};
     if (!plotState.isPlanted && !plotState.isPrepared) {
+      const e = lp.prepareEnergy ?? 20;
+      const verb = lp.prepareVerb || 'labrar la tierra (azada)';
       return {
-        actionText: `Mantén [E] para labrar la tierra en ${plotName} (Azada)`,
-        holdDuration: effortHold(1.8),
+        actionText: `Mantén [E] para ${verb} en ${plotName} (-${e}⚡)`,
+        holdDuration: effortHold(lp.prepareHoldSec ?? 1.8),
+        energyCost: e,
         mode: 'prepare'
       };
     }
     if (!plotState.isPlanted) {
+      const e = lp.plantEnergy ?? 15;
+      const verb = lp.plantVerb || 'sembrar';
       return {
-        actionText: `Mantén [E] para sembrar ${plotState.cropName} (Surco a surco)`,
-        holdDuration: effortHold(1.4),
+        actionText: `Mantén [E] para ${verb} ${plotState.cropName} (-${e}⚡)`,
+        holdDuration: effortHold(lp.plantHoldSec ?? 1.4),
+        energyCost: e,
         mode: 'plant'
       };
     }
     if (plotState.daysGrown >= plotState.daysToMature) {
+      const e = lp.harvestEnergy ?? 15;
+      const verb = lp.harvestVerb || 'cosechar';
       return {
-        actionText: `Mantén [E] para cosechar ${plotState.cropName} (${plotState.yieldKg} kg)`,
-        holdDuration: effortHold(1.6),
+        actionText: `Mantén [E] para ${verb} ${plotState.cropName} (${plotState.yieldKg} kg · -${e}⚡)`,
+        holdDuration: effortHold(lp.harvestHoldSec ?? 1.6),
+        energyCost: e,
         mode: 'harvest'
       };
     }
     if (plotState.visualState === 4) {
       return {
-        actionText: `Mantén [E] para desyerbar cultivo marchito`,
+        actionText: `Mantén [E] para desyerbar cultivo marchito (-12⚡)`,
         holdDuration: effortHold(1.2),
+        energyCost: 12,
         mode: 'clean'
       };
     }
+    if ((plotState.pestPressure || 0) >= 15 && plotState.pestTreatedDay !== farmAdapter.simulation.day) {
+      return { actionText: `Mantén E: retirar plagas (${plotState.pestPressure}%) · 12 energía / 15 con calor`, holdDuration: effortHold(1.4), energyCost: 12, mode: 'pests' };
+    }
     return {
-      actionText: `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días). Riega o avanza el día.`,
+      actionText: `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días). Plaga ${plotState.pestPressure || 0}%. Vigila humedad y focos.`,
       holdDuration: 0,
+      energyCost: 0,
       mode: 'growing'
     };
   };
@@ -728,22 +756,31 @@ async function bootstrap() {
           const info = getPlotActionInfo(curPlot, p.name);
           player.faceWorkTarget(p);
 
+          if (info.mode === 'pests') {
+            const energy = currentState.currentWeather?.id === 'heatwave' ? 15 : 12;
+            if (currentState.farmerEnergy < energy) {
+              hud.showToast('Recupera fuerzas en la casa rural antes de retirar plagas.', 'warning');
+              interactionSystem.stopHold(true);
+              return;
+            }
+            player.playActionAnimation('plant');
+          }
           if (info.mode === 'prepare') {
-            if (currentState.farmerEnergy < 20) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Estás exhausto! El campesino no tiene fuerzas para labrar. Descansa en la Casa Campesina con agua de panela.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
             player.playActionAnimation('hoe');
           } else if (info.mode === 'plant') {
-            if (currentState.farmerEnergy < 15) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Demasiado cansado para sembrar! Descansa en la Casa Campesina para recuperar energía.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
             }
             player.playActionAnimation('plant');
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
-            if (currentState.farmerEnergy < 15) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Agotado para cosechar! Ve a descansar a la Casa Campesina.', 'warning', 4200);
               interactionSystem.stopHold(true);
               return;
@@ -762,7 +799,7 @@ async function bootstrap() {
           player.faceWorkTarget(p);
 
           if (info.mode === 'prepare') {
-            if (currentState.farmerEnergy < 20) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Estás exhausto! Descansa en la Casa Campesina y tómate un agua de panela caliente.', 'warning', 4000);
               return;
             }
@@ -775,7 +812,7 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (info.mode === 'plant') {
-            if (currentState.farmerEnergy < 15) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Estás sin energía para sembrar! Descansa en tu Casa Campesina.', 'warning', 4000);
               return;
             }
@@ -787,7 +824,7 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (info.mode === 'harvest' || info.mode === 'clean') {
-            if (currentState.farmerEnergy < 15) {
+            if (currentState.farmerEnergy < info.energyCost) {
               hud.showToast('⚠️ ¡Sin energía para cosechar! Descansa en tu Casa Campesina.', 'warning', 4000);
               return;
             }
@@ -798,8 +835,15 @@ async function bootstrap() {
             } else {
               hud.showToast(res.message, 'warning');
             }
+          } else if (info.mode === 'pests') {
+            const result = await farmAdapter.controlPests(p.id);
+            hud.showToast(result.message, result.success ? 'success' : 'warning', 5000);
+            if (result.success) {
+              pestVisuals.showTreatment(p.id);
+              audioSystem.playSuccess();
+            }
           } else {
-            hud.showToast(`El cultivo está en desarrollo (${curPlot.daysGrown}/${curPlot.daysToMature} días). Riega o avanza el día.`, 'info');
+            hud.showToast(`Cultivo en desarrollo. Plaga ${curPlot.pestPressure || 0}%. Revisa la humedad y vuelve mañana.`, 'info');
           }
         }
       });
@@ -979,14 +1023,14 @@ async function bootstrap() {
     }
 
     const text = item?.actionText?.toLowerCase() || '';
-    if (!isCancelled && text.includes('sembrar')) {
+    if (!isCancelled && (text.includes('sembrar') || text.includes('trasplantar'))) {
       // Dos toques de la mano en la tierra: abrir el hueco y depositar la semilla
       const pos = player.getPosition();
       const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
       const spot = { x: pos.x + fwd.x * 0.5, z: pos.z + fwd.z * 0.5 };
       if (!laborFx1 && progress >= 0.32) { laborFx1 = true; particleSystem.emitFootstepDust(spot); audioSystem.playFootstep(); }
       if (!laborFx2 && progress >= 0.57) { laborFx2 = true; particleSystem.emitFootstepDust(spot); }
-    } else if (!isCancelled && (text.includes('cosechar') || text.includes('desyerbar'))) {
+    } else if (!isCancelled && (text.includes('cosechar') || text.includes('recolectar') || text.includes('desyerbar'))) {
       // La raíz se resiste y luego sale con tierra
       const pos = player.getPosition();
       const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
@@ -1000,7 +1044,7 @@ async function bootstrap() {
     }
 
     // Si está labrando con la azada, sincronizar los dos impactos rítmicos contra la tierra
-    const isHoeing = item?.actionText?.toLowerCase().includes('labrar') || item?.actionText?.toLowerCase().includes('preparar');
+    const isHoeing = text.includes('labrar') || text.includes('preparar') || text.includes('mullir');
     if (!isCancelled && isHoeing) {
       const pos = player.getPosition();
       const fwd = { x: Math.sin(player.rotationY), z: Math.cos(player.rotationY) };
@@ -1030,6 +1074,8 @@ async function bootstrap() {
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
     }
     hud.updateFarmState(state);
+    pestVisuals.sync(state);
+    updatePestPanel(state);
 
     // Sincronizar la fatiga física del campesino (afecta animaciones, ritmo y velocidad)
     if (typeof state?.farmerEnergy === 'number') {
@@ -1137,6 +1183,7 @@ async function bootstrap() {
   });
 
   farmAdapter.on('dayAdvanced', async ({ result }) => {
+    if (result?.pestAlerts?.length) hud.showToast(result.pestAlerts.join(' '), 'warning', 7000);
     if (!naturalDayAdvanceInFlight) {
       skySystem.triggerDayNightCycle();
     }
@@ -1340,6 +1387,7 @@ async function bootstrap() {
         }
       }
       particleSystem.update(delta);
+      pestVisuals.update(delta);
       if (isPumpSprayingManually && !pumpStepPending) {
         pumpTickAcc += delta;
         if (pumpTickAcc >= PUMP_TICK_SECONDS) {

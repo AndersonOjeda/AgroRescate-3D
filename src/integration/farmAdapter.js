@@ -63,6 +63,7 @@ export class FarmAdapter {
       const visual = this.cropPlotVisuals.get(plotId);
       if (visual && typeof visual.setVisualState === 'function') {
         visual.setVisualState(plotData.visualState);
+        visual.setPestPressure?.(plotData.pestPressure || 0);
       }
     }
   }
@@ -227,6 +228,8 @@ export class FarmAdapter {
 
   /** Descansa en la casa campesina y recupera energía */
   restAtFarmerHouse() { return this._run('restAtFarmerHouse', 'farmerRested'); }
+
+  controlPests(plotId) { return this._run('controlPests', 'pestsControlled', plotId); }
 
   /** Selecciona variedad de semilla para la siembra */
   setSelectedSeedVariety(seedId) {

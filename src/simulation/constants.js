@@ -166,7 +166,18 @@ export const MODE_CONFIGS = Object.freeze({
     autoIrrigationThreshold: 0,
     organicPriceMultiplier: 1.0,
     compostMoistureBonus: 2,
-    compostFertilityGain: 10
+    compostFertilityGain: 10,
+    laborProfile: {
+      prepareEnergy: 20,
+      plantEnergy: 15,
+      harvestEnergy: 15,
+      prepareHoldSec: 2.0,
+      plantHoldSec: 1.5,
+      harvestHoldSec: 1.7,
+      prepareVerb: 'labrar a pulso (azada)',
+      plantVerb: 'sembrar surco a surco',
+      harvestVerb: 'cosechar a mano'
+    }
   },
   [SIMULATION_MODES.PRECISION]: {
     id: SIMULATION_MODES.PRECISION,
@@ -196,7 +207,18 @@ export const MODE_CONFIGS = Object.freeze({
     autoIrrigationThreshold: 45,
     organicPriceMultiplier: 1.05,
     compostMoistureBonus: 2,
-    compostFertilityGain: 10
+    compostFertilityGain: 10,
+    laborProfile: {
+      prepareEnergy: 12,
+      plantEnergy: 10,
+      harvestEnergy: 10,
+      prepareHoldSec: 1.1,
+      plantHoldSec: 0.9,
+      harvestHoldSec: 1.1,
+      prepareVerb: 'preparar cama tecnificada',
+      plantVerb: 'trasplantar bandeja calibrada',
+      harvestVerb: 'recolectar lote tecnificado'
+    }
   },
   [SIMULATION_MODES.ECOLOGICAL]: {
     id: SIMULATION_MODES.ECOLOGICAL,
@@ -226,7 +248,18 @@ export const MODE_CONFIGS = Object.freeze({
     autoIrrigationThreshold: 0,
     organicPriceMultiplier: 1.30,
     compostMoistureBonus: 4,
-    compostFertilityGain: 15
+    compostFertilityGain: 15,
+    laborProfile: {
+      prepareEnergy: 14,
+      plantEnergy: 12,
+      harvestEnergy: 12,
+      prepareHoldSec: 1.3,
+      plantHoldSec: 1.3,
+      harvestHoldSec: 1.5,
+      prepareVerb: 'mullir tierra orgánica',
+      plantVerb: 'sembrar con cuidado artesanal',
+      harvestVerb: 'cosechar hoja por hoja'
+    }
   },
   [SIMULATION_MODES.INTEGRATED]: {
     id: SIMULATION_MODES.INTEGRATED,
@@ -256,7 +289,18 @@ export const MODE_CONFIGS = Object.freeze({
     autoIrrigationThreshold: 45,
     organicPriceMultiplier: 1.25,
     compostMoistureBonus: 4,
-    compostFertilityGain: 15
+    compostFertilityGain: 15,
+    laborProfile: {
+      prepareEnergy: 15,
+      plantEnergy: 12,
+      harvestEnergy: 12,
+      prepareHoldSec: 1.4,
+      plantHoldSec: 1.2,
+      harvestHoldSec: 1.4,
+      prepareVerb: 'labrar parcela',
+      plantVerb: 'sembrar',
+      harvestVerb: 'cosechar'
+    }
   }
 });
 

@@ -112,4 +112,25 @@ describe('Fatiga y Desgaste Físico del Campesino', () => {
     expect(prepRes.success).toBe(true);
     expect(sim.farmerEnergy).toBe(80);
   });
+
+  it('aplica mecánicas de esfuerzo y gasto de energía distintas según el tipo de agricultura', () => {
+    const sub = new FarmSimulation('subsistence');
+    const pre = new FarmSimulation('precision');
+    const eco = new FarmSimulation('ecological');
+
+    sub.prepareSoil('plot_1');
+    pre.prepareSoil('plot_2');
+    eco.prepareSoil('plot_3');
+
+    // Subsistencia gasta más energía (20), Ecológica intermedio (14) y Precisión menos (12)
+    expect(sub.farmerEnergy).toBe(80);
+    expect(eco.farmerEnergy).toBe(86);
+    expect(pre.farmerEnergy).toBe(88);
+
+    // En modo Integral 3 en 1 cada parcela conserva su propio perfil laboral
+    const integ = new FarmSimulation('integrated');
+    const st = integ.getState();
+    expect(st.plots.plot_1.laborProfile.prepareHoldSec).toBeGreaterThan(st.plots.plot_2.laborProfile.prepareHoldSec);
+    expect(st.plots.plot_3.laborProfile.prepareHoldSec).toBeLessThan(st.plots.plot_1.laborProfile.prepareHoldSec);
+  });
 });

@@ -1509,6 +1509,18 @@ body.is-touch-device .crosshair {
   max-width: 520px;
 }
 
+.pest-panel { margin-top: 10px; border-top: 1px solid #64748b; padding-top: 8px; pointer-events: auto; }
+.pest-panel summary { cursor: pointer; color: #fde68a; font-weight: 700; }
+.pest-panel ul { list-style: none; padding: 0; margin: 8px 0; max-height: 25vh; overflow-y: auto; }
+.pest-panel li { display: grid; gap: 3px; padding: 8px; margin-bottom: 5px; background: #17251fe8; border-left: 3px solid #84cc16; border-radius: 4px; }
+.pest-panel li[data-severity="high"] { border-color: #f59e0b; }
+.pest-panel li[data-severity="critical"] { border-color: #ef4444; background: #451a1ae8; }
+.pest-panel span { color: #fde68a; font-size: 12px; }
+.pest-panel small, .pest-panel p { color: #d1d5db; font-size: 11px; line-height: 1.4; }
+.pest-panel progress { width: 100%; height: 6px; accent-color: #f59e0b; }
+.pest-panel li[data-severity="critical"] progress { accent-color: #ef4444; }
+@media (max-width: 700px) { .pest-panel ul { max-height: 16vh; } .pest-panel p { display: none; } }
+
 .house-content-box {
   margin: 16px 0;
   background: rgba(15, 23, 42, 0.65);
