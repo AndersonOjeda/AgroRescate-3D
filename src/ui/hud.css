@@ -736,6 +736,83 @@
   gap: 8px;
 }
 
+.agro-guide-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.agro-guide-tab {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.agro-guide-tab.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.65);
+  color: #fef3c7;
+}
+
+.agro-guide-ai-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agro-guide-ai-box.hidden,
+.agro-guide-nav.hidden {
+  display: none;
+}
+
+.agro-guide-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agro-guide-chip {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #a7f3d0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agro-guide-chip:hover {
+  background: rgba(16, 185, 129, 0.28);
+}
+
+.agro-guide-ai-form {
+  display: flex;
+  gap: 6px;
+}
+
+.agro-guide-ai-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(2, 6, 23, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 9px;
+  padding: 7px 10px;
+  color: #f8fafc;
+  font-size: 0.78rem;
+}
+
+.agro-guide-ai-input:focus {
+  outline: none;
+  border-color: rgba(245, 158, 11, 0.75);
+}
+
 @media (max-width: 900px), (pointer: coarse) {
   .agro-hud-dock {
     top: 146px;

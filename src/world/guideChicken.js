@@ -5,69 +5,69 @@ export const GUIDE_STEPS = [
   {
     id: 'welcome',
     badge: 'Bienvenida y Controles',
-    title: '¡Kikirikí! Soy Rudy, tu gallina guía',
-    body: 'Bienvenido a AgroRescate 3D. Tu misión es gestionar la finca y comparar qué enfoque agrícola logra mejor cosecha cuidando el agua y la salud del suelo.',
+    title: '¡Kikirikí! Soy Rudy, tu gallina guía e IA agrícola',
+    body: 'Bienvenido a AgroRescate 3D. Tu misión es gestionar la finca y comparar qué enfoque agrícola logra mejor cosecha cuidando el agua, tu energía y la salud del suelo.',
     tips: [
       'Camina con W, A, S, D y mantén Shift para correr más rápido.',
       'Mueve el ratón para girar la cámara (click en el mapa para bloquear puntero, ESC para liberarlo).',
-      'Acércate a parcelas, bomba, sensor, compostera o granero y presiona E para interactuar.'
+      'Mantén E cerca de parcelas para trabajar con esfuerzo real (azadón, siembra, plagas y cosecha).'
     ],
     spokenText:
-      'Kikirikí. Bienvenido a AgroRescate 3D. Soy Rudy, tu gallina guía. Camina con W, A, S, D, corre con Shift, gira la cámara con el ratón y presiona la tecla E cerca de los elementos de la finca para interactuar.'
+      'Kikirikí. Bienvenido a AgroRescate 3D. Soy Rudy, tu gallina guía con asistente inteligente. Camina con W, A, S, D, corre con Shift, y mantén la tecla E en las parcelas y estaciones para trabajar la tierra.'
   },
   {
     id: 'plots',
-    badge: 'Paso 1 · Parcelas',
-    title: 'Siembra y cosecha en las 3 Parcelas',
-    body: 'Cada parcela representa un sistema distinto. Camina hasta su zona o selecciónala en el Panel Agrícola lateral.',
+    badge: 'Paso 1 · Parcelas y Esfuerzo',
+    title: 'Prepara, siembra y cosecha según cada agricultura',
+    body: 'Cada parcela y modalidad agrícola tiene exigencias distintas de esfuerzo campesino, agua y fertilidad.',
     tips: [
-      'Parcela 1 (Subsistencia, noreste): siembra tradicional con mayor consumo de agua.',
-      'Parcela 2 (Precisión IoT, noroeste): usa microriego eficiente y sensores de humedad.',
-      'Parcela 3 (Ecológica, suroeste): aprovecha compost orgánico para regenerar el suelo.',
-      'Presiona E en una parcela vacía para sembrar y vuelve a presionar E cuando madure para cosechar.'
+      'Parcela 1 (Subsistencia): trabajo manual intenso, mayor gasto de energía y agua.',
+      'Parcela 2 (Precisión IoT): microriego eficiente y sensores con menor fatiga.',
+      'Parcela 3 (Ecológica): regeneración orgánica con compost y control biológico.',
+      'Vigila los brotes de plagas y mantén E para tratarlos antes de perder la cosecha.'
     ],
     spokenText:
-      'En la finca hay tres parcelas: Subsistencia al noreste, Precisión I o T al noroeste y Ecológica al suroeste. Acércate a una parcela y presiona E para sembrar, y vuelve a presionar E cuando el cultivo madure para cosecharlo.'
+      'En la finca hay tres parcelas con mecánicas distintas: Subsistencia, Precisión I o T y Ecológica. Prepara el terreno con el azadón manteniendo E, siembra, controla las plagas a tiempo y cosecha al madurar.'
   },
   {
     id: 'stations',
-    badge: 'Paso 2 · Estaciones',
-    title: 'Usa la Bomba, el Sensor, la Compostera y el Granero',
-    body: 'Los cultivos pierden humedad cada día. Usa las estaciones de la finca para mantenerlos sanos y evitar que se marchiten.',
+    badge: 'Paso 2 · Estaciones y Casa Rural',
+    title: 'Bomba, Sensor, Compostera, Acopio y Casa Rural',
+    body: 'Usa las estaciones de la finca para cuidar tus cultivos y descansa en la Casa Rural cuando baje tu energía.',
     tips: [
-      'Bomba y Tanque de Agua (sur): presiona E para activar el riego en tu parcela activa o recargar agua.',
-      'Sensor de Humedad IoT (junto a la Parcela 2): presiona E para consultar la telemetría de humedad y suelo.',
-      'Compostera Orgánica (suroeste): presiona E para aplicar abono orgánico y mejorar la fertilidad.',
-      'Granero y Silo (sureste): acércate al frente y presiona E para lanzar cajas físicas con Cannon-es.'
+      'Bomba de Agua (sur): mantén E para regar la parcela activa.',
+      'Sensor IoT y Compostera: consulta telemetría o prepara abono orgánico.',
+      'Centro de Acopio: compra semillas y vende tus cosechas al mercado justo.',
+      'Casa Rural: entra con E para ver estadísticas, avisos de cultivos y cerrar los ojos para descansar.'
     ],
     spokenText:
-      'Cuida tus cultivos usando las estaciones: presiona E en la bomba de agua para regar, en el sensor de humedad para ver telemetría en vivo, en la compostera para abonar el suelo y frente al silo del granero para probar cajas físicas.'
+      'Cuida tus cultivos usando la bomba de agua, la compostera, el sensor y el centro de acopio. Cuando estés cansado o anochezca, entra a la Casa Rural para ver el estado de tus cultivos y cerrar los ojos para descansar.'
   },
   {
     id: 'modes_and_time',
-    badge: 'Paso 3 · Tiempo y Modos',
-    title: 'Cambia de Modo Agrícola y Avanza Días',
-    body: 'Experimenta cómo responden los cultivos al paso del tiempo, al clima y a cada tecnología agrícola.',
+    badge: 'Paso 3 · Ciclo del Día y Clima',
+    title: 'El tiempo fluye: Mañana, Mediodía, Tarde y Noche',
+    body: 'Ya no dependes de un botón mágico: estás a merced del clima y del paso continuo del día.',
     tips: [
-      'En la barra superior o panel izquierdo cambia entre Subsistencia, Precisión IoT y Ecológica.',
-      'Pulsa Avanzar Día para hacer crecer los cultivos y observar el ciclo de día y noche.',
+      'Observa la fase del día en la barra superior (Mañana, Mediodía, Tarde y Noche).',
+      'Cambia de modalidad agrícola en el panel superior o lateral para comparar sus mecánicas.',
       'Atajos útiles: R alterna lluvia ambiental y F lanza una caja física donde estés parado.'
     ],
     spokenText:
-      'Usa la barra superior o el panel izquierdo para cambiar entre los modos Subsistencia, Precisión y Ecológica. Pulsa Avanzar Día para ver crecer los cultivos y observar el cielo, y recuerda que R cambia la lluvia y F lanza una caja física.'
+      'El día avanza de forma continua entre mañana, mediodía, tarde y noche, y el clima cambia tu finca. Usa la pestaña de Asesor IA cuando quieras que analice tus parcelas en vivo.'
   },
   {
     id: 'goals',
-    badge: 'Paso 4 · Objetivo Final',
-    title: 'Analiza la Comparativa y Sostenibilidad',
-    body: 'Administra bien tu presupuesto ($), reserva hídrica (L) y salud del suelo (%) antes de que tus plantas sufran estrés hídrico.',
+    badge: 'Paso 4 · Rudy IA y Comparativa',
+    title: 'Consulta mi Asesor IA y analiza la Sostenibilidad',
+    body: 'Cambia a la pestaña "🧠 Asesor IA" arriba para preguntarme sobre riego, plagas, energía o qué hacer ahora mismo.',
     tips: [
-      'Si la humedad baja demasiado al avanzar el día, el cultivo puede marchitarse (E para limpiarlo).',
-      'Abre 📊 Comparativa en la esquina inferior derecha o 📊 Demo 3 Modos para comparar rendimiento y ahorro de agua.',
-      'Cuando quieras volver a escuchar las instrucciones, acércate a mí o pulsa 🐔 Guía en la barra inferior.'
+      'Cuando mi marcador brille en rojo o ámbar, tengo una alerta urgente sobre tus cultivos.',
+      'Abre 📊 Comparativa o 📊 Demo 3 Modos para evaluar rendimiento y ahorro hídrico.',
+      'Pulsa 🐔 Rudy en la barra inferior o acércate a mí con E cuando necesites ayuda.'
     ],
     spokenText:
-      'Controla tu presupuesto, tu agua y la salud del suelo cada día. Cuando termines tus pruebas, abre el botón Comparativa o Demo tres modos para ver qué sistema produce más cuidando el agua. Mucho éxito en la finca.'
+      'Cuando veas mi marcador brillar en ámbar o rojo, acércate para recibir alertas en vivo de mi Asesor I A. Mucho éxito trabajando la tierra.'
   }
 ];
 
@@ -132,6 +132,8 @@ export class GuideChicken {
     this.activeAction = null;
     this.hasTalked = false;
     this.isTalking = false;
+    this.alertLevel = 'normal';
+    this.celebrateTimer = 0;
     this.lookRange = options.lookRange ?? 6.5;
 
     this.group = new THREE.Group();
@@ -273,14 +275,51 @@ export class GuideChicken {
    */
   setTalked(talked = true) {
     this.hasTalked = Boolean(talked);
+    this._syncIndicatorColors();
+  }
+
+  /**
+   * Ajusta el nivel de alerta visual de Rudy ('normal' | 'warning' | 'critical').
+   * @param {'normal'|'warning'|'critical'} level
+   */
+  setAlertState(level = 'normal') {
+    this.alertLevel = ['critical', 'warning', 'normal'].includes(level) ? level : 'normal';
+    this._syncIndicatorColors();
+  }
+
+  /**
+   * Pequeño salto de celebración de Rudy (ej. al cosechar o completar una misión).
+   */
+  celebrate() {
+    this.celebrateTimer = 1.1;
+  }
+
+  _syncIndicatorColors() {
+    let hex = this.hasTalked ? 0x34d399 : 0xf59e0b;
+    let emissive = this.hasTalked ? 0x059669 : 0xd97706;
+    let emissiveIntensity = this.hasTalked ? 0.45 : 0.7;
+    let ringOpacity = this.hasTalked ? 0.3 : 0.45;
+
+    if (this.alertLevel === 'critical') {
+      hex = 0xef4444;
+      emissive = 0xdc2626;
+      emissiveIntensity = 0.95;
+      ringOpacity = 0.65;
+    } else if (this.alertLevel === 'warning') {
+      hex = 0xf59e0b;
+      emissive = 0xd97706;
+      emissiveIntensity = 0.8;
+      ringOpacity = 0.55;
+    }
+
     if (this.markerMat) {
-      this.markerMat.color.setHex(this.hasTalked ? 0x34d399 : 0xf59e0b);
-      this.markerMat.emissive.setHex(this.hasTalked ? 0x059669 : 0xd97706);
-      this.markerMat.emissiveIntensity = this.hasTalked ? 0.45 : 0.7;
+      this.markerMat.color.setHex(hex);
+      this.markerMat.emissive.setHex(emissive);
+      this.markerMat.emissiveIntensity = emissiveIntensity;
     }
     if (this.ringMat) {
-      this.ringMat.color.setHex(this.hasTalked ? 0x34d399 : 0xfbbf24);
-      this.ringMat.opacity = this.hasTalked ? 0.3 : 0.45;
+      this.ringMat.color.setHex(hex);
+      this.ringMat.opacity = ringOpacity;
     }
   }
 
@@ -308,13 +347,25 @@ export class GuideChicken {
       this.visualModel.position.y = Math.sin(t) * 0.02;
     }
 
+    if (this.celebrateTimer > 0) {
+      this.celebrateTimer = Math.max(0, this.celebrateTimer - delta);
+      const hop = Math.abs(Math.sin(this.celebrateTimer * Math.PI * 3)) * 0.16;
+      this.visualPivot.position.y = hop;
+    } else if (this.alertLevel === 'critical') {
+      const alertT = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.006;
+      this.visualPivot.position.y = Math.max(0, Math.sin(alertT)) * 0.04;
+    } else {
+      this.visualPivot.position.y = 0;
+    }
+
     const nowSec = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.001;
+    const pulseSpeed = this.alertLevel === 'critical' ? 6.0 : this.alertLevel === 'warning' ? 4.4 : 3.2;
     if (this.markerGroup) {
-      this.markerGroup.position.y = this.markerBaseY + Math.sin(nowSec * 3.2) * 0.07;
-      this.markerGroup.rotation.y += delta * (this.isTalking ? 3.2 : 1.6);
+      this.markerGroup.position.y = this.markerBaseY + Math.sin(nowSec * pulseSpeed) * 0.07;
+      this.markerGroup.rotation.y += delta * (this.isTalking ? 3.2 : this.alertLevel === 'critical' ? 2.6 : 1.6);
     }
     if (this.groundRing) {
-      const pulse = 1 + Math.sin(nowSec * 3.0) * 0.05;
+      const pulse = 1 + Math.sin(nowSec * pulseSpeed) * (this.alertLevel === 'critical' ? 0.09 : 0.05);
       this.groundRing.scale.setScalar(pulse);
     }
 

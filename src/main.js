@@ -16,6 +16,7 @@ import { FarmLoader, collectGlbSceneObstacles } from './world/farmLoader.js';
 import { createNaturalHorizon } from './world/landscapeEnhancer.js';
 import { MultimediaStation } from './world/multimediaStation.js';
 import { GuideChicken } from './world/guideChicken.js';
+import { analyzeFarmWithRudyAI } from './ai/rudyAdvisor.js';
 import { FarmAdapter } from './integration/farmAdapter.js';
 import { HUD } from './ui/hud.js';
 import { DebugGUI } from './ui/debugGui.js';
@@ -25,6 +26,7 @@ import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
 import { PestVisualSystem } from './systems/pestVisualSystem.js';
 import { updatePestPanel } from './ui/pestPanel.js';
+import { getFarmNeed } from './gameplay/farmNeeds.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -42,7 +44,7 @@ async function bootstrap() {
   window.addEventListener('resize', () => handleResize(camera));
 
   // 2. HUD e Interfaces
-  const hud = new HUD();
+  const hud = new HUD({ collapsed: true });
   hud.updateLoadingProgress(10, 'Inicializando motor 3D y sistemas...');
 
   // 3. Físicas con Cannon-es
@@ -708,7 +710,7 @@ async function bootstrap() {
         mode: 'plant'
       };
     }
-    if (plotState.daysGrown >= plotState.daysToMature) {
+    if (plotState.daysGrown >= plotState.daysToMature && plotState.visualState !== 4) {
       const e = lp.harvestEnergy ?? 15;
       const verb = lp.harvestVerb || 'cosechar';
       return {
@@ -727,7 +729,8 @@ async function bootstrap() {
       };
     }
     if ((plotState.pestPressure || 0) >= 15 && plotState.pestTreatedDay !== farmAdapter.simulation.day) {
-      return { actionText: `Mantén E: retirar plagas (${plotState.pestPressure}%) · 12 energía / 15 con calor`, holdDuration: effortHold(1.4), energyCost: 12, mode: 'pests' };
+      const action = plotState.pestAction;
+      return { actionText: `Mantén E: ${action.label} (${plotState.pestPressure}%) · ${action.energy} energía${action.cost ? ` · $${action.cost} COP` : ''}`, holdDuration: effortHold(action.duration), energyCost: action.energy, animation: action.animation, mode: 'pests' };
     }
     return {
       actionText: `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días). Plaga ${plotState.pestPressure || 0}%. Vigila humedad y focos.`,
@@ -757,13 +760,13 @@ async function bootstrap() {
           player.faceWorkTarget(p);
 
           if (info.mode === 'pests') {
-            const energy = currentState.currentWeather?.id === 'heatwave' ? 15 : 12;
+            const energy = info.energyCost;
             if (currentState.farmerEnergy < energy) {
               hud.showToast('Recupera fuerzas en la casa rural antes de retirar plagas.', 'warning');
               interactionSystem.stopHold(true);
               return;
             }
-            player.playActionAnimation('plant');
+            player.playActionAnimation(info.animation, info.holdDuration);
           }
           if (info.mode === 'prepare') {
             if (currentState.farmerEnergy < info.energyCost) {
@@ -911,6 +914,10 @@ async function bootstrap() {
   // E2. Casa Campesina (Hogar, Descanso Familiar y Sabiduría Campesina)
   // Acceso exterior, fuera de la colisión del edificio.
   const houseCoords = isGlb ? { x: 7.3, y: 0.8, z: 6.2 } : { x: -15.1, y: 0.8, z: -9.4 };
+  modals.worldMenus = [
+    { kind: 'house', position: houseCoords, radius: 5 },
+    { kind: 'warehouse', position: sceneCoords.warehouse, radius: 5.2 }
+  ];
   interactionSystem.register({
     id: 'interact_house',
     name: 'Casa Campesina (Hogar y Descanso)',
@@ -960,9 +967,23 @@ async function bootstrap() {
     );
   };
 
+  hud.onRudySpeak = (spokenText) => {
+    guideChicken.setTalked(true);
+    guideChicken.setTalking(true);
+    audioSystem.playChickenCluck();
+    if (spokenText) {
+      audioSystem.speakGuideText(spokenText);
+    }
+  };
+
   hud.onChickenVoiceToggle = (voiceEnabled, step) => {
-    if (voiceEnabled && hud.isChickenGuideOpen() && step?.spokenText) {
-      audioSystem.speakGuideText(step.spokenText);
+    if (voiceEnabled && hud.isChickenGuideOpen()) {
+      if (hud.chickenGuideTab === 'ai') {
+        const analysis = hud.refreshRudyAI({ speak: false });
+        if (analysis?.spokenText) audioSystem.speakGuideText(analysis.spokenText);
+      } else if (step?.spokenText) {
+        audioSystem.speakGuideText(step.spokenText);
+      }
     } else {
       audioSystem.stopGuideSpeech();
     }
@@ -974,7 +995,7 @@ async function bootstrap() {
     audioSystem.stopGuideSpeech();
     interactionSystem.updateActionText(
       'interact_guide_chicken',
-      'Presiona E para hablar con la gallina guía (Cómo jugar)'
+      'Presiona E para hablar con la gallina guía (Rudy IA)'
     );
     if (options.relock && !player.isLocked && hud.startOverlay?.classList.contains('hidden')) {
       player.requestLock();
@@ -983,17 +1004,19 @@ async function bootstrap() {
 
   interactionSystem.register({
     id: 'interact_guide_chicken',
-    name: 'Rudy — Gallina Guía',
+    name: 'Rudy — Gallina Guía e IA',
     position: { x: guideChicken.position.x, y: 0.5, z: guideChicken.position.z },
     customDistance: 4.0,
-    actionText: 'Presiona E para hablar con la gallina guía (Cómo jugar)',
+    actionText: 'Presiona E para hablar con la gallina guía (Rudy IA)',
     onInteract: () => {
       if (!hud.isChickenGuideOpen()) {
         guideOpenedByProximity = true;
         if (player.isLocked) {
           player.unlock();
         }
-        hud.openChickenGuide(0);
+        hud.openChickenGuide(0, { tab: guideChicken.hasTalked ? 'ai' : 'guide' });
+      } else if (hud.chickenGuideTab === 'ai') {
+        hud.closeChickenGuide({ relock: false });
       } else {
         hud.nextChickenGuideStep({ closeAtEnd: true, relock: false });
       }
@@ -1074,6 +1097,18 @@ async function bootstrap() {
       hud.renderMission(missionManager.getSnapshot(), 'Estado cosecha: En desarrollo');
     }
     hud.updateFarmState(state);
+    const need = getFarmNeed(state);
+    const needTitle = document.getElementById('need-title');
+    const needReason = document.getElementById('need-reason');
+    if (needTitle) needTitle.textContent = need.title;
+    if (needReason) needReason.textContent = need.reason;
+    const active = state.plots[state.activePlotId];
+    for (const key of ['moisture', 'fertility', 'health']) {
+      const bar = document.getElementById(`player-crop-${key}`);
+      if (bar) { bar.value = active[key]; bar.title = `${active.name}: ${Math.round(active[key])}%`; }
+      const value = document.getElementById(`player-crop-${key}-value`);
+      if (value) value.textContent = `${Math.round(active[key])}%`;
+    }
     pestVisuals.sync(state);
     updatePestPanel(state);
 
@@ -1183,6 +1218,10 @@ async function bootstrap() {
   });
 
   farmAdapter.on('dayAdvanced', async ({ result }) => {
+    if (['storm', 'flood', 'frost', 'heatwave'].includes(result?.state?.currentWeather?.id)) {
+      const weather = result.state.currentWeather;
+      hud.showToast(`${weather.icon} ${weather.name}: ${weather.description}`, 'warning', 8000);
+    }
     if (result?.pestAlerts?.length) hud.showToast(result.pestAlerts.join(' '), 'warning', 7000);
     if (!naturalDayAdvanceInFlight) {
       skySystem.triggerDayNightCycle();
@@ -1190,6 +1229,11 @@ async function bootstrap() {
     const state = result?.state || (await farmAdapter.getState());
     if (state?.currentWeather?.id) {
       weatherSystem.setWeather(state.currentWeather.id);
+    }
+    const rudyAnalysis = analyzeFarmWithRudyAI(state, skySystem.getDayPhaseName?.() || 'Mañana');
+    guideChicken.setAlertState(rudyAnalysis.urgency);
+    if (hud.isChickenGuideOpen() && hud.chickenGuideTab === 'ai') {
+      hud.refreshRudyAI({ speak: false });
     }
     missionManager.handleEvent({ type: 'dayAdvanced', state });
     const p = state?.plots?.[state.activePlotId];
@@ -1252,7 +1296,7 @@ async function bootstrap() {
     startTimeOfDay: 0.08,
     onDayComplete: async () => {
       const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
-      if (inMenu || naturalDayAdvanceInFlight || advanceDayPending || modals.isPaused) return;
+      if (inMenu || naturalDayAdvanceInFlight || advanceDayPending || modals.houseActionPending) return;
       naturalDayAdvanceInFlight = true;
       try {
         const res = await farmAdapter.advanceDay();
@@ -1335,9 +1379,6 @@ async function bootstrap() {
     if (e.code === 'KeyF') {
       physicsWorld.dropDemoCrate(player.getPosition());
       hud.showToast('📦 Caja física arrojada (Tecla F)', 'info', 1800);
-    } else if (e.code === 'KeyR') {
-      const raining = particleSystem.toggleRain();
-      hud.showToast(raining ? '🌧️ Lluvia ambiental' : '☀️ Clima despejado', 'info', 1800);
     }
   });
 
@@ -1353,6 +1394,12 @@ async function bootstrap() {
 
   // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
   gameLoop.addUpdateCallback((delta, fps) => {
+    const inStartMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+    skySystem.autoCycleEnabled = !inStartMenu;
+    skySystem.update(delta);
+    hud.setDayPhase(skySystem.phaseName);
+    weatherSystem.update(delta, { preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning });
+    modals.updateWorldMenus(player.getPosition());
     if (!modals.isPaused) {
       // A. Actualizar jugador y cámara en tercera persona
       player.update(delta);
@@ -1366,13 +1413,6 @@ async function bootstrap() {
       physicsWorld.step(delta);
 
       // C. Actualizar atmósfera (nubes + ciclo continuo Mañana/Mediodía/Tarde/Noche + clima dinámico), fauna, molino, gallina guía y partículas
-      const isInMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
-      skySystem.autoCycleEnabled = !isInMenu;
-      skySystem.update(delta);
-      hud.setDayPhase(skySystem.phaseName);
-      weatherSystem.update(delta, {
-        preserveDayCycle: skySystem.autoCycleEnabled && !skySystem.isTransitioning
-      });
       const isNight = skySystem.phaseName === 'Noche';
       wildlifeSystem.update(delta, isNight);
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {

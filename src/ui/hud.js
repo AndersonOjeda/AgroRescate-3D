@@ -14,6 +14,7 @@ import {
 } from '../simulation/farmSimulation.js';
 import { CROP_STAGES, EDUCATIONAL_DISCLAIMER, SIMULATION_MODES, formatCOP } from '../simulation/constants.js';
 import { GUIDE_STEPS } from '../world/guideChicken.js';
+import { analyzeFarmWithRudyAI, askRudyAI, RUDY_QUICK_QUESTIONS } from '../ai/rudyAdvisor.js';
 
 const LIFECYCLE_STEPS = [
   { key: CROP_STAGES.UNPLANTED, label: 'Sin sembrar' },
@@ -55,10 +56,13 @@ export class HUD {
 
     this.chickenGuideSteps = GUIDE_STEPS;
     this.chickenGuideIndex = 0;
+    this.chickenGuideTab = 'guide';
     this.chickenVoiceEnabled = true;
+    this.currentDayPhase = 'Mañana';
     this.onChickenGuideStepChange = null;
     this.onChickenGuideClose = null;
     this.onChickenVoiceToggle = null;
+    this.onRudySpeak = null;
     this.onPromptTap = options.onPromptTap || null;
 
     if (!this.doc) return;
@@ -941,6 +945,26 @@ export class HUD {
     head.appendChild(speaker);
     head.appendChild(closeBtn);
 
+    const tabs = d.createElement('div');
+    tabs.className = 'agro-guide-tabs';
+
+    const tabGuideBtn = d.createElement('button');
+    tabGuideBtn.type = 'button';
+    tabGuideBtn.id = 'agro-guide-tab-guide';
+    tabGuideBtn.className = 'agro-guide-tab active';
+    tabGuideBtn.textContent = '📖 Guía Paso a Paso';
+    tabGuideBtn.addEventListener('click', () => this.setChickenGuideTab('guide'));
+
+    const tabAiBtn = d.createElement('button');
+    tabAiBtn.type = 'button';
+    tabAiBtn.id = 'agro-guide-tab-ai';
+    tabAiBtn.className = 'agro-guide-tab';
+    tabAiBtn.textContent = '🧠 Asesor IA (En vivo)';
+    tabAiBtn.addEventListener('click', () => this.setChickenGuideTab('ai'));
+
+    tabs.appendChild(tabGuideBtn);
+    tabs.appendChild(tabAiBtn);
+
     const title = d.createElement('h3');
     title.id = 'agro-guide-title';
     title.className = 'agro-guide-title';
@@ -952,6 +976,55 @@ export class HUD {
     const tips = d.createElement('ul');
     tips.id = 'agro-guide-tips';
     tips.className = 'agro-guide-tips';
+
+    const aiBox = d.createElement('div');
+    aiBox.id = 'agro-guide-ai-box';
+    aiBox.className = 'agro-guide-ai-box hidden';
+
+    const chips = d.createElement('div');
+    chips.className = 'agro-guide-ai-chips';
+    for (const q of RUDY_QUICK_QUESTIONS) {
+      const chip = d.createElement('button');
+      chip.type = 'button';
+      chip.className = 'agro-guide-chip';
+      chip.textContent = q.label;
+      chip.addEventListener('click', () => this.askRudy(q.query));
+      chips.appendChild(chip);
+    }
+
+    const aiForm = d.createElement('form');
+    aiForm.className = 'agro-guide-ai-form';
+    const aiInput = d.createElement('input');
+    aiInput.type = 'text';
+    aiInput.id = 'agro-guide-ai-input';
+    aiInput.className = 'agro-guide-ai-input';
+    aiInput.placeholder = 'Pregúntale a Rudy (ej. riego, plagas, energía, modos)…';
+    aiInput.ariaLabel = 'Pregunta para Rudy IA';
+    // Evita que WASD o E disparen controles del juego mientras se escribe
+    aiInput.addEventListener('keydown', (e) => e.stopPropagation());
+    aiInput.addEventListener('keyup', (e) => e.stopPropagation());
+
+    const aiSubmit = d.createElement('button');
+    aiSubmit.type = 'submit';
+    aiSubmit.id = 'agro-guide-ai-submit';
+    aiSubmit.className = 'agro-guide-btn primary';
+    aiSubmit.textContent = 'Preguntar';
+
+    aiForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const question = aiInput.value.trim();
+      if (!question) {
+        this.refreshRudyAI({ speak: true });
+        return;
+      }
+      this.askRudy(question);
+      aiInput.value = '';
+    });
+
+    aiForm.appendChild(aiInput);
+    aiForm.appendChild(aiSubmit);
+    aiBox.appendChild(chips);
+    aiBox.appendChild(aiForm);
 
     const actions = d.createElement('div');
     actions.className = 'agro-guide-actions';
@@ -995,9 +1068,11 @@ export class HUD {
     hint.appendChild(hintRight);
 
     card.appendChild(head);
+    card.appendChild(tabs);
     card.appendChild(title);
     card.appendChild(body);
     card.appendChild(tips);
+    card.appendChild(aiBox);
     card.appendChild(actions);
     card.appendChild(hint);
     host.appendChild(card);
@@ -1005,18 +1080,87 @@ export class HUD {
     this.guideCardEl = card;
     this.guideRefs = {
       badge,
+      tabGuideBtn,
+      tabAiBtn,
       title,
       body,
       tips,
+      aiBox,
+      aiInput,
       voiceBtn,
       prevBtn,
-      nextBtn
+      nextBtn,
+      nav
     };
     this._renderChickenGuideStep();
   }
 
   isChickenGuideOpen() {
     return Boolean(this.guideCardEl && !this.guideCardEl.classList.contains('hidden'));
+  }
+
+  setChickenGuideTab(tab = 'guide', options = {}) {
+    this.chickenGuideTab = tab === 'ai' ? 'ai' : 'guide';
+    if (!this.guideRefs) return;
+    const isAi = this.chickenGuideTab === 'ai';
+    this.guideRefs.tabGuideBtn?.classList.toggle('active', !isAi);
+    this.guideRefs.tabAiBtn?.classList.toggle('active', isAi);
+    this.guideRefs.aiBox?.classList.toggle('hidden', !isAi);
+    this.guideRefs.nav?.classList.toggle('hidden', isAi);
+
+    if (isAi) {
+      this.refreshRudyAI({ speak: options.speak !== false });
+    } else {
+      this._renderChickenGuideStep();
+      if (options.speak !== false && typeof this.onChickenGuideStepChange === 'function') {
+        const step = this.chickenGuideSteps[this.chickenGuideIndex];
+        this.onChickenGuideStepChange(step, this.chickenGuideIndex, this.chickenGuideSteps.length, this.chickenVoiceEnabled);
+      }
+    }
+  }
+
+  refreshRudyAI(options = {}) {
+    const analysis = analyzeFarmWithRudyAI(this.lastState, this.currentDayPhase);
+    this._renderRudyAIResponse({
+      badge: `IA · Salud ${analysis.score}/100`,
+      title: analysis.headline,
+      body: analysis.summary,
+      tips: analysis.tips,
+      spokenText: analysis.spokenText
+    }, options);
+    return analysis;
+  }
+
+  askRudy(question, options = {}) {
+    const answer = askRudyAI(question, this.lastState, this.currentDayPhase);
+    this._renderRudyAIResponse({
+      badge: 'Rudy IA · Respuesta',
+      title: answer.title,
+      body: answer.body,
+      tips: answer.tips,
+      spokenText: answer.spokenText
+    }, { speak: options.speak !== false });
+    return answer;
+  }
+
+  _renderRudyAIResponse(payload, options = {}) {
+    if (!this.guideRefs) return;
+    const { badge, title, body, tips, voiceBtn } = this.guideRefs;
+    badge.textContent = payload.badge || 'Rudy IA';
+    title.textContent = payload.title || '';
+    body.textContent = payload.body || '';
+    tips.innerHTML = '';
+    for (const tipText of payload.tips || []) {
+      const li = this.doc.createElement('li');
+      li.textContent = tipText;
+      tips.appendChild(li);
+    }
+    voiceBtn.textContent = this.chickenVoiceEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
+    voiceBtn.classList.toggle('voice-active', this.chickenVoiceEnabled);
+
+    if (options.speak && this.chickenVoiceEnabled && payload.spokenText && typeof this.onRudySpeak === 'function') {
+      this.onRudySpeak(payload.spokenText);
+    }
   }
 
   openChickenGuide(stepIndex = 0, options = {}) {
@@ -1027,6 +1171,15 @@ export class HUD {
     if (this.interactionPrompt) {
       this.interactionPrompt.classList.add('hidden');
     }
+    if (options.tab === 'ai') {
+      this.setChickenGuideTab('ai', { speak: !options.silent });
+      return null;
+    }
+    this.chickenGuideTab = 'guide';
+    this.guideRefs?.tabGuideBtn?.classList.add('active');
+    this.guideRefs?.tabAiBtn?.classList.remove('active');
+    this.guideRefs?.aiBox?.classList.add('hidden');
+    this.guideRefs?.nav?.classList.remove('hidden');
     const step = this._renderChickenGuideStep();
     if (!options.silent && typeof this.onChickenGuideStepChange === 'function') {
       this.onChickenGuideStepChange(step, this.chickenGuideIndex, total, this.chickenVoiceEnabled);
@@ -1465,7 +1618,9 @@ export class HUD {
    * @param {string} phaseName
    */
   setDayPhase(phaseName) {
-    if (!this.hudDayPhase || !phaseName) return;
+    if (!phaseName) return;
+    this.currentDayPhase = phaseName;
+    if (!this.hudDayPhase) return;
     const icons = {
       'Mañana': '🌅 Mañana',
       'Mediodía': '☀️ Mediodía',
