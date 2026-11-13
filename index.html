@@ -387,6 +387,55 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal: Tienda y Centro de Acopio Campesino (Almacén) -->
+    <div id="warehouse-store-modal" class="report-modal hidden">
+      <div class="report-card warehouse-card">
+        <div class="report-header">
+          <h2>🏪 Centro de Acopio y Tienda Campesina</h2>
+          <button id="btn-close-store" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <p class="report-intro">Apoya la soberanía alimentaria veredal comprando semillas locales o entregando tu cosecha al comercio justo.</p>
+        <div class="warehouse-grid">
+          <div class="store-section">
+            <h3>🌱 Semillas Campesinas Disponibles</h3>
+            <div id="store-seeds-list" class="store-items-list"></div>
+          </div>
+          <div class="store-section">
+            <h3>⚖️ Cosecha y Acopio de Hortalizas</h3>
+            <div id="store-harvest-box" class="store-harvest-box">
+              <p>Acércate con tus cosechas maduras para pesarlas en báscula veredal y seleccionar venta a intermediario o mercado campesino directo.</p>
+            </div>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button id="btn-store-done" type="button" class="btn-primary">Aceptar y Salir</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Casa Campesina (Descanso y Cuentas Familiares) -->
+    <div id="farmer-house-modal" class="report-modal hidden">
+      <div class="report-card house-card">
+        <div class="report-header">
+          <h2>🏡 Hogar Campesino — Descanso y Familia</h2>
+          <button id="btn-close-house" class="btn-close" title="Cerrar">&times;</button>
+        </div>
+        <p class="report-intro">Tras una jornada de arduo trabajo en el campo, el campesino regresa a su casa humilde a tomar agua de panela con queso y reponer fuerzas para el nuevo día.</p>
+        <div class="house-content-box">
+          <blockquote id="house-quote" class="farmer-quote">«Tierra que da de comer, merece que la aprendas a querer.»</blockquote>
+          <div class="house-stats">
+            <div><strong>⚡ Energía campesina:</strong> <span id="house-energy-val">100%</span> (Recuperada)</div>
+            <div><strong>📅 Día en curso:</strong> <span id="house-day-val">Día 1</span></div>
+            <div><strong>💰 Saldo familiar:</strong> <span id="house-budget-val">$55.000 COP</span></div>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button id="btn-house-sleep" type="button" class="btn-primary">🌙 Descansar y Avanzar al Siguiente Día</button>
+          <button id="btn-house-continue" type="button" class="hud-btn">Salir al Corredor</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

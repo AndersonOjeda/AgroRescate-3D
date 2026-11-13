@@ -163,6 +163,32 @@ async function bootstrap() {
         farmAdapter.registerCropPlotVisual(plotId, visual);
       }
     }
+
+    // Adaptabilidad visual dinámica de la finca según modalidad elegida (sin nuevos mapas GLB)
+    const syncEnvironmentModeElements = (mode) => {
+      const isSub = mode === 'subsistence';
+      const isPre = mode === 'precision';
+      const isEco = mode === 'ecological';
+
+      // Sensores y paneles IoT
+      const iotElements = ['sensor_humedad', 'sensor_humedad_display', 'sensor_humedad_led', 'panel_solar', 'panel_solar_base'];
+      iotElements.forEach(name => {
+        const obj = farmEnv.root.getObjectByName(name);
+        if (obj) obj.visible = isPre || mode === 'integrated';
+      });
+
+      // Elementos rústicos tradicionales
+      const subElements = ['espantapajaros_poste', 'espantapajaros_brazos', 'espantapajaros_camisa', 'espantapajaros_cabeza', 'espantapajaros_sombrero'];
+      subElements.forEach(name => {
+        const obj = farmEnv.root.getObjectByName(name);
+        if (obj) obj.visible = isSub || isEco || mode === 'integrated';
+      });
+    };
+
+    farmAdapter.on('stateChange', ({ state }) => {
+      if (state && state.mode) syncEnvironmentModeElements(state.mode);
+    });
+    syncEnvironmentModeElements(farmAdapter.simulation.mode);
   }
 
   // Vincular audio posicional al mesh de la bomba de agua
@@ -572,6 +598,8 @@ async function bootstrap() {
           const curPlot = currentState.plots[p.id];
 
           if (!curPlot.isPlanted && !curPlot.isPrepared) {
+            // Labranza campesina con animación de azada
+            player.playActionAnimation();
             const res = await farmAdapter.prepareSoil(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -580,7 +608,8 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (!curPlot.isPlanted) {
-            // Sembrar
+            // Sembrar con dedicación agachado
+            player.playActionAnimation();
             const res = await farmAdapter.plant(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -589,7 +618,8 @@ async function bootstrap() {
               hud.showToast(res.message, 'warning');
             }
           } else if (curPlot.daysGrown >= curPlot.daysToMature || curPlot.visualState === 4) {
-            // Cosechar o limpiar
+            // Cosechar con canastilla
+            player.playActionAnimation();
             const res = await farmAdapter.harvest(p.id);
             if (res.success) {
               hud.showToast(res.message, 'success');
@@ -641,17 +671,32 @@ async function bootstrap() {
     }
   });
 
-  // E. Almacén de Cosecha / Cajas de Cannon-es
+  // E. Almacén de Cosecha, Tienda y Centro de Acopio Comunitario
   interactionSystem.register({
     id: 'interact_warehouse',
-    name: 'Almacén de Cosecha y Cajas Físicas',
+    name: 'Almacén y Centro de Acopio Campesino',
     position: { x: sceneCoords.warehouse.x, y: 0.8, z: sceneCoords.warehouse.z },
     customDistance: isGlb ? 4.2 : null,
-    actionText: 'Presiona E para inspeccionar inventario o soltar caja física',
+    actionText: 'Presiona E para abrir Tienda de Semillas y Centro de Acopio',
     onInteract: () => {
       audioSystem.playClick();
       physicsWorld.dropDemoCrate(player.getPosition());
-      hud.showToast('📦 ¡Caja física de Cannon-es arrojada al escenario! Observa el rebote y la gravedad.', 'info');
+      modals.openWarehouseStore();
+    }
+  });
+
+  // E2. Casa Campesina (Hogar, Descanso Familiar y Sabiduría Campesina)
+  const houseCoords = isGlb ? { x: 7.3, y: 0.8, z: 9.4 } : { x: -16, y: 0.8, z: -14 };
+  interactionSystem.register({
+    id: 'interact_house',
+    name: 'Casa Campesina (Hogar y Descanso)',
+    position: { x: houseCoords.x, y: houseCoords.y, z: houseCoords.z },
+    customDistance: isGlb ? 4.0 : 3.5,
+    actionText: 'Presiona E para descansar en casa (agua de panela)',
+    onInteract: () => {
+      audioSystem.playClick();
+      player.playActionAnimation();
+      modals.openFarmerHouse();
     }
   });
 

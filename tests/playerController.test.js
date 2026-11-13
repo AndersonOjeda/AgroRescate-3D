@@ -54,7 +54,7 @@ describe('PlayerController — Modelo GLB, Rigging Procedural y Respaldo', () =>
     expect(rig).toBeTruthy();
     expect(rig.bones.length).toBe(11);
     expect(rig.skinnedMesh.isSkinnedMesh).toBe(true);
-    expect(Object.keys(rig.actions)).toEqual(['idle', 'walk', 'run', 'action']);
+    expect(Object.keys(rig.actions)).toEqual(['idle', 'walk', 'run', 'action', 'hoe']);
 
     const weights = rig.skinnedMesh.geometry.attributes.skinWeight;
     for (let i = 0; i < weights.count; i++) {

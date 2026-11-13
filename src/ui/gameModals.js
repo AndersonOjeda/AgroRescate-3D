@@ -49,6 +49,8 @@ export class GameModalsController {
     this.aboutModal = g('about-modal');
     this.pauseModal = g('pause-modal');
     this.resultsModal = g('results-modal');
+    this.warehouseModal = g('warehouse-store-modal');
+    this.houseModal = g('farmer-house-modal');
 
     this.settingVolume = g('setting-volume');
     this.settingVolumeVal = g('setting-volume-val');
@@ -120,6 +122,22 @@ export class GameModalsController {
     document.getElementById('btn-results-switch')?.addEventListener('click', () => {
       this.closeResults({ relock: false });
       this.openMainMenu();
+    });
+
+    // Tienda / Almacén
+    document.getElementById('btn-close-store')?.addEventListener('click', () => this.closeWarehouseStore());
+    document.getElementById('btn-store-done')?.addEventListener('click', () => this.closeWarehouseStore());
+
+    // Casa Campesina
+    document.getElementById('btn-close-house')?.addEventListener('click', () => this.closeFarmerHouse());
+    document.getElementById('btn-house-continue')?.addEventListener('click', () => this.closeFarmerHouse());
+    document.getElementById('btn-house-sleep')?.addEventListener('click', async () => {
+      this.closeFarmerHouse({ relock: false });
+      const restRes = await this.farmAdapter.restAtFarmerHouse();
+      const advanceRes = await this.farmAdapter.advanceDay();
+      this.audioSystem?.playSuccess();
+      this.hud?.showToast(restRes.message || 'Descansaste en casa y amaneció un nuevo día', 'success', 5000);
+      this._relockIfPlaying();
     });
 
     // Volumen y Calidad gráfica sincronizados entre menú y pausa
@@ -343,6 +361,101 @@ export class GameModalsController {
 
   closeResults({ relock = true } = {}) {
     this.resultsModal?.classList.add('hidden');
+    if (relock) this._relockIfPlaying();
+  }
+
+  /**
+   * Abre el Centro de Acopio y Tienda Campesina (Almacén).
+   */
+  async openWarehouseStore() {
+    if (!this.warehouseModal) return;
+    const state = await this.farmAdapter.getState();
+
+    const seedsListEl = document.getElementById('store-seeds-list');
+    if (seedsListEl) {
+      seedsListEl.innerHTML = `
+        <div class="store-seed-card ${state.selectedSeedId === 'native_community' ? 'selected' : ''}" data-seed="native_community">
+          <div class="store-seed-header">
+            <strong>🌱 Semilla Criolla Campesina</strong>
+            <span class="store-price">$10.000 COP</span>
+          </div>
+          <p class="store-desc">Comprada a campesinos vecinos. Gran resistencia genética a sequía y plagas locales.</p>
+          <button type="button" class="btn-select-seed hud-btn" data-seed-btn="native_community">
+            ${state.selectedSeedId === 'native_community' ? '✓ Seleccionada' : 'Seleccionar'}
+          </button>
+        </div>
+        <div class="store-seed-card ${state.selectedSeedId === 'commercial_certified' ? 'selected' : ''}" data-seed="commercial_certified">
+          <div class="store-seed-header">
+            <strong>🏷️ Semilla Comercial Certificada</strong>
+            <span class="store-price">$38.000 COP</span>
+          </div>
+          <p class="store-desc">Distribuidora agropecuaria. Madura más rápido pero exige abundantes riegos y agroquímicos.</p>
+          <button type="button" class="btn-select-seed hud-btn" data-seed-btn="commercial_certified">
+            ${state.selectedSeedId === 'commercial_certified' ? '✓ Seleccionada' : 'Seleccionar'}
+          </button>
+        </div>
+        <div class="store-seed-card ${state.selectedSeedId === 'own_harvest' ? 'selected' : ''}" data-seed="own_harvest">
+          <div class="store-seed-header">
+            <strong>🌾 Semillero Propio Campesino</strong>
+            <span class="store-price">$0 COP (Disp: ${state.ownSeedInventory || 0})</span>
+          </div>
+          <p class="store-desc">Reservada de tu mejor cosecha. Máxima soberanía alimentaria y costo cero.</p>
+          <button type="button" class="btn-select-seed hud-btn" data-seed-btn="own_harvest" ${state.ownSeedInventory <= 0 ? 'disabled' : ''}>
+            ${state.selectedSeedId === 'own_harvest' ? '✓ Seleccionada' : (state.ownSeedInventory > 0 ? 'Seleccionar' : 'Agotada')}
+          </button>
+        </div>
+      `;
+
+      seedsListEl.querySelectorAll('[data-seed-btn]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const seedId = e.currentTarget.dataset.seedBtn;
+          this.farmAdapter.setSelectedSeedVariety(seedId);
+          this.recordDecision(`Semilla seleccionada en almacén: ${seedId}`);
+          this.hud?.showToast(`Semilla activa: ${seedId}`, 'success', 2500);
+          this.openWarehouseStore();
+        });
+      });
+    }
+
+    const harvestBoxEl = document.getElementById('store-harvest-box');
+    if (harvestBoxEl) {
+      harvestBoxEl.innerHTML = `
+        <div class="harvest-summary-tile">
+          <div><strong>Total Cosechado:</strong> ${state.harvestedTotalKg || 0} kg</div>
+          <div><strong>Ingresos Netos:</strong> ${formatCOP(state.economy?.netProfit || 0, { withCurrency: true, showPlus: true })}</div>
+          <div><strong>Semillas Propias en Bodega:</strong> ${state.ownSeedInventory || 0} unidades</div>
+        </div>
+        <p class="store-tip">💡 <em>Comercio Justo:</em> Si cosechas lechugas con salud superior al 80%, obtienes semillas propias para la siguiente siembra sin costo.</p>
+      `;
+    }
+
+    this.warehouseModal.classList.remove('hidden');
+  }
+
+  closeWarehouseStore({ relock = true } = {}) {
+    this.warehouseModal?.classList.add('hidden');
+    if (relock) this._relockIfPlaying();
+  }
+
+  /**
+   * Abre el Modal de la Casa Campesina (Hogar y Descanso).
+   */
+  async openFarmerHouse() {
+    if (!this.houseModal) return;
+    const state = await this.farmAdapter.getState();
+
+    const energyEl = document.getElementById('house-energy-val');
+    const dayEl = document.getElementById('house-day-val');
+    const budgetEl = document.getElementById('house-budget-val');
+    if (energyEl) energyEl.textContent = `${state.farmerEnergy || 100}%`;
+    if (dayEl) dayEl.textContent = `Día ${state.day}`;
+    if (budgetEl) budgetEl.textContent = formatCOP(state.budget, { withCurrency: true });
+
+    this.houseModal.classList.remove('hidden');
+  }
+
+  closeFarmerHouse({ relock = true } = {}) {
+    this.houseModal?.classList.add('hidden');
     if (relock) this._relockIfPlaying();
   }
 }

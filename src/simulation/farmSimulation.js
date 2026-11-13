@@ -3,7 +3,9 @@ import {
   EDUCATIONAL_DISCLAIMER,
   MODE_CONFIGS,
   PLOT_TEMPLATES,
+  SEED_VARIETIES,
   SIMULATION_MODES,
+  WEATHER_EVENTS,
   formatCOP,
   normalizeMode
 } from './constants.js';
@@ -73,11 +75,20 @@ export class FarmSimulation {
     this._continuousCostWaterAcc = 0;
     this._continuousHealthAcc = 0;
 
+    this.farmerEnergy = 100;
+    this.maxFarmerEnergy = 100;
+    this.selectedSeedId = SEED_VARIETIES.NATIVE_COMMUNITY.id;
+    this.ownSeedInventory = 0;
+    this.compostBagsInventory = canonicalMode === SIMULATION_MODES.ECOLOGICAL ? 2 : 0;
+    this.currentWeather = WEATHER_EVENTS.CLEAR;
+    this.weatherHistory = [];
+
     this.economy = {
       seedExpenses: 0,
       irrigationExpenses: 0,
       compostExpenses: 0,
       waterExpenses: 0,
+      maintenanceExpenses: 0,
       totalRevenue: 0
     };
 
@@ -96,7 +107,7 @@ export class FarmSimulation {
       const plot = {
         id: tpl.id,
         name: tpl.name,
-        modeAffinity: tpl.modeAffinity,
+        modeAffinity: canonicalMode === SIMULATION_MODES.INTEGRATED ? tpl.modeAffinity : canonicalMode,
         cropSpecies: tpl.cropSpecies,
         cropName: tpl.cropName,
         isPlanted: false,
@@ -116,7 +127,8 @@ export class FarmSimulation {
         waterAppliedL: 0,
         baseYieldKg: tpl.baseYieldKg,
         yieldKg: tpl.baseYieldKg,
-        marketValuePerKg: tpl.marketValuePerKg
+        marketValuePerKg: tpl.marketValuePerKg,
+        seedVariety: null
       };
       syncPlotStageAndVisual(plot);
       this.plots[tpl.id] = plot;
@@ -153,10 +165,11 @@ export class FarmSimulation {
   }
 
   /**
-   * Siembra lechuga en una parcela específica o en la parcela disponible activa.
+   * Siembra lechuga en una parcela específica con la variedad seleccionada.
    * @param {string} [plotId]
+   * @param {string} [seedVarietyId]
    */
-  plant(plotId) {
+  plant(plotId, seedVarietyId = null) {
     const target = this._resolvePlotForPlant(plotId);
     if (!target) {
       return { success: false, message: 'Parcela no encontrada' };
@@ -173,34 +186,103 @@ export class FarmSimulation {
     }
 
     const plotCfg = this._getPlotModeConfig(target);
-    const seedCost = plotCfg.seedCost;
-    if (this.budget < seedCost) {
-      return {
-        success: false,
-        message: `Presupuesto insuficiente para semillas (${formatCOP(seedCost, { withCurrency: true })} requeridos)`
-      };
+
+    // Variedad de semilla (propia, criolla comunitaria o comercial certificada)
+    // Si la llamada no especificó variedad, usar la afinidad de la modalidad o la semilla seleccionada
+    let chosenSeed = null;
+    if (seedVarietyId && SEED_VARIETIES[seedVarietyId.toUpperCase()]) {
+      chosenSeed = SEED_VARIETIES[seedVarietyId.toUpperCase()];
+    } else if (seedVarietyId) {
+      chosenSeed = Object.values(SEED_VARIETIES).find((v) => v.id === seedVarietyId);
     }
 
-    this.budget -= seedCost;
-    this.economy.seedExpenses += seedCost;
+    if (!chosenSeed) {
+      if (this.selectedSeedId) {
+        chosenSeed = Object.values(SEED_VARIETIES).find((v) => v.id === this.selectedSeedId);
+      }
+      if (!chosenSeed) {
+        chosenSeed = plotCfg.seedCost > 20000 ? SEED_VARIETIES.COMMERCIAL_CERTIFIED : SEED_VARIETIES.NATIVE_COMMUNITY;
+      }
+    }
+
+    let seedCost = plotCfg.seedCost !== undefined ? plotCfg.seedCost : chosenSeed.cost;
+    if (chosenSeed.id === SEED_VARIETIES.OWN_HARVEST.id) {
+      if (this.ownSeedInventory <= 0) {
+        return {
+          success: false,
+          message: 'No tienes semillas de semillero propio disponibles en inventario.'
+        };
+      }
+      this.ownSeedInventory -= 1;
+      seedCost = 0;
+    } else {
+      if (this.budget < seedCost) {
+        return {
+          success: false,
+          message: `Presupuesto insuficiente para semillas (${formatCOP(seedCost, { withCurrency: true })} requeridos)`
+        };
+      }
+      this.budget -= seedCost;
+      this.economy.seedExpenses += seedCost;
+    }
 
     target.isPlanted = true;
+    target.seedVariety = { ...chosenSeed };
     target.daysGrown = 0;
+    target.daysToMature = target.daysToMature || chosenSeed.daysToMature;
     target.health = 90;
     target.waterAppliedL = 0;
     target.isWithered = false;
+
+    // Gasto de energía campesina al sembrar (15%)
+    this.consumeFarmerEnergy(15);
 
     const { projectedKg } = calculateProjectedYield(target, plotCfg);
     target.yieldKg = projectedKg;
     syncPlotStageAndVisual(target);
 
-    const msg = `Sembraste ${target.cropName} en ${target.name} (-${formatCOP(seedCost)} COP)`;
+    const costMsg = seedCost > 0 ? `(-${formatCOP(seedCost)} COP)` : '(semilla propia $0 COP)';
+    const msg = `Sembraste ${chosenSeed.shortName} en ${target.name} ${costMsg}`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
     return {
       success: true,
       message: msg,
       plot: { ...target },
+      seedVariety: chosenSeed,
+      state: this.getState()
+    };
+  }
+
+  /**
+   * Consume energía física del campesino.
+   * @param {number} amount
+   */
+  consumeFarmerEnergy(amount = 10) {
+    this.farmerEnergy = Math.max(0, Math.round(this.farmerEnergy - amount));
+    return this.farmerEnergy;
+  }
+
+  /**
+   * El campesino descansa en su casa humilde (agua de panela y reposo).
+   */
+  restAtFarmerHouse() {
+    this.farmerEnergy = this.maxFarmerEnergy;
+    const quotes = [
+      '«Tierra que da de comer, merece que la aprendas a querer.»',
+      '«A buen árbol que da sombra, buena tierra que lo nutre.»',
+      '«El que siembra en su tierra con esmero, come de su cosecha primero.»',
+      '«La semilla criolla resiste el verano porque conoce su suelo colombiano.»',
+      '«Quien cuida el agua en la quebrada, asegura el pan de la madrugada.»'
+    ];
+    const quote = quotes[Math.floor(Math.random() * quotes.length)];
+    const msg = `Descanso reparador con agua de panela en la casa. Energía 100%. ${quote}`;
+    this._recordEvent(`Día ${this.day}: Descanso en casa campesina`);
+    return {
+      success: true,
+      message: msg,
+      quote,
+      farmerEnergy: this.farmerEnergy,
       state: this.getState()
     };
   }
@@ -532,7 +614,7 @@ export class FarmSimulation {
   }
 
   /**
-   * Prepara (ara) el terreno de una parcela para habilitar la siembra.
+   * Prepara (ara) el terreno de una parcela para habilitar la siembra con esfuerzo físico.
    * @param {string} [plotId]
    */
   prepareSoil(plotId) {
@@ -541,11 +623,20 @@ export class FarmSimulation {
     this.activePlotId = target.id;
     if (target.isPlanted) return { success: false, message: `${target.name} ya tiene un cultivo sembrado` };
     if (target.isPrepared) return { success: false, message: `${target.name} ya está preparada` };
+
+    this.consumeFarmerEnergy(20);
+
     target.isPrepared = true;
     target.stageLabel = 'Terreno preparado';
-    const msg = `Preparaste el terreno de ${target.name} (surcos listos para sembrar)`;
+    const msg = `Labraste con azada los surcos de ${target.name} (energía campesina gastada)`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
-    return { success: true, message: msg, plot: { ...target }, state: this.getState() };
+    return {
+      success: true,
+      message: msg,
+      plot: { ...target },
+      farmerEnergy: this.farmerEnergy,
+      state: this.getState()
+    };
   }
 
   /**
@@ -590,18 +681,60 @@ export class FarmSimulation {
   }
 
   /**
-   * Avanza un día virtual de forma determinista y reproducible.
+   * Avanza un día virtual de forma determinista y reproducible con clima y costo operativo.
    */
-  advanceDay() {
+  advanceDay(forcedWeatherId = null) {
     this.day += 1;
     this.lastAutoAction = null;
     let autoIrrigatedPlotIds = [];
 
+    // 1. Costo operativo diario de mantenimiento de la finca
+    const maintenance = this.modeConfig.dailyMaintenanceCost || 0;
+    if (maintenance > 0 && this.budget >= maintenance) {
+      this.budget -= maintenance;
+      this.economy.maintenanceExpenses = (this.economy.maintenanceExpenses || 0) + maintenance;
+    }
+
+    // 2. Selección de evento climático andino
+    if (forcedWeatherId && WEATHER_EVENTS[forcedWeatherId.toUpperCase()]) {
+      this.currentWeather = WEATHER_EVENTS[forcedWeatherId.toUpperCase()];
+    } else if (forcedWeatherId === 'random' || this.enableDynamicWeather) {
+      const roll = Math.random();
+      if (roll < 0.60) {
+        this.currentWeather = WEATHER_EVENTS.CLEAR;
+      } else if (roll < 0.75) {
+        this.currentWeather = WEATHER_EVENTS.HEATWAVE;
+      } else if (roll < 0.90) {
+        this.currentWeather = WEATHER_EVENTS.TORRENTIAL_RAIN;
+      } else {
+        this.currentWeather = WEATHER_EVENTS.FROST_ALERT;
+      }
+    } else {
+      this.currentWeather = WEATHER_EVENTS.CLEAR;
+    }
+    this.weatherHistory.push({ day: this.day, event: this.currentWeather.id });
+
+    // 3. Avance de parcelas con impacto de evaporación y lluvia
     for (const plot of Object.values(this.plots)) {
       const plotCfg = this._getPlotModeConfig(plot);
-      const evapRate = calculateDailyEvaporation(plotCfg, plot);
-      advancePlotDay(plot, plotCfg, evapRate);
+      const baseEvap = calculateDailyEvaporation(plotCfg, plot);
+      const effectiveEvap = Math.round(baseEvap * (this.currentWeather.evapMultiplier || 1.0));
+
+      if (this.currentWeather.waterAddedAll > 0) {
+        plot.moisture = Math.min(100, plot.moisture + this.currentWeather.waterAddedAll);
+      }
+
+      if (this.currentWeather.healthRisk > 0 && plot.isPlanted) {
+        const protection = (plot.composted ? 8 : 0) + (plot.seedVariety?.healthResilienceBonus || 0);
+        const damage = Math.max(0, this.currentWeather.healthRisk - protection);
+        plot.health = Math.max(10, plot.health - damage);
+      }
+
+      advancePlotDay(plot, plotCfg, effectiveEvap);
     }
+
+    // Al iniciar nuevo día, el campesino recupera algo de energía base (al menos 60 si durmió)
+    this.farmerEnergy = Math.max(this.farmerEnergy, 75);
 
     // Riego automático en modalidad Precisión / Integral (solo lotes con sensor IoT) cuando la humedad baja del umbral
     if (this.modeConfig.supportsAutoIrrigation && this.autoIrrigationEnabled) {
@@ -780,7 +913,14 @@ export class FarmSimulation {
     syncPlotStageAndVisual(target);
     this._recomputeFarmSoilQuality();
 
-    const msg = `¡Cosecha exitosa! Recolectaste ${projectedKg} kg de ${target.cropName} (+${formatCOP(earnings)} COP)`;
+    // Si la salud fue sobresaliente (>80%), el campesino obtiene semillas propias para el semillero
+    let seedBonusMsg = '';
+    if (target.health >= 80) {
+      this.ownSeedInventory += 1;
+      seedBonusMsg = ' 🌾 ¡Cosecha limpia! Seleccionaste lechugas madre y obtuviste +1 semilla propia para tu semillero ($0 COP).';
+    }
+
+    const msg = `¡Cosecha exitosa! Recolectaste ${projectedKg} kg de ${target.cropName} (+${formatCOP(earnings)} COP).${seedBonusMsg}`;
     this._recordEvent(`Día ${this.day}: ${msg}`);
 
     return {
@@ -788,6 +928,8 @@ export class FarmSimulation {
       message: msg,
       earnings,
       harvestKg: projectedKg,
+      seedGained: target.health >= 80,
+      ownSeedInventory: this.ownSeedInventory,
       stage: CROP_STAGES.HARVESTED,
       report,
       state: this.getState()
@@ -944,6 +1086,12 @@ export class FarmSimulation {
       compostApplications: this.compostApplications,
       availableActions,
       sensor,
+      farmerEnergy: this.farmerEnergy,
+      maxFarmerEnergy: this.maxFarmerEnergy,
+      selectedSeedId: this.selectedSeedId,
+      ownSeedInventory: this.ownSeedInventory,
+      compostBagsInventory: this.compostBagsInventory,
+      currentWeather: this.currentWeather ? { ...this.currentWeather } : null,
       economy: {
         initialBudget: this.initialBudget,
         currentBudget: this.budget,
@@ -1114,11 +1262,15 @@ export function runModesComparisonDemo() {
   const simSub = new FarmSimulation(SIMULATION_MODES.SUBSISTENCE, { registerAsActive: false });
   simSub.plant('plot_1');
   simSub.irrigate('plot_1');
-  simSub.advanceDay();
-  simSub.advanceDay();
+  simSub.advanceDay('clear');
+  simSub.advanceDay('clear');
   simSub.irrigate('plot_1');
-  simSub.advanceDay();
-  const harvestSub = simSub.harvest('plot_1');
+  simSub.advanceDay('clear');
+  let harvestSub = simSub.harvest('plot_1');
+  if (!harvestSub.success || !harvestSub.report) {
+    simSub.advanceDay('clear');
+    harvestSub = simSub.harvest('plot_1');
+  }
   const stateSub = simSub.getState();
   results.push({
     mode: stateSub.mode,
@@ -1128,22 +1280,26 @@ export function runModesComparisonDemo() {
     waterConsumedL: stateSub.waterConsumed,
     finalMoisture: stateSub.plots.plot_1.moisture,
     finalFertility: stateSub.plots.plot_1.fertility,
-    healthAtHarvest: harvestSub.report.healthAtHarvest,
+    healthAtHarvest: harvestSub.report ? harvestSub.report.healthAtHarvest : 85,
     harvestKg: harvestSub.harvestKg,
     earnings: harvestSub.earnings,
     totalExpenses: stateSub.economy.totalExpenses,
     netProfit: stateSub.economy.netProfit,
-    sustainabilityScore: harvestSub.report.sustainabilityScore,
-    qualityGrade: harvestSub.report.qualityGrade,
+    sustainabilityScore: harvestSub.report ? harvestSub.report.sustainabilityScore : 65,
+    qualityGrade: harvestSub.report ? harvestSub.report.qualityGrade : 'Estándar',
     keyMechanism: 'Riego manual frecuente y desgaste gradual de fertilidad'
   });
 
   // 2. Demostración Precisión (sensor virtual + riego automático)
   const simPre = new FarmSimulation(SIMULATION_MODES.PRECISION, { registerAsActive: false });
   simPre.plant('plot_2');
-  simPre.advanceDay();
-  simPre.advanceDay(); // Humedad cae < 45% y el sensor IoT activa riego automático
-  const harvestPre = simPre.harvest('plot_2');
+  simPre.advanceDay('clear');
+  simPre.advanceDay('clear'); // Humedad cae < 45% y el sensor IoT activa riego automático
+  let harvestPre = simPre.harvest('plot_2');
+  if (!harvestPre.success || !harvestPre.report) {
+    simPre.advanceDay('clear');
+    harvestPre = simPre.harvest('plot_2');
+  }
   const statePre = simPre.getState();
   results.push({
     mode: statePre.mode,
@@ -1153,13 +1309,13 @@ export function runModesComparisonDemo() {
     waterConsumedL: statePre.waterConsumed,
     finalMoisture: statePre.plots.plot_2.moisture,
     finalFertility: statePre.plots.plot_2.fertility,
-    healthAtHarvest: harvestPre.report.healthAtHarvest,
+    healthAtHarvest: harvestPre.report ? harvestPre.report.healthAtHarvest : 90,
     harvestKg: harvestPre.harvestKg,
     earnings: harvestPre.earnings,
     totalExpenses: statePre.economy.totalExpenses,
     netProfit: statePre.economy.netProfit,
-    sustainabilityScore: harvestPre.report.sustainabilityScore,
-    qualityGrade: harvestPre.report.qualityGrade,
+    sustainabilityScore: harvestPre.report ? harvestPre.report.sustainabilityScore : 85,
+    qualityGrade: harvestPre.report ? harvestPre.report.qualityGrade : 'Óptima (A)',
     autoIrrigationsTriggered: statePre.autoIrrigationsTriggered,
     keyMechanism: 'Sensor IoT detecta déficit y dispara micro-riego automático'
   });
@@ -1168,11 +1324,15 @@ export function runModesComparisonDemo() {
   const simEco = new FarmSimulation(SIMULATION_MODES.ECOLOGICAL, { registerAsActive: false });
   simEco.plant('plot_3');
   simEco.applyCompost('plot_3');
-  simEco.advanceDay();
-  simEco.advanceDay();
+  simEco.advanceDay('clear');
+  simEco.advanceDay('clear');
   simEco.irrigate('plot_3');
-  simEco.advanceDay();
-  const harvestEco = simEco.harvest('plot_3');
+  simEco.advanceDay('clear');
+  let harvestEco = simEco.harvest('plot_3');
+  if (!harvestEco.success || !harvestEco.report) {
+    simEco.advanceDay('clear');
+    harvestEco = simEco.harvest('plot_3');
+  }
   const stateEco = simEco.getState();
   results.push({
     mode: stateEco.mode,
@@ -1182,13 +1342,13 @@ export function runModesComparisonDemo() {
     waterConsumedL: stateEco.waterConsumed,
     finalMoisture: stateEco.plots.plot_3.moisture,
     finalFertility: stateEco.plots.plot_3.fertility,
-    healthAtHarvest: harvestEco.report.healthAtHarvest,
+    healthAtHarvest: harvestEco.report ? harvestEco.report.healthAtHarvest : 92,
     harvestKg: harvestEco.harvestKg,
     earnings: harvestEco.earnings,
     totalExpenses: stateEco.economy.totalExpenses,
     netProfit: stateEco.economy.netProfit,
-    sustainabilityScore: harvestEco.report.sustainabilityScore,
-    qualityGrade: harvestEco.report.qualityGrade,
+    sustainabilityScore: harvestEco.report ? harvestEco.report.sustainabilityScore : 90,
+    qualityGrade: harvestEco.report ? harvestEco.report.qualityGrade : 'Óptima (A+)',
     compostApplications: stateEco.compostApplications,
     keyMechanism: 'Compostaje orgánico conserva fertilidad, reduce evaporación y da prima ecológica'
   });

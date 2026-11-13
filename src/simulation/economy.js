@@ -55,9 +55,11 @@ export function calculateProjectedYield(plot, modeConfig) {
       ? 1.12
       : 1.0;
 
+  const seedYieldFactor = plot.seedVariety?.waterEfficiencyBonus || 1.0;
+
   const projectedKg = Math.max(
     5,
-    Math.round(plot.baseYieldKg * healthFactor * fertilityFactor * ecoBonus)
+    Math.round(plot.baseYieldKg * healthFactor * fertilityFactor * ecoBonus * seedYieldFactor)
   );
 
   const organicMultiplier =
@@ -65,8 +67,10 @@ export function calculateProjectedYield(plot, modeConfig) {
       ? modeConfig.organicPriceMultiplier
       : 1.0;
 
+  const seedPriceBonus = plot.seedVariety?.marketPriceMultiplier || 1.0;
+
   const effectivePricePerKg = Number(
-    (plot.marketValuePerKg * organicMultiplier).toFixed(2)
+    (plot.marketValuePerKg * organicMultiplier * seedPriceBonus).toFixed(2)
   );
 
   return { projectedKg, effectivePricePerKg };
@@ -90,7 +94,7 @@ export function advancePlotDay(plot, modeConfig, evapRate) {
     return;
   }
 
-  // Impacto de humedad en la salud de la lechuga
+  // Impacto de humedad en la salud de la lechuga (incluye asfixia radicular agronómica por exceso de agua >90%)
   let healthDelta = 0;
   if (plot.moisture < 15) {
     healthDelta = -30;
@@ -98,12 +102,20 @@ export function advancePlotDay(plot, modeConfig, evapRate) {
     healthDelta = -12;
   } else if (plot.moisture < 45) {
     healthDelta = -3;
-  } else if (plot.moisture <= 85) {
-    healthDelta = 2;
-  } else if (plot.moisture <= 92) {
-    healthDelta = -2;
-  } else {
+  } else if (plot.moisture <= 80) {
+    // Zona de confort agronómico (45-80%)
+    healthDelta = 3;
+  } else if (plot.moisture <= 90) {
+    // Saturación incipiente
     healthDelta = -4;
+  } else {
+    // Asfixia radicular severa y pudrición por exceso de agua (>90%)
+    healthDelta = -14;
+  }
+
+  // Bonificación por resiliencia de semilla criolla/propia
+  if (plot.seedVariety?.healthResilienceBonus) {
+    healthDelta += Math.round(plot.seedVariety.healthResilienceBonus * 0.5);
   }
 
   // Impacto de la fertilidad

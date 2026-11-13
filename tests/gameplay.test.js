@@ -133,11 +133,11 @@ describe('Ciclo Completo, Misiones y Resultados', () => {
     expect(start.plots.plot_2.fertility).toBe(80);
     expect(start.plots.plot_3.fertility).toBe(95);
 
-    // Sembrar los 3 lotes cobra $22.000 + $45.000 + $32.000 = $99.000 COP
+    // Sembrar los 3 lotes en Integral (criolla P1 $10.000 + comercial P2 $38.000 + criolla P3 $10.000 = $58.000 COP)
     sim.plant('plot_1');
     sim.plant('plot_2');
     sim.plant('plot_3');
-    expect(sim.getState().economy.seedExpenses).toBe(99000);
+    expect(sim.getState().economy.seedExpenses).toBe(58000);
 
     // Compost en P3 es gratis, mientras en P1 cuesta $18.000
     expect(sim.applyCompost('plot_3').success).toBe(true);

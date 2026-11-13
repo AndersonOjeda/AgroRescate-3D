@@ -543,11 +543,59 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
     ])
   ]);
 
+  // 5. HOE / LABRANZA (1.2s): movimiento rítmico campesino blandiendo azada
+  const hoeT = [0, 0.35, 0.65, 0.95, 1.2];
+  const hoeClip = new THREE.AnimationClip('hoe', 1.2, [
+    makePosTrack('hips', hoeT, hipsRestPosition, [
+      [0, 0, 0],
+      [0, -0.08 * height, 0],
+      [0, -0.12 * height, 0],
+      [0, -0.06 * height, 0],
+      [0, 0, 0]
+    ]),
+    makeQuatTrack('spine', hoeT, [
+      [0.05, 0, 0],
+      [-0.20, 0.1, 0],
+      [0.75, 0.05, 0],
+      [0.45, 0, 0],
+      [0.05, 0, 0]
+    ]),
+    makeQuatTrack('rightUpperArm', hoeT, [
+      [-0.1, 0, 1.0],
+      [-1.4, 0.2, 0.7],
+      [-0.4, -0.2, 0.5],
+      [-0.8, 0, 0.6],
+      [-0.1, 0, 1.0]
+    ]),
+    makeQuatTrack('rightForeArm', hoeT, [
+      [0, 0.3, 0],
+      [0, 1.1, 0],
+      [0, 0.4, 0],
+      [0, 0.8, 0],
+      [0, 0.3, 0]
+    ]),
+    makeQuatTrack('leftUpperArm', hoeT, [
+      [-0.1, 0, -1.0],
+      [-1.2, -0.1, -0.6],
+      [-0.3, 0.1, -0.4],
+      [-0.7, 0, -0.5],
+      [-0.1, 0, -1.0]
+    ]),
+    makeQuatTrack('leftForeArm', hoeT, [
+      [0, -0.3, 0],
+      [0, -1.0, 0],
+      [0, -0.4, 0],
+      [0, -0.7, 0],
+      [0, -0.3, 0]
+    ])
+  ]);
+
   return {
     idle: idleClip,
     walk: walkClip,
     run: runClip,
-    action: actionClip
+    action: actionClip,
+    hoe: hoeClip
   };
 }
 
@@ -606,7 +654,8 @@ export function applyProceduralFarmerRig(modelRoot) {
     idle: mixer.clipAction(clips.idle),
     walk: mixer.clipAction(clips.walk),
     run: mixer.clipAction(clips.run),
-    action: mixer.clipAction(clips.action)
+    action: mixer.clipAction(clips.action),
+    hoe: mixer.clipAction(clips.hoe)
   };
 
   actions.idle.setLoop(THREE.LoopRepeat, Infinity);
@@ -614,6 +663,8 @@ export function applyProceduralFarmerRig(modelRoot) {
   actions.run.setLoop(THREE.LoopRepeat, Infinity);
   actions.action.setLoop(THREE.LoopOnce, 1);
   actions.action.clampWhenFinished = true;
+  actions.hoe.setLoop(THREE.LoopRepeat, 2);
+  actions.hoe.clampWhenFinished = true;
 
   return {
     skinnedMesh,

@@ -225,6 +225,15 @@ export class FarmAdapter {
   /** Prepara el terreno de una parcela (habilita la siembra) */
   prepareSoil(plotId) { return this._run('prepareSoil', 'soilPrepared', plotId); }
 
+  /** Descansa en la casa campesina y recupera energía */
+  restAtFarmerHouse() { return this._run('restAtFarmerHouse', 'farmerRested'); }
+
+  /** Selecciona variedad de semilla para la siembra */
+  setSelectedSeedVariety(seedId) {
+    if (this.simulation) this.simulation.selectedSeedId = seedId;
+    return { success: true, selectedSeedId: seedId };
+  }
+
   /** Activa/desactiva riego automático IoT (Precisión) */
   setAutoIrrigation(enabled) { return this._run('setAutoIrrigation', 'autoIrrigationChanged', enabled); }
 
