@@ -1,5 +1,7 @@
 import { buildRunResult } from '../gameplay/resultsStore.js';
 import { formatCOP } from '../simulation/constants.js';
+import { withRestTransition } from './restTransition.js';
+import { outsideInteraction } from '../gameplay/farmNeeds.js';
 
 /**
  * Controlador de pantallas y modales principales del juego:
@@ -136,6 +138,12 @@ export class GameModalsController {
     // Tienda / Almacén
     document.getElementById('btn-close-store')?.addEventListener('click', () => this.closeWarehouseStore());
     document.getElementById('btn-store-done')?.addEventListener('click', () => this.closeWarehouseStore());
+    for (const [id, kind] of [['btn-buy-compost', 'compost'], ['btn-buy-nutrients', 'nutrients']]) {
+      document.getElementById(id)?.addEventListener('click', async () => {
+        const result = await this.farmAdapter.buyFertilizer(kind);
+        this.hud?.showToast(result.message, result.success ? 'success' : 'warning');
+      });
+    }
 
     // Casa Campesina
     document.getElementById('btn-close-house')?.addEventListener('click', () => this.closeFarmerHouse());
@@ -146,19 +154,22 @@ export class GameModalsController {
       const buttons = ['btn-house-rest', 'btn-house-sleep'].map(id => document.getElementById(id));
       buttons.forEach(button => { if (button) button.disabled = true; });
       try {
-        if (sleep) {
-          const advance = await this.farmAdapter.advanceDay();
-          if (!advance.success) { this.hud?.showToast(advance.message, 'warning'); return; }
-        }
-        const result = await this.farmAdapter.restAtFarmerHouse();
+        await withRestTransition(async () => {
+        const result = await this.farmAdapter.restAtFarmerHouse({ sleep });
+        if (!result.success) { this.hud?.showToast(result.message, 'warning'); return; }
         this.hud?.showToast(sleep ? 'Amaneció un nuevo día. Revisa el clima y las parcelas antes de salir.' : result.message, 'success', 5000);
         this.audioSystem?.playSuccess();
         await this.openFarmerHouse();
+        }, sleep);
       } catch {
         this.hud?.showToast('No se pudo completar el descanso. Inténtalo otra vez.', 'warning');
       } finally {
         this.houseActionPending = false;
-        buttons.forEach(button => { if (button) button.disabled = false; });
+        const state = await this.farmAdapter.getState();
+        const availability = state.restAvailability;
+        buttons.forEach((button, index) => {
+          if (button) button.disabled = !(index === 0 ? availability?.canRest : availability?.canSleep);
+        });
       }
     };
     document.getElementById('btn-house-rest')?.addEventListener('click', () => houseAction(false));
@@ -448,6 +459,7 @@ export class GameModalsController {
    */
   async openWarehouseStore() {
     if (!this.warehouseModal) return;
+    this.player?.unlock();
     const state = await this.farmAdapter.getState();
 
     const seedsListEl = document.getElementById('store-seeds-list');
@@ -532,13 +544,15 @@ export class GameModalsController {
     if (budgetEl) budgetEl.textContent = formatCOP(state.budget, { withCurrency: true });
 
     const weatherEl = document.getElementById('house-weather');
+    const summary = document.getElementById('house-crop-status');
+    if (summary) summary.textContent = 'Tus cultivos siguen activos. Consulta sus barras y alertas en el tablero en vivo.';
     if (weatherEl) weatherEl.textContent = (state.currentWeather?.name || 'Clima despejado') + ': ' + (state.currentWeather?.description || '');
     const choresEl = document.getElementById('house-chores');
     if (choresEl) {
       choresEl.replaceChildren();
       for (const plot of Object.values(state.plots)) {
         const item = document.createElement('li');
-        const task = plot.isWithered ? 'Retirar cultivo perdido' : !plot.isPrepared ? 'Preparar la tierra' : !plot.isPlanted ? 'Sembrar' : plot.daysGrown >= plot.daysToMature ? 'Cosechar hoy' : plot.pestPressure >= 15 ? `Controlar plaga (${plot.pestPressure}%)` : plot.moisture < 40 ? 'Revisar el riego' : 'Vigilar el crecimiento';
+        const task = plot.isWithered ? 'Retirar cultivo perdido' : !plot.isPrepared ? 'Preparar la tierra' : !plot.isPlanted ? 'Sembrar' : plot.daysGrown >= plot.daysToMature ? 'Cosechar hoy' : plot.pestPressure >= 15 ? `${plot.pestAction?.label || 'Controlar plaga'} (${plot.pestPressure}%)` : plot.moisture < 40 ? 'Revisar el riego' : 'Vigilar el crecimiento';
         item.textContent = (plot.cropName || plot.id) + ': ' + task + ' · humedad ' + plot.moisture + '%';
         choresEl.appendChild(item);
       }
@@ -547,7 +561,20 @@ export class GameModalsController {
   }
 
   closeFarmerHouse({ relock = true } = {}) {
+    if (this.houseActionPending) return;
     this.houseModal?.classList.add('hidden');
     if (relock) this._relockIfPlaying();
+  }
+
+  updateWorldMenus(position) {
+    if (this.houseActionPending) return;
+    for (const binding of this.worldMenus || []) {
+      const modal = binding.kind === 'house' ? this.houseModal : this.warehouseModal;
+      if (modal && !modal.classList.contains('hidden') && outsideInteraction(position, binding.position, binding.radius)) {
+        if (binding.kind === 'house') this.closeFarmerHouse({ relock: false });
+        else this.closeWarehouseStore({ relock: false });
+        this.hud?.showToast('Te alejaste del edificio. Menú cerrado.', 'info', 1800);
+      }
+    }
   }
 }

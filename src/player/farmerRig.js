@@ -550,7 +550,7 @@ function buildFarmerAnimationClips(hipsRestPosition, height) {
   //    - Tirón de tierra hacia el agricultor para desterronar (Pull 1).
   //    - Segundo golpe rítmico encadenado aprovechando la inercia elástica (Windup 2 -> Strike 2).
   //    - Retorno fluido y controlado a la postura inicial.
-  const hoeT = [0, 0.26, 0.52, 0.72, 1.05, 1.35, 1.55, 1.80];
+  const hoeT = [0, 0.42, 0.52, 0.78, 1.18, 1.35, 1.58, 1.80];
   const hoeClip = new THREE.AnimationClip('hoe', 1.80, [
     makePosTrack('hips', hoeT, hipsRestPosition, [
       [0, 0, 0],

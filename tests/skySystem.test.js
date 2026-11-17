@@ -36,6 +36,22 @@ function createFakeAudioChannel() {
 }
 
 describe('SkySystem — Nubes 3D y Ciclo Día-Noche-Día', () => {
+  it('sincroniza reloj, recorrido Este-Oeste y dirección de las sombras', () => {
+    const fixture = createSkyTestFixture();
+    const sky = new SkySystem(fixture);
+    sky.setAutoCycle(true, { startTimeOfDay: 0.04 });
+    expect(sky.getClockInfo().formatted).toBe('06:00');
+    expect(sky.sunMesh.position.x).toBeGreaterThan(50);
+    sky.setAutoCycle(true, { startTimeOfDay: 0.38 });
+    expect(sky.getClockInfo().formatted).toBe('12:00');
+    expect(sky.sunMesh.position.y).toBeCloseTo(44);
+    expect(fixture.sunLight.position.distanceTo(sky.sunMesh.position)).toBeLessThan(0.001);
+    sky.setAutoCycle(true, { startTimeOfDay: 0.70 });
+    expect(sky.sunMesh.position.x).toBeLessThan(-50);
+    expect(sky.sunHaloMesh.isSprite).toBe(true);
+    sky.setAutoCycle(true, { startTimeOfDay: 0.85 });
+    expect(sky.sunMesh.visible).toBe(false);
+  });
   it('crea 10 nubes animadas, luna y 260 estrellas ocultas de día', () => {
     const fixture = createSkyTestFixture();
     const sky = new SkySystem(fixture);

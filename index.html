@@ -75,7 +75,7 @@
           <div class="instruction-item"><kbd>Shift</kbd><span>Correr</span></div>
           <div class="instruction-item"><kbd>R</kbd><span>Lluvia / Clima</span></div>
           <div class="instruction-item"><kbd>F</kbd><span>Tirar Caja Física</span></div>
-          <div class="instruction-item"><kbd>🐔 Rudy</kbd><span>Gallina Guía (E)</span></div>
+          <div class="instruction-item"><kbd>🐔 Rudy</kbd><span>Consejos automáticos · botón Rudy para consultas</span></div>
           <div class="instruction-item instruction-item-wide"><kbd>📱 Táctil</kbd><span>Joystick izquierdo + deslizar cámara + botón ✋</span></div>
         </div>
 
@@ -182,6 +182,7 @@
             <span class="stat-label">DÍA</span>
             <span id="hud-day" class="stat-value highlight">1</span>
             <span id="hud-day-phase" class="stat-value-sub" title="Ciclo natural del día">🌅 Mañana</span>
+            <time id="hud-game-clock" class="game-clock" aria-label="Hora de la partida">06:42</time>
           </div>
           <div id="hud-celestial-dial" class="celestial-dial" title="Reloj solar tipo Warcraft: Sol (madrugada) ↔ Mediodía ↔ Luna (noche)" aria-label="Indicador día y noche">
             <svg viewBox="0 0 64 64" class="celestial-svg" aria-hidden="true">
@@ -268,7 +269,11 @@
       <div id="mission-harvest-status" class="mission-harvest-status">Estado cosecha: En espera</div>
     </aside>
     <aside class="live-crop-dashboard" aria-label="Cultivos en tiempo real">
-      <div class="live-crop-heading"><strong>Mis cultivos · En vivo</strong><span id="live-crop-weather"></span></div>
+      <div class="live-player-vitals"><label for="live-player-energy">⚡ Energía <strong id="live-player-energy-value">100%</strong></label><progress id="live-player-energy" max="100" value="100"></progress><time id="live-game-clock" class="game-clock" aria-label="Hora del juego">06:42</time></div>
+      <div id="corner-celestial" aria-label="Recorrido del día"></div>
+      <div class="corner-budget"><span>Presupuesto</span><strong id="live-player-budget">— COP</strong></div>
+      <div class="live-crop-heading"><strong>Surco seleccionado</strong><span id="live-crop-weather"></span></div>
+      <small id="fertilizer-stock"></small>
       <ul id="pest-status-list"></ul>
     </aside>
 
@@ -290,6 +295,7 @@
       </div>
 
       <div class="hud-controls-right">
+        <button id="btn-equip-fertilizer" class="hud-btn" type="button" aria-pressed="false">♻️ Equipar abono (B)</button>
         <button id="btn-toggle-cam" class="hud-btn" title="Alternar Cámara 3ra Persona / Órbita Libre (Tecla C)">
           🎥 Cámara
         </button>
@@ -471,6 +477,7 @@
           </div>
           <div class="store-section">
             <h3>⚖️ Cosecha y Acopio de Hortalizas</h3>
+            <div class="fertilizer-shop"><h3>Abonos por dosis</h3><button id="btn-buy-compost" type="button" class="hud-btn">Compost maduro · $2.500 COP</button><button id="btn-buy-nutrients" type="button" class="hud-btn">Nutrientes medidos · $4.500 COP</button><p>Cada aplicación trata un solo surco. También puedes producir compost con residuos de cosecha.</p></div>
             <div id="store-harvest-box" class="store-harvest-box">
               <p>Acércate con tus cosechas maduras para pesarlas en báscula veredal y seleccionar venta a intermediario o mercado campesino directo.</p>
             </div>
@@ -509,5 +516,8 @@
   </div>
 
   <script type="module" src="/src/main.js"></script>
+  <div id="farm-victory" class="report-modal hidden" role="dialog" aria-modal="true" aria-label="Meta económica completada">
+    <div class="report-card"><h2>🏆 ¡Finca próspera!</h2><p>Completaste la partida: aumentaste el saldo inicial en $100.000 COP después de los gastos. Tu trabajo en los surcos dio frutos.</p><p>Puedes consultar Resultados desde el menú o seguir cuidando la finca.</p><button id="btn-victory-continue" class="btn-primary" type="button">Seguir cultivando</button></div>
+  </div>
 </body>
 </html>

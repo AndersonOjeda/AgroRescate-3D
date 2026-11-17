@@ -59,7 +59,7 @@ export function calculateProjectedYield(plot, modeConfig) {
 
   const projectedKg = Math.max(
     5,
-    Math.round(plot.baseYieldKg * healthFactor * fertilityFactor * ecoBonus * seedYieldFactor * (1 - (plot.pestPressure || 0) * 0.003))
+    Math.round(plot.baseYieldKg * healthFactor * fertilityFactor * ecoBonus * seedYieldFactor * (1 - (plot.pestPressure || 0) * 0.003) * (1 - Math.min(0.6, Object.values(plot.trampledPlants || {}).reduce((total, hits) => total + hits, 0) * 0.01)))
   );
 
   const organicMultiplier =

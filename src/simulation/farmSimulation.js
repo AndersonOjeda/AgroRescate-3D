@@ -22,7 +22,8 @@ import {
   syncPlotStageAndVisual
 } from './economy.js';
 
-import { advancePests, resetPests, PEST_CONTROL_ENERGY } from './pests.js';
+import { advancePests, resetPests, getPestAction } from './pests.js';
+import { fertilizerAdvice, advanceFertilizer } from './fertilizer.js';
 
 let activeSimulationInstance = null;
 
@@ -55,6 +56,8 @@ export class FarmSimulation {
     this.modeConfig = config;
     this.day = 1;
     this.activePlotId = config.primaryPlotId;
+    this.plotRows = null;
+    this.goalReached = false;
 
     this.initialBudget = config.initialBudget;
     this.budget = config.initialBudget;
@@ -78,11 +81,17 @@ export class FarmSimulation {
     this._continuousHealthAcc = 0;
 
     this.farmerEnergy = 100;
+    this.timeOfDay = 0.5;
+    this.lastSiestaDay = -1;
     this.maxFarmerEnergy = 100;
     this.selectedSeedId = SEED_VARIETIES.NATIVE_COMMUNITY.id;
     this.ownSeedInventory = 0;
     this.compostBagsInventory = canonicalMode === SIMULATION_MODES.ECOLOGICAL ? 2 : 0;
+    this.fertilizerStock = { compost: 2, nutrients: 2 };
+    this.cropResidues = 2;
+    this.compostBatch = null;
     this.currentWeather = WEATHER_EVENTS.CLEAR;
+    this.enableDynamicWeather ??= false;
     this.weatherHistory = [];
 
     this.economy = {
@@ -91,6 +100,7 @@ export class FarmSimulation {
       compostExpenses: 0,
       waterExpenses: 0,
       maintenanceExpenses: 0,
+      pestExpenses: 0,
       totalRevenue: 0
     };
 
@@ -141,10 +151,39 @@ export class FarmSimulation {
       this._recomputeFarmSoilQuality();
     }
 
+    if (this.rowMode) this.enableRows();
     return this.getState();
   }
 
+  enableRows() {
+    this.rowMode = true;
+    this.requirePreparation = true;
+    this.plotRows = Object.fromEntries(Object.entries(this.plots).map(([id, plot]) => {
+      const count = 5;
+      return [id, Array.from({ length: count }, (_, index) => ({ ...JSON.parse(JSON.stringify(plot)), rowCount: count, rowIndex: index, baseYieldKg: plot.baseYieldKg / count, yieldKg: plot.baseYieldKg / count, name: `${plot.name} · Surco ${index + 1}` }))];
+    }));
+    for (const id of Object.keys(this.plots)) this.plots[id] = this.plotRows[id][0];
+  }
+
+  selectRow(plotId, index) {
+    if (!this.plotRows?.[plotId]?.[index]) return false;
+    this.plots[plotId] = this.plotRows[plotId][index];
+    this.activePlotId = plotId;
+    return true;
+  }
+
+  getAllRows() {
+    return this.plotRows ? Object.values(this.plotRows).flat() : Object.values(this.plots);
+  }
+
   _getPlotModeConfig(plot) {
+    if (this.rowMode && plot?.rowIndex !== undefined && !this._resolvingRowConfig) {
+      this._resolvingRowConfig = true;
+      let cfg;
+      try { cfg = this._getPlotModeConfig(plot); } finally { this._resolvingRowConfig = false; }
+      const labor = cfg.laborProfile;
+      return { ...cfg, seedCost: Math.ceil(cfg.seedCost / plot.rowCount), waterPerIrrigation: Math.ceil(cfg.waterPerIrrigation / plot.rowCount), irrigationCost: Math.ceil(cfg.irrigationCost / plot.rowCount), laborProfile: { ...labor, prepareEnergy: Math.ceil(labor.prepareEnergy * 0.6), plantEnergy: Math.ceil(labor.plantEnergy * 0.6), harvestEnergy: Math.ceil(labor.harvestEnergy * 0.6) } };
+    }
     if (this.mode === SIMULATION_MODES.INTEGRATED && plot?.modeAffinity) {
       return MODE_CONFIGS[plot.modeAffinity] || this.modeConfig;
     }
@@ -272,15 +311,31 @@ export class FarmSimulation {
    * @param {number} amount
    */
   consumeFarmerEnergy(amount = 10) {
-    const heatEffort = this.currentWeather?.id === 'heatwave' ? 1.25 : 1;
-    this.farmerEnergy = Math.max(0, Math.round(this.farmerEnergy - amount * heatEffort));
+    this.farmerEnergy = Math.max(0, Math.round(this.farmerEnergy - amount));
     return this.farmerEnergy;
   }
 
   /**
    * El campesino descansa en su casa humilde (agua de panela y reposo).
    */
-  restAtFarmerHouse() {
+  getRestAvailability() {
+    const raining = ['rain', 'storm', 'flood'].includes(this.currentWeather?.id);
+    return { canRest: ((this.timeOfDay >= 0.5 && this.timeOfDay < 0.75) || raining) && this.lastSiestaDay !== this.day,
+      canSleep: this.timeOfDay >= 0.7,
+      restLabel: raining ? '☕ Refugiarse de la lluvia y descansar' : '☕ Comida o siesta · una vez por tarde',
+      restReason: this.lastSiestaDay === this.day ? 'Ya usaste la pausa de descanso de hoy.' : 'Una pausa diaria: durante la tarde o cuando llueve.',
+      sleepReason: 'Dormir: desde el final de la tarde y durante la noche.' };
+  }
+
+  restAtFarmerHouse({ sleep = false } = {}) {
+    const availability = this.getRestAvailability();
+    if (!(sleep ? availability.canSleep : availability.canRest)) return { success: false, message: sleep ? availability.sleepReason : availability.restReason };
+    if (sleep) {
+      this.advanceDay();
+      this.timeOfDay = 0.08;
+    } else {
+      this.lastSiestaDay = this.day;
+    }
     this.farmerEnergy = this.maxFarmerEnergy;
     const quotes = [
       '«Tierra que da de comer, merece que la aprendas a querer.»',
@@ -295,8 +350,10 @@ export class FarmSimulation {
     return {
       success: true,
       message: msg,
+      slept: sleep,
       quote,
       farmerEnergy: this.farmerEnergy,
+      restAvailability: this.getRestAvailability(),
       state: this.getState()
     };
   }
@@ -305,8 +362,8 @@ export class FarmSimulation {
     if (plotId) {
       return [this.plots[plotId]];
     }
-    const planted = Object.values(this.plots).filter((p) => p.isPlanted);
-    return planted.length > 0 ? planted : Object.values(this.plots);
+    const planted = this.getAllRows().filter((p) => p.isPlanted);
+    return planted.length > 0 ? planted : this.getAllRows();
   }
 
   _applyPlotMoistureEffects(plot, moistureGain, waterL, healthGain = 0, maxMoisture = 100) {
@@ -726,28 +783,36 @@ export class FarmSimulation {
       this.currentWeather = WEATHER_EVENTS[forcedWeatherId.toUpperCase()];
     } else if (forcedWeatherId === 'random' || this.enableDynamicWeather) {
       const roll = Math.random();
-      if (roll < 0.60) {
+      if (roll < 0.50 || this.day <= 2) {
         this.currentWeather = WEATHER_EVENTS.CLEAR;
-      } else if (roll < 0.75) {
+      } else if (roll < 0.68) {
         this.currentWeather = WEATHER_EVENTS.HEATWAVE;
-      } else if (roll < 0.90) {
+      } else if (roll < 0.84) {
         this.currentWeather = WEATHER_EVENTS.TORRENTIAL_RAIN;
-      } else {
+      } else if (roll < 0.92) {
         this.currentWeather = WEATHER_EVENTS.FROST_ALERT;
+      } else if (roll < 0.97) {
+        this.currentWeather = WEATHER_EVENTS.STORM;
+      } else {
+        this.currentWeather = WEATHER_EVENTS.FLOOD;
       }
     } else {
       this.currentWeather = WEATHER_EVENTS.CLEAR;
     }
     this.weatherHistory.push({ day: this.day, event: this.currentWeather.id });
 
-    // 3. Avance de parcelas con impacto de evaporación y lluvia
-    for (const plot of Object.values(this.plots)) {
+    // Todos los surcos siguen creciendo aunque no estén seleccionados.
+    for (const plot of this.getAllRows()) {
       const plotCfg = this._getPlotModeConfig(plot);
       const baseEvap = calculateDailyEvaporation(plotCfg, plot);
       const effectiveEvap = Math.round(baseEvap * (this.currentWeather.evapMultiplier || 1.0));
+      advanceFertilizer(plot, this.currentWeather.id);
 
       if (this.currentWeather.waterAddedAll > 0) {
         plot.moisture = Math.min(100, plot.moisture + this.currentWeather.waterAddedAll);
+      }
+      if (this.currentWeather.id === 'flood' && plotCfg.supportsSensor) {
+        plot.moisture = Math.max(0, plot.moisture - 20);
       }
 
       if (this.currentWeather.healthRisk > 0 && plot.isPlanted) {
@@ -759,19 +824,19 @@ export class FarmSimulation {
       advancePlotDay(plot, plotCfg, effectiveEvap);
     }
 
-    // Al iniciar nuevo día, el campesino recupera algo de energía base (al menos 60 si durmió)
+    // Un amanecer recupera lo mínimo; el descanso completo requiere volver a casa.
     this.farmerEnergy = Math.max(this.farmerEnergy, 35);
 
     // Riego automático en modalidad Precisión / Integral (solo lotes con sensor IoT) cuando la humedad baja del umbral
     if (this.modeConfig.supportsAutoIrrigation && this.autoIrrigationEnabled) {
       const needing = getPlotsNeedingAutoIrrigation(
-        this.plots,
+        this.rowMode ? this.getAllRows() : this.plots,
         this.autoIrrigationThreshold
       ).filter((p) => this._getPlotModeConfig(p).supportsAutoIrrigation);
 
       if (needing.length > 0) {
         const iotCfg = this._getPlotModeConfig(needing[0]);
-        const waterNeeded = iotCfg.waterPerIrrigation;
+        const waterNeeded = this.rowMode ? needing.reduce((sum, row) => sum + this._getPlotModeConfig(row).waterPerIrrigation, 0) : iotCfg.waterPerIrrigation;
         if (this.waterReserve >= waterNeeded) {
           const opCost = this.budget >= iotCfg.irrigationCost
             ? iotCfg.irrigationCost
@@ -807,8 +872,8 @@ export class FarmSimulation {
       }
     }
 
-    const pestAlerts = advancePests(this.plots, this.currentWeather.id);
-    for (const plot of Object.values(this.plots)) {
+    const pestAlerts = advancePests(Object.fromEntries(this.getAllRows().map((p, i) => [i, p])), this.currentWeather.id);
+    for (const plot of this.getAllRows()) {
       if (plot.isPlanted) {
         plot.yieldKg = calculateProjectedYield(plot, this._getPlotModeConfig(plot)).projectedKg;
         syncPlotStageAndVisual(plot);
@@ -876,6 +941,7 @@ export class FarmSimulation {
       this.harvestHistory.push(report);
 
       target.isPlanted = false;
+      if (this.rowMode) this.cropResidues += 1;
       resetPests(target);
       target.daysGrown = 0;
       target.health = 90;
@@ -951,6 +1017,7 @@ export class FarmSimulation {
     target.fertility = Math.max(10, target.fertility - postHarvestDrain);
 
     const healthySeedHarvest = target.health >= 80 && (target.pestPressure || 0) < 40;
+    if (this.rowMode) this.cropResidues += 2;
     // Resetear cama de cultivo lista para un nuevo ciclo
     resetPests(target);
     target.isPlanted = false;
@@ -990,6 +1057,7 @@ export class FarmSimulation {
    * @param {string} [plotId]
    */
   applyCompost(plotId) {
+    if (this.rowMode) return this.applyRowFertilizer(plotId || this.activePlotId);
     if (plotId && !this.plots[plotId]) {
       return { success: false, message: 'Parcela no encontrada' };
     }
@@ -1061,6 +1129,7 @@ export class FarmSimulation {
    * Devuelve una copia inmutable y completa del estado actual de la finca.
    */
   getState() {
+    if (this.rowMode && this.budget >= this.initialBudget + 100000 && this.harvestedTotalKg > 0) this.goalReached = true;
     const plotList = Object.values(this.plots);
     const activePlot = this.plots[this.activePlotId] || plotList[0];
     const plantedPlots = plotList.filter((p) => p.isPlanted);
@@ -1096,7 +1165,7 @@ export class FarmSimulation {
       canHarvest:
         activePlot.isPlanted &&
         (activePlot.daysGrown >= activePlot.daysToMature || activePlot.isWithered),
-      canCompost: this.budget >= activeCfg.compostCost,
+      canCompost: this.rowMode ? fertilizerAdvice(activePlot, activeCfg.id, this.fertilizerStock).canApply && this.farmerEnergy >= fertilizerAdvice(activePlot, activeCfg.id, this.fertilizerStock).energy : this.budget >= activeCfg.compostCost,
       canRefillWater:
         this.waterReserve < this.maxWater && this.budget >= this.modeConfig.waterRefillCost,
       canToggleAutoIrrigation: Boolean(this.modeConfig.supportsAutoIrrigation)
@@ -1112,6 +1181,7 @@ export class FarmSimulation {
       activePlotModeName: activeCfg.shortName,
       day: this.day,
       activePlotId: this.activePlotId,
+      goal: this.rowMode ? { target: this.initialBudget + 100000, current: this.budget, progress: Math.max(0, Math.min(1, (this.budget - this.initialBudget) / 100000)), complete: this.goalReached } : null,
       budget: this.budget,
       waterReserve: this.waterReserve,
       maxWater: this.maxWater,
@@ -1137,9 +1207,13 @@ export class FarmSimulation {
       sensor,
       farmerEnergy: this.farmerEnergy,
       maxFarmerEnergy: this.maxFarmerEnergy,
+      restAvailability: this.getRestAvailability(),
       selectedSeedId: this.selectedSeedId,
       ownSeedInventory: this.ownSeedInventory,
-      compostBagsInventory: this.compostBagsInventory,
+      compostBagsInventory: this.rowMode ? this.fertilizerStock.compost : this.compostBagsInventory,
+      fertilizerStock: { ...this.fertilizerStock },
+      cropResidues: this.cropResidues,
+      compostBatch: this.compostBatch ? { ...this.compostBatch, ready: this.day >= this.compostBatch.readyDay } : null,
       currentWeather: this.currentWeather ? { ...this.currentWeather } : null,
       economy: {
         initialBudget: this.initialBudget,
@@ -1158,7 +1232,11 @@ export class FarmSimulation {
           id,
           {
             ...JSON.parse(JSON.stringify(plot)),
-            laborProfile: this._getPlotModeConfig(plot).laborProfile
+            rows: this.plotRows?.[id]?.map(row => ({ ...JSON.parse(JSON.stringify(row)), laborProfile: { ...this._getPlotModeConfig(row).laborProfile }, pestAction: getPestAction(row, this) })),
+            selectedRow: plot.rowIndex,
+            fertilizerAdvice: fertilizerAdvice(plot, this._getPlotModeConfig(plot).id, this.fertilizerStock),
+            laborProfile: { ...this._getPlotModeConfig(plot).laborProfile },
+            pestAction: getPestAction(plot, this)
           }
         ])
       )
@@ -1170,16 +1248,73 @@ export class FarmSimulation {
     if (!plot?.isPlanted || plot.isWithered) return { success: false, message: 'No hay un cultivo vivo que cuidar. Retira los restos si está marchito.' };
     if ((plot.pestPressure || 0) < 15) return { success: false, message: 'No hay un foco activo. Revisa de nuevo mañana.' };
     if (plot.pestTreatedDay === this.day) return { success: false, message: 'Ya atendiste este lote hoy. Deja actuar el control y revisa mañana.' };
-    const required = this.currentWeather.id === 'heatwave' ? 15 : PEST_CONTROL_ENERGY;
+    const action = getPestAction(plot, this);
+    const required = action.energy;
     if (this.farmerEnergy < required) return { success: false, message: `Necesitas ${required} de energía. Recupera fuerzas en la casa rural.` };
-    this.consumeFarmerEnergy(PEST_CONTROL_ENERGY);
-    plot.pestPressure = Math.max(0, plot.pestPressure - 55);
-    plot.pestProtectionDays = 2;
+    this.consumeFarmerEnergy(required);
+    this.budget -= action.cost;
+    this.economy.pestExpenses += action.cost;
+    plot.pestPressure = Math.max(0, plot.pestPressure - action.reduction);
+    plot.pestProtectionDays = action.protectionDays;
     plot.pestTreatedDay = this.day;
     plot.yieldKg = calculateProjectedYield(plot, this._getPlotModeConfig(plot)).projectedKg;
-    const message = `${plot.name}: retiraste insectos y hojas afectadas. Plaga ${plot.pestPressure}%; protección durante 2 días. El daño anterior no se borra.`;
+    const message = `${plot.name}: completaste ${action.label}. Plaga ${plot.pestPressure}%; protección ${action.protectionDays} días. -${required} energía${action.cost ? `; -${formatCOP(action.cost)} COP` : ''}. El daño anterior no se borra.`;
     this._recordEvent(`Día ${this.day}: ${message}`);
     return { success: true, plotId, message, state: this.getState() };
+  }
+
+  applyRowFertilizer(plotId) {
+    const plot = this.plots[plotId];
+    if (!plot) return { success: false, message: 'Surco no encontrado.' };
+    const advice = fertilizerAdvice(plot, this._getPlotModeConfig(plot).id, this.fertilizerStock);
+    if (!advice.canApply) return { success: false, message: advice.reason };
+    if (this.farmerEnergy < advice.energy) return { success: false, message: `Necesitas ${advice.energy} de energía para repartir el abono.` };
+    this.fertilizerStock[advice.stock]--;
+    this.consumeFarmerEnergy(advice.energy);
+    plot.fertilizer = { gain: advice.gain, remainingDays: advice.days, stock: advice.stock, appliedDay: this.day, washed: false };
+    plot.compostCount++;
+    this.compostApplications++;
+    const message = `${plot.name}: ${advice.label} repartido. Mejora gradual durante ${advice.days} días; la lluvia fuerte reduce el aprovechamiento.`;
+    this._recordEvent(`Día ${this.day}: ${message}`);
+    return { success: true, message, state: this.getState() };
+  }
+
+  buyFertilizer(kind = 'compost') {
+    const prices = { compost: 2500, nutrients: 4500 };
+    const cost = prices[kind];
+    if (!cost || this.budget < cost) return { success: false, message: 'No alcanza el presupuesto para esa dosis.' };
+    this.budget -= cost;
+    this.economy.compostExpenses += cost;
+    this.fertilizerStock[kind]++;
+    return { success: true, message: `Compraste una dosis de ${kind === 'compost' ? 'compost maduro' : 'nutrientes medidos'}.`, state: this.getState() };
+  }
+
+  useComposter() {
+    if (this.compostBatch) {
+      if (this.day < this.compostBatch.readyDay) return { success: false, message: `Compost madurando: listo el día ${this.compostBatch.readyDay}.` };
+      this.fertilizerStock.compost += 2;
+      this.compostBatch = null;
+      return { success: true, message: 'Recogiste 2 dosis de compost maduro. Llévalas al surco que lo necesite.', state: this.getState() };
+    }
+    if (this.cropResidues < 2) return { success: false, message: 'Necesitas 2 residuos de cosecha para preparar compost.' };
+    this.cropResidues -= 2;
+    this.compostBatch = { readyDay: this.day + 2 };
+    return { success: true, message: `Mezclaste los residuos. El compost estará listo el día ${this.day + 2}.`, state: this.getState() };
+  }
+
+  trampleCrop(plotId, plantId, rowIndex = null) {
+    const plot = rowIndex !== null && this.plotRows ? this.plotRows[plotId]?.[rowIndex] : this.plots[plotId];
+    if (!plot?.isPlanted || plot.isWithered || !Number.isInteger(plantId) || plantId < 0) return { success: false };
+    plot.trampledPlants ||= {};
+    const hits = plot.trampledPlants[plantId] || 0;
+    if (hits >= 3) return { success: false };
+    plot.trampledPlants[plantId] = hits + 1;
+    plot.health = Math.max(0, plot.health - 4);
+    plot.yieldKg = calculateProjectedYield(plot, this._getPlotModeConfig(plot)).projectedKg;
+    syncPlotStageAndVisual(plot);
+    const message = hits === 2 ? 'Planta aplastada. Perdiste parte de la cosecha.' : 'Pisaste una planta. Camina entre las hileras para evitar daños.';
+    this._recordEvent(`Día ${this.day}: ${plot.name}: ${message}`);
+    return { success: true, message, plotId, state: this.getState() };
   }
 
   _getTotalExpenses() {
@@ -1187,7 +1322,8 @@ export class FarmSimulation {
       this.economy.seedExpenses +
       this.economy.irrigationExpenses +
       this.economy.compostExpenses +
-      this.economy.waterExpenses
+      this.economy.waterExpenses +
+      (this.economy.pestExpenses || 0)
     );
   }
 

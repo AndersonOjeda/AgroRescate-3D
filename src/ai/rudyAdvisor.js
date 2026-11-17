@@ -1,10 +1,15 @@
 import { MODE_CONFIGS } from '../simulation/constants.js';
+import { answerGameRule } from './rudyKnowledge.js';
 
 export const RUDY_QUICK_QUESTIONS = [
   { id: 'now', label: '🌾 ¿Qué hago ahora?', query: '¿Qué debo hacer ahora en la finca?' },
   { id: 'water', label: '💧 Agua y Riego', query: '¿Cómo está la humedad y el riego?' },
   { id: 'pests', label: '🐛 Plagas y Suelo', query: '¿Hay plagas o problemas en el suelo?' },
   { id: 'modes', label: '🧭 Modos y Energía', query: '¿Cómo funciona mi modalidad y energía?' }
+  , { id: 'goal', label: '🏆 Meta y comienzo', query: '¿Cómo empezar y ganar la partida?' }
+  , { id: 'fertilizer', label: '♻️ Abono e inventario', query: '¿Cómo uso el abono y la compostera?' }
+  , { id: 'shopping', label: '🛒 Compras', query: '¿Qué conviene comprar con mi presupuesto?' }
+  , { id: 'blocked', label: '🚜 No puedo trabajar', query: '¿Por qué no puedo sembrar el surco?' }
 ];
 
 function normalizeText(text = '') {
@@ -16,7 +21,7 @@ function normalizeText(text = '') {
 }
 
 function getPlotsList(state) {
-  return Object.values(state?.plots || {});
+  return Object.values(state?.plots || {}).flatMap(plot => plot.rows || [plot]);
 }
 
 function formatCop(value) {
@@ -56,7 +61,7 @@ export function analyzeFarmWithRudyAI(state, dayPhase = 'Mañana') {
     priorities.push({
       severity: 'critical',
       label: `Energía crítica (${energy}%)`,
-      detail: 'El cansancio campesino frena tu labor. Ve a la Casa Rural (E) para cerrar los ojos y reponer fuerzas.'
+      detail: state.restAvailability?.canRest || state.restAvailability?.canSleep ? 'Puedes descansar ahora en la Casa Rural. Acércate y pulsa E.' : 'Reduce las faenas: la pausa se habilita por la tarde o con lluvia, y dormir al anochecer. Planifica tu energía.'
     });
   } else if (energy <= 40 || dayPhase === 'Noche') {
     score -= 10;
@@ -82,6 +87,15 @@ export function analyzeFarmWithRudyAI(state, dayPhase = 'Mañana') {
   const readyPlots = plantedPlots.filter((p) => p.daysGrown >= p.daysToMature);
   const witheredPlots = plots.filter((p) => p.isWithered);
   const emptyPlots = plots.filter((p) => !p.isPlanted && !p.isWithered);
+  if (state.compostBatch?.ready) priorities.push({ severity: 'info', label: 'Compost maduro disponible', detail: 'Recógelo en la compostera antes de comprar más abono.' });
+  const needySoil = plots.find(p => p.fertility < 60 && !p.isWithered && !p.fertilizer?.remainingDays);
+  if (needySoil && state.fertilizerStock) {
+    const resource = needySoil.modeAffinity === 'precision' ? 'nutrients' : 'compost';
+    const available = state.fertilizerStock[resource] || 0;
+    priorities.push({ severity: 'info', label: `Plan de abonado: ${needySoil.name}`, detail: available ? 'Ya tienes abono: equipa con B y mantén E en ese surco. Evita comprar otra dosis.' : resource === 'compost' && state.cropResidues >= 2 ? 'Tienes residuos: prepara compost en la compostera; tarda dos días.' : resource === 'compost' && state.compostBatch ? `Espera a que madure el compost el día ${state.compostBatch.readyDay}; no apliques material inmaduro.` : `Sin existencias: compara el saldo antes de comprar ${resource === 'compost' ? 'compost ($2.500)' : 'nutrientes ($4.500)'} en el almacén.` });
+  }
+  if (plots.some(p => p.fertilizer?.remainingDays)) priorities.push({ severity: 'info', label: 'Hay abono actuando', detail: 'Espera sus efectos diarios. Repetir la aplicación no acelera el proceso; la lluvia intensa reduce su aprovechamiento.' });
+  if (state.goal) priorities.push({ severity: 'info', label: state.goal.complete ? '¡Meta económica completada!' : 'Tu objetivo: una finca próspera', detail: state.goal.complete ? 'Puedes seguir cultivando o consultar tus resultados.' : `Debes alcanzar ${formatCop(state.goal.target)} de saldo después de cosechar. Cada lote tiene cinco surcos: prepara y siembra uno cada vez.` });
 
   if (readyPlots.length > 0) {
     priorities.push({
@@ -204,7 +218,7 @@ export function analyzeFarmWithRudyAI(state, dayPhase = 'Mañana') {
     priorities.push({
       severity: 'info',
       label: 'Parcelas listas para trabajar',
-      detail: 'Acércate a una parcela vacía y mantén E para preparar el terreno con el azadón y sembrar.'
+      detail: emptyPlots.some(p => p.isPrepared) ? 'Ya hay tierra preparada: acércate al surco y mantén E para sembrar. No necesitas preparar todo el lote primero.' : 'Empieza con un solo surco: acércate, mantén E para preparar y luego otra vez para sembrar. Camina hacia el siguiente para continuar.'
     });
   }
 
@@ -257,6 +271,8 @@ export function analyzeFarmWithRudyAI(state, dayPhase = 'Mañana') {
  */
 export function askRudyAI(question, state, dayPhase = 'Mañana') {
   const q = normalizeText(question);
+  const rule = answerGameRule(q, state);
+  if (rule) return rule;
   const analysis = analyzeFarmWithRudyAI(state, dayPhase);
   const plots = getPlotsList(state);
   const modeCfg = MODE_CONFIGS[state?.mode] || {};
@@ -328,8 +344,8 @@ export function askRudyAI(question, state, dayPhase = 'Mañana') {
       title: '🏡 Energía Campesina, Clima y Tiempo',
       body,
       tips: [
-        'Cuando tu energía baje o llegue la noche, entra a la Casa Rural (E) y cierra los ojos para descansar.',
-        'Puedes recuperar fuerzas sin cambiar de día o dormir hasta el amanecer siguiente.',
+        state?.restAvailability?.canRest ? 'Puedes tomar ahora la pausa diaria en la Casa Rural.' : state?.restAvailability?.restReason || 'La pausa es por la tarde o con lluvia, una vez al día.',
+        state?.restAvailability?.canSleep ? 'Puedes dormir ahora hasta el siguiente amanecer.' : state?.restAvailability?.sleepReason || 'Dormir se habilita desde el final de la tarde.',
         'Las labores con azadón, siembra y cosecha exigen más esfuerzo según la modalidad agrícola.'
       ],
       spokenText: `Kikirikí. Estás en ${dayPhase} con ${energy} por ciento de energía y clima ${weather}. Visita la Casa Rural cuando necesites descansar.`
@@ -380,7 +396,7 @@ export function askRudyAI(question, state, dayPhase = 'Mañana') {
   // Respuesta fallback inteligente con diagnóstico en vivo
   return {
     title: `🐔 Rudy IA responde sobre "${question.slice(0, 36)}"`,
-    body: `${analysis.headline}. ${analysis.summary}`,
+    body: `No identifiqué una regla específica para esa pregunta. Este es el diagnóstico actual de la finca: ${analysis.headline}. ${analysis.summary}`,
     tips: analysis.tips,
     spokenText: analysis.spokenText
   };

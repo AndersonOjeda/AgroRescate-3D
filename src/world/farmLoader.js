@@ -26,7 +26,8 @@ const GLB_OBSTACLE_PREFIXES = [
   'cajonherramientas',
   'espantapajarosposte',
   'fardopaja',
-  'farmfence'
+  'farmfence',
+  'crate', 'caja', 'barril', 'barrel', 'roca', 'rock', 'tronco', 'trunk'
 ];
 
 /**

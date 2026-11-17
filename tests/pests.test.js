@@ -71,6 +71,87 @@ describe('Plagas y presión de la jornada', () => {
     expect(sim.getState()).toEqual(before);
   });
 
+  it('en calor exige y cobra exactamente la energía anunciada', () => {
+    const sim = new FarmSimulation();
+    sim.plant('plot_2');
+    sim.plots.plot_2.pestPressure = 30;
+    sim.currentWeather = { id: 'heatwave' };
+    const required = sim.getState().plots.plot_2.pestAction.energy;
+    sim.farmerEnergy = required - 1;
+    expect(sim.controlPests('plot_2').success).toBe(false);
+    sim.farmerEnergy = required;
+    expect(sim.controlPests('plot_2').success).toBe(true);
+    expect(sim.farmerEnergy).toBe(0);
+  });
+
+  it('descuidar el foco destruye salud mientras el cuidado temprano evita la escalada', () => {
+    const neglected = plot('a', 20);
+    const cared = plot('a', 0);
+    cared.pestProtectionDays = 2;
+    for (let day = 0; day < 5; day++) {
+      advancePests({ a: neglected }, 'heatwave');
+      advancePests({ a: cared }, 'heatwave');
+      if (cared.pestPressure >= 15) {
+        cared.pestPressure = Math.max(0, cared.pestPressure - 55);
+        cared.pestProtectionDays = 2;
+      }
+    }
+    expect(neglected.pestPressure).toBe(100);
+    expect(neglected.health).toBeLessThan(40);
+    expect(cared.health).toBe(100);
+  });
+
+  it('integral conserva las tres acciones y cobra lo anunciado para cada lote', () => {
+    const sim = new FarmSimulation('integrated');
+    const expected = [
+      ['plot_1', 'manual', 12, 0, 55, 2],
+      ['plot_2', 'traps', 8, 1200, 70, 2],
+      ['plot_3', 'ecological', 16, 0, 45, 3]
+    ];
+    for (const [id, method, energy, cost, reduction, days] of expected) {
+      sim.plots[id].isPlanted = true;
+      sim.plots[id].pestPressure = 90;
+      sim.farmerEnergy = 100;
+      const before = sim.getState();
+      const action = before.plots[id].pestAction;
+      expect(action).toMatchObject({ method, energy, cost, reduction, protectionDays: days });
+      expect(sim.controlPests(id).success).toBe(true);
+      expect(sim.farmerEnergy).toBe(100 - energy);
+      expect(sim.budget).toBe(before.budget - cost);
+      expect(sim.plots[id].pestPressure).toBe(90 - reduction);
+      expect(sim.plots[id].pestProtectionDays).toBe(days);
+      expect(sim.getState().economy.totalExpenses).toBe(before.economy.totalExpenses + cost);
+    }
+  });
+
+  it('usa la modalidad elegida en todos los lotes fuera de integral y actualiza al reiniciar', () => {
+    const sim = new FarmSimulation('ecological');
+    expect(Object.values(sim.getState().plots).every(p => p.pestAction.method === 'ecological')).toBe(true);
+    sim.initializeFarm('precision');
+    expect(Object.values(sim.getState().plots).every(p => p.pestAction.method === 'traps')).toBe(true);
+    sim.initializeFarm('subsistence');
+    expect(Object.values(sim.getState().plots).every(p => p.pestAction.method === 'manual')).toBe(true);
+  });
+
+  it('ofrece y ejecuta respaldo manual en precisión cuando falta presupuesto', () => {
+    const sim = new FarmSimulation('precision');
+    sim.plots.plot_2.isPlanted = true;
+    sim.plots.plot_2.pestPressure = 60;
+    sim.budget = 1199;
+    const action = sim.getState().plots.plot_2.pestAction;
+    expect(action).toMatchObject({ method: 'manual', fallback: true, cost: 0, energy: 12 });
+    expect(sim.controlPests('plot_2').success).toBe(true);
+    expect(sim.budget).toBe(1199);
+    expect(sim.plots.plot_2.pestPressure).toBe(5);
+  });
+
+  it('el compost ecológico reduce más el crecimiento de plagas', () => {
+    const traditional = { ...plot('a'), composted: true, modeAffinity: 'subsistence' };
+    const ecological = { ...plot('b'), composted: true, modeAffinity: 'ecological' };
+    advancePests({ a: traditional, b: ecological }, 'clear');
+    expect(ecological.pestPressure).toBeLessThan(traditional.pestPressure);
+  });
+
   it('cosechar limpia el foco y no regala semillas por resetear salud', () => {
     const sim = new FarmSimulation();
     sim.plant('plot_2');

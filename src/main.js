@@ -26,6 +26,7 @@ import { ResultsStore } from './gameplay/resultsStore.js';
 import { GameModalsController } from './ui/gameModals.js';
 import { PestVisualSystem } from './systems/pestVisualSystem.js';
 import { updatePestPanel } from './ui/pestPanel.js';
+import { organizeGameUI } from './ui/compactLayout.js';
 import { CropPlot } from './world/cropPlot.js';
 import { findTrampledPlant } from './gameplay/trampling.js';
 
@@ -45,7 +46,8 @@ async function bootstrap() {
   window.addEventListener('resize', () => handleResize(camera));
 
   // 2. HUD e Interfaces
-  const hud = new HUD();
+  const hud = new HUD({ collapsed: true });
+  organizeGameUI(hud);
   hud.updateLoadingProgress(10, 'Inicializando motor 3D y sistemas...');
 
   // 3. Físicas con Cannon-es
@@ -474,7 +476,7 @@ async function bootstrap() {
     const position = player.getPosition();
     return cropFootprints.filter(p => p.plotId === plot.id && p.rowIndex === farmAdapter.simulation.plots[plot.id].rowIndex).sort((a, b) => Math.hypot(a.x - position.x, a.z - position.z) - Math.hypot(b.x - position.x, b.z - position.z))[0] || plot;
   };
-  physicsWorld.setObstacles([...player.obstacles]);
+  physicsWorld.setObstacles(player.obstacles.filter(obstacle => obstacle.id !== 'guide_chicken'));
   player._resolvePenetration();
   const initialState = await farmAdapter.getState();
   farmAdapter.syncVisuals(initialState);
@@ -740,7 +742,14 @@ async function bootstrap() {
   // Un campesino cansado tarda más en cada faena (la duración escala con la fatiga)
   const effortHold = (base) => Math.round(base * player.getEffortMultiplier() * 100) / 100;
 
+  let fertilizerEquipped = false;
   const getPlotActionInfo = (plotState, plotName) => {
+    if (fertilizerEquipped && plotState?.fertilizerAdvice) {
+      const advice = plotState.fertilizerAdvice;
+      return advice.canApply
+        ? { actionText: `Mantén E: repartir ${advice.label} · 1 dosis · ${advice.energy} energía`, holdDuration: effortHold(advice.duration), energyCost: advice.energy, mode: 'fertilize' }
+        : { actionText: advice.reason + ' · B: guardar abono', holdDuration: 0, energyCost: 0, mode: 'fertilizerUnavailable' };
+    }
     if (plotState?.rowIndex !== undefined) plotName = plotState.name;
     if (!plotState) return { actionText: 'Acércate para interactuar', holdDuration: 0, energyCost: 0, mode: 'none' };
     const lp = plotState.laborProfile || {};
@@ -787,7 +796,7 @@ async function bootstrap() {
       return { actionText: `Mantén E: ${action.label} (${plotState.pestPressure}%) · ${action.energy} energía${action.cost ? ` · $${action.cost} COP` : ''}`, holdDuration: effortHold(action.duration), energyCost: action.energy, animation: action.animation, mode: 'pests' };
     }
     return {
-      actionText: `Cultivo creciendo (${plotState.daysGrown}/${plotState.daysToMature} días). Plaga ${plotState.pestPressure || 0}%. Vigila humedad y focos.`,
+      actionText: `${plotState.fertilizerAdvice?.reason || 'Cultivo creciendo.'} Plaga ${plotState.pestPressure || 0}%.`,
       holdDuration: 0,
       energyCost: 0,
       mode: 'growing'
@@ -813,6 +822,14 @@ async function bootstrap() {
           const info = getPlotActionInfo(curPlot, p.name);
           player.faceWorkTarget(workTarget(p));
 
+          if (info.mode === 'fertilize') {
+            if (currentState.farmerEnergy < info.energyCost) {
+              hud.showToast('Recupera energía antes de repartir el abono.', 'warning');
+              interactionSystem.stopHold(true);
+              return;
+            }
+            player.playActionAnimation('compost', info.holdDuration);
+          }
           if (info.mode === 'pests') {
             const energy = info.energyCost;
             if (currentState.farmerEnergy < energy) {
@@ -893,6 +910,15 @@ async function bootstrap() {
             } else {
               hud.showToast(res.message, 'warning');
             }
+          } else if (info.mode === 'fertilizerUnavailable') {
+            hud.showToast(curPlot.fertilizerAdvice.reason, 'info');
+          } else if (info.mode === 'fertilize') {
+            const result = await farmAdapter.applyCompost(p.id);
+            hud.showToast(result.message, result.success ? 'success' : 'warning', 5000);
+            if (result.success) {
+              particleSystem.emitSoilImpactParticles(player.getPosition(), player.getForwardVector?.());
+              audioSystem.playSuccess();
+            }
           } else if (info.mode === 'pests') {
             const result = await farmAdapter.controlPests(p.id);
             hud.showToast(result.message, result.success ? 'success' : 'warning', 5000);
@@ -933,7 +959,7 @@ async function bootstrap() {
     id: 'interact_compost',
     name: 'Compostera Orgánica',
     position: { x: sceneCoords.compost.x, y: 0.5, z: sceneCoords.compost.z },
-    actionText: 'Mantén E para repartir abono orgánico',
+    actionText: 'Mantén E: preparar o recoger compost (madura en 2 días)',
     holdDuration: 1.8,
     onHoldStart: () => {
       player.faceWorkTarget(sceneCoords.compost);
@@ -942,7 +968,7 @@ async function bootstrap() {
     onHoldCancel: () => player.cancelActionAnimation(),
     onInteract: async () => {
       audioSystem.playClick();
-      const res = await farmAdapter.applyCompost();
+      const res = await farmAdapter.useComposter();
       if (res.success) {
         hud.showToast(res.message, 'success');
         audioSystem.playSuccess();
@@ -1018,7 +1044,6 @@ async function bootstrap() {
   });
 
   // G. Rudy — Gallina Guía (Instrucciones de cómo jugar)
-  let guideOpenedByProximity = false;
 
   hud.onChickenGuideStepChange = (step, index, total, voiceEnabled) => {
     guideChicken.setTalked(true);
@@ -1029,24 +1054,19 @@ async function bootstrap() {
     } else {
       audioSystem.stopGuideSpeech();
     }
-    interactionSystem.updateActionText(
-      'interact_guide_chicken',
-      index + 1 >= total
-        ? 'Presiona E para finalizar con Rudy'
-        : `Presiona E para siguiente consejo (${index + 1}/${total})`
-    );
+
   };
 
   let rudyTalkTimeout = null;
-  let lastAutoRudyAt = 0;
+  let lastAutoRudyAt = -Infinity;
   let autoRudyAccumulator = 18; // dispara la primera viñeta pocos segundos después de iniciar
 
   const maybeTriggerAutoRudyBubble = ({ force = false, speak = true } = {}) => {
-    if (!force && !hud.autoRudyEnabled) return null;
+    if (!hud.autoRudyEnabled) return null;
     const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
-    if (inMenu || hud.isChickenGuideOpen()) return null;
+    if (inMenu || hud.isChickenGuideOpen() || interactionSystem.isHolding) return null;
     const now = performance.now();
-    if (!force && now - lastAutoRudyAt < 18000) return null;
+    if (now - lastAutoRudyAt < (force ? 20000 : 45000)) return null;
     lastAutoRudyAt = now;
     autoRudyAccumulator = 0;
     const bubble = hud.triggerAutoRudyBubble({ force, speak });
@@ -1085,38 +1105,13 @@ async function bootstrap() {
   };
 
   hud.onChickenGuideClose = (options = {}) => {
-    guideOpenedByProximity = false;
     guideChicken.setTalking(false);
     audioSystem.stopGuideSpeech();
-    interactionSystem.updateActionText(
-      'interact_guide_chicken',
-      'Presiona E para hablar con la gallina guía (Rudy IA)'
-    );
+
     if (options.relock && !player.isLocked && hud.startOverlay?.classList.contains('hidden')) {
       player.requestLock();
     }
   };
-
-  interactionSystem.register({
-    id: 'interact_guide_chicken',
-    name: 'Rudy — Gallina Guía e IA',
-    position: { x: guideChicken.position.x, y: 0.5, z: guideChicken.position.z },
-    customDistance: 4.0,
-    actionText: 'Presiona E para hablar con la gallina guía (Rudy IA)',
-    onInteract: () => {
-      if (!hud.isChickenGuideOpen()) {
-        guideOpenedByProximity = true;
-        if (player.isLocked) {
-          player.unlock();
-        }
-        hud.openChickenGuide(0, { tab: guideChicken.hasTalked ? 'ai' : 'guide' });
-      } else if (hud.chickenGuideTab === 'ai') {
-        hud.closeChickenGuide({ relock: false });
-      } else {
-        hud.nextChickenGuideStep({ closeAtEnd: true, relock: false });
-      }
-    }
-  });
 
   // Conectar cambio en el interactable con el prompt central del HUD y botón táctil móvil
   interactionSystem.onPromptChange = (item) => {
@@ -1348,6 +1343,23 @@ async function bootstrap() {
   });
 
   // 11. BINDINGS DE BOTONES DEL HUD
+  const equipFertilizer = async () => {
+    interactionSystem.stopHold(true);
+    fertilizerEquipped = !fertilizerEquipped;
+    const button = document.getElementById('btn-equip-fertilizer');
+    if (button) { button.textContent = fertilizerEquipped ? '♻️ Guardar abono (B)' : '♻️ Equipar abono (B)'; button.setAttribute('aria-pressed', String(fertilizerEquipped)); }
+    const state = await farmAdapter.getState();
+    for (const plot of plotsData) {
+      const info = getPlotActionInfo(state.plots[plot.id], plot.name);
+      interactionSystem.updateActionText(`interact_${plot.id}`, info.actionText, info.holdDuration);
+    }
+    hud.showToast(fertilizerEquipped ? 'Abono equipado. Acércate al surco y mantén E para repartir una dosis.' : 'Abono guardado. Puedes continuar las labores.', 'info');
+  };
+  hud.onEquipFertilizer = equipFertilizer;
+  document.getElementById('btn-equip-fertilizer')?.addEventListener('click', equipFertilizer);
+  window.addEventListener('keydown', event => {
+    if (event.code === 'KeyB' && !event.repeat && !player._isAnyModalOpen() && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) equipFertilizer();
+  });
   document.getElementById('btn-victory-continue')?.addEventListener('click', () => {
     document.getElementById('farm-victory').classList.add('hidden');
     player.requestLock();
@@ -1513,6 +1525,7 @@ async function bootstrap() {
       player._resolvePenetration();
       const previousFootPosition = { x: player.position.x, z: player.position.z };
       player.update(delta);
+      document.body.classList.toggle('near-crop', bedObstacles.some(bed => player.position.x > bed.minX - 1 && player.position.x < bed.maxX + 1 && player.position.z > bed.minZ - 1 && player.position.z < bed.maxZ + 1));
       if (!interactionSystem.isHolding) {
         for (const bed of bedObstacles) {
           if (player.position.x >= bed.minX && player.position.x <= bed.maxX && player.position.z >= bed.minZ && player.position.z <= bed.maxZ) {
@@ -1563,17 +1576,12 @@ async function bootstrap() {
       if (farmEnv && farmEnv.environment && typeof farmEnv.environment.update === 'function') {
         farmEnv.environment.update(delta);
       }
-      guideChicken.update(delta, pPos);
+      guideChicken.update(delta, pPos, { enabled: !isInMenu && !hud.isChickenGuideOpen(), obstacles: player.obstacles, bounds: player.bounds });
+      const rudyObstacle = player.obstacles.find(obstacle => obstacle.id === 'guide_chicken');
+      if (rudyObstacle) { rudyObstacle.x = guideChicken.position.x; rudyObstacle.z = guideChicken.position.z; }
       autoRudyAccumulator += delta;
       if (autoRudyAccumulator >= 22) {
         maybeTriggerAutoRudyBubble({ force: false, speak: true });
-      }
-      if (guideOpenedByProximity && hud.isChickenGuideOpen()) {
-        const dx = pPos.x - guideChicken.position.x;
-        const dz = pPos.z - guideChicken.position.z;
-        if (dx * dx + dz * dz > 42.25) {
-          hud.closeChickenGuide({ relock: false });
-        }
       }
       particleSystem.update(delta);
       pestVisuals.update(delta);

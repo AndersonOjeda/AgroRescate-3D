@@ -96,6 +96,16 @@ export const WEATHER_EVENTS = Object.freeze({
     evapMultiplier: 0.8,
     waterAddedAll: 0,
     healthRisk: 12
+  },
+  STORM: {
+    id: 'storm', name: 'Tormenta con vendaval', icon: '⛈️',
+    description: 'Vendaval: daño foliar y lluvia intensa. El compost y las semillas resistentes amortiguan el daño.',
+    evapMultiplier: 0.25, waterAddedAll: 35, healthRisk: 18
+  },
+  FLOOD: {
+    id: 'flood', name: 'Inundación del terreno', icon: '🌊',
+    description: 'Saturación del suelo. Suspende el riego; los lotes tecnificados evacúan parte del exceso.',
+    evapMultiplier: 0.2, waterAddedAll: 50, healthRisk: 14
   }
 });
 

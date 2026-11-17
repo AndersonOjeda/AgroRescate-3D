@@ -48,7 +48,7 @@ export function buildMissions(mode) {
       id: 'm3',
       title: 'Misión 3: Cuidar el cultivo',
       tasks: [
-        { id: 'irrigate', label: 'Aplica riego al cultivo', done: false },
+        { id: 'irrigate', label: 'Mantén humedad adecuada; riega solo cuando haga falta', done: false },
         { id: 'special', label: special.label, done: false }
       ]
     },
@@ -142,6 +142,8 @@ export class MissionManager {
         return ok ? this._complete('special') : false;
       }
       case 'dayAdvanced': {
+        const planted = Object.values(event.state?.plots || {}).filter(p => p.isPlanted);
+        if (planted.length && planted.every(p => p.moisture >= 45 && p.moisture <= 85 && !p.isWithered)) this._complete('irrigate');
         if (this.mode === 'integrated') {
           const anyMature = Object.values(event.state?.plots || {}).some(
             (pl) => pl && pl.isPlanted && pl.daysGrown >= pl.daysToMature && !pl.isWithered

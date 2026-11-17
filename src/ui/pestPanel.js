@@ -1,14 +1,33 @@
 import { cropWarnings } from './cropStatus.js';
+import { hasPrecisionIndicators, fieldObservation } from './agricultureIndicators.js';
 
 let lastSignature = '';
 let lastDocument = null;
 export function updatePestPanel(state, doc = document) {
   const list = doc.getElementById('pest-status-list');
   if (!list || !state?.plots) return;
-  const signature = JSON.stringify([state.day, state.farmerEnergy, state.restAvailability, state.currentWeather, state.activePlotId, state.plots, state.fertilizerStock, state.cropResidues, state.compostBatch]);
+  const signature = JSON.stringify([state.mode, state.day, state.farmerEnergy, state.restAvailability, state.currentWeather, state.activePlotId, state.plots, state.fertilizerStock, state.cropResidues, state.compostBatch]);
   if (lastDocument === doc && lastSignature === signature) return;
   lastDocument = doc;
   lastSignature = signature;
+  const dial = doc.getElementById('hud-celestial-dial');
+  const dialDock = doc.getElementById('corner-celestial');
+  if (dial && dialDock && dial.parentNode !== dialDock) dialDock.appendChild(dial);
+  const energyBar = doc.getElementById('live-player-energy');
+  const budget = doc.getElementById('live-player-budget');
+  if (budget) budget.textContent = `$${Math.round(state.budget ?? 0).toLocaleString('es-CO')} COP`;
+  const energyValue = doc.getElementById('live-player-energy-value');
+  if (energyBar) energyBar.value = state.farmerEnergy ?? 100;
+  if (energyValue) energyValue.textContent = `${state.farmerEnergy ?? 100}%`;
+  const precisionMode = state.mode === 'precision';
+  const selectedPlot = state.plots[state.activePlotId];
+  const selectedMeasured = selectedPlot && hasPrecisionIndicators(state, selectedPlot);
+  for (const panel of doc.querySelectorAll?.('.agro-hud-metrics') || []) panel.style.display = selectedMeasured ? '' : 'none';
+  for (const id of ['meter-soil', 'meter-water']) {
+    const meter = doc.getElementById(id);
+    const group = meter?.closest?.('.stat-group');
+    if (group) group.hidden = !precisionMode;
+  }
   for (const [id, allowed, reason] of [['btn-house-rest', state.restAvailability?.canRest, state.restAvailability?.restReason], ['btn-house-sleep', state.restAvailability?.canSleep, state.restAvailability?.sleepReason]]) {
     const button = doc.getElementById(id);
     if (button) {
@@ -53,11 +72,12 @@ export function updatePestPanel(state, doc = document) {
 
     const metrics = doc.createElement('div');
     metrics.className = 'live-crop-metrics';
-    for (const [key, icon, name] of [
+    const measured = hasPrecisionIndicators(state, plot);
+    for (const [key, icon, name] of measured ? [
       ['moisture', '💧', 'Humedad'],
       ['fertility', '🌱', 'Fertilidad'],
       ['health', '❤️', 'Salud']
-    ]) {
+    ] : []) {
       const val = Math.max(0, Math.min(100, Math.round(plot[key] ?? 0)));
       const level = val < 30 ? 'crit' : val < 55 ? 'warn' : 'ok';
 
@@ -90,12 +110,24 @@ export function updatePestPanel(state, doc = document) {
       metric.appendChild(track);
       metrics.appendChild(metric);
     }
-    item.appendChild(metrics);
+    if (measured) item.appendChild(metrics);
+    if (measured) {
+      const fertilizer = doc.createElement('label');
+      fertilizer.className = 'fertilizer-reading';
+      const days = plot.fertilizer?.remainingDays || 0;
+      fertilizer.textContent = days ? `Abono en suelo · ${days} días de efecto` : 'Abono: sin aplicación activa';
+      const bar = doc.createElement('progress');
+      bar.max = plot.fertilizerAdvice?.days || 4;
+      bar.value = days;
+      bar.setAttribute('aria-label', `Efecto restante del abono en ${plot.name}`);
+      fertilizer.appendChild(bar);
+      item.appendChild(fertilizer);
+    }
 
     const notice = doc.createElement('small');
     notice.className = 'live-plot-notice';
     const warning = cropWarnings(plot, state.currentWeather)[0];
-    notice.textContent = warning;
+    notice.textContent = measured ? warning : fieldObservation(plot);
     if (plot.fertilizerAdvice) notice.textContent += ` ${plot.fertilizerAdvice.reason}`;
     notice.title = cropWarnings(plot, state.currentWeather).join(' ');
     item.appendChild(notice);

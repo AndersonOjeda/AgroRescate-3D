@@ -75,8 +75,29 @@ export class SkySystem {
     this.scene.add(this.skyGroup);
 
     this._createSun();
+    this._createHorizonDirections();
     this._createClouds();
     this._createMoonAndStars();
+  }
+
+  _createHorizonDirections() {
+    if (typeof document === 'undefined') return;
+    for (const [text, x] of [['ESTE · AMANECER', 58], ['OESTE · OCASO', -58]]) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512; canvas.height = 80;
+      const context = canvas.getContext('2d');
+      if (!context) continue;
+      context.font = 'bold 30px sans-serif';
+      context.textAlign = 'center';
+      context.fillStyle = '#fff1bb';
+      context.shadowColor = '#000'; context.shadowBlur = 8;
+      context.fillText(text, 256, 49);
+      const material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false, fog: false });
+      const label = new THREE.Sprite(material);
+      label.position.set(x, 8, -18);
+      label.scale.set(15, 2.35, 1);
+      this.skyGroup.add(label);
+    }
   }
 
   _createClouds() {
@@ -124,26 +145,39 @@ export class SkySystem {
   }
 
   _createSun() {
-    const sunGeo = new THREE.IcosahedronGeometry(3.4, 1);
+    const sunGeo = new THREE.SphereGeometry(2.5, 24, 16);
     this.sunMaterial = new THREE.MeshBasicMaterial({
       color: 0xfef08a,
       transparent: true,
       opacity: 1,
-      fog: false
+      fog: false,
+      toneMapped: false
     });
     this.sunMesh = new THREE.Mesh(sunGeo, this.sunMaterial);
     this.sunMesh.position.set(25, 40, -16);
     this.skyGroup.add(this.sunMesh);
 
-    const haloGeo = new THREE.IcosahedronGeometry(5.4, 1);
-    this.sunHaloMaterial = new THREE.MeshBasicMaterial({
+    const haloSize = 64;
+    const pixels = new Uint8Array(haloSize * haloSize * 4);
+    for (let y = 0; y < haloSize; y++) for (let x = 0; x < haloSize; x++) {
+      const radius = Math.hypot((x - 31.5) / 31.5, (y - 31.5) / 31.5);
+      const index = (y * haloSize + x) * 4;
+      pixels[index] = pixels[index + 1] = pixels[index + 2] = 255;
+      pixels[index + 3] = Math.round(Math.pow(Math.max(0, 1 - radius), 2) * 255);
+    }
+    const haloTexture = new THREE.DataTexture(pixels, haloSize, haloSize);
+    haloTexture.needsUpdate = true;
+    this.sunHaloMaterial = new THREE.SpriteMaterial({
+      map: haloTexture,
       color: 0xfde047,
       transparent: true,
       opacity: 0.30,
       depthWrite: false,
-      fog: false
+      fog: false,
+      toneMapped: false
     });
-    this.sunHaloMesh = new THREE.Mesh(haloGeo, this.sunHaloMaterial);
+    this.sunHaloMesh = new THREE.Sprite(this.sunHaloMaterial);
+    this.sunHaloMesh.scale.set(16, 16, 1);
     this.sunMesh.add(this.sunHaloMesh);
   }
 
@@ -307,8 +341,9 @@ export class SkySystem {
     }
 
     const wrapped = totalHours % 24;
-    const hours = Math.floor(wrapped);
-    const minutes = Math.floor((wrapped - hours) * 60);
+    const clockMinutes = Math.floor(wrapped * 60 + 1e-7) % 1440;
+    const hours = Math.floor(clockMinutes / 60);
+    const minutes = clockMinutes % 60;
     const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
     let solarAngleRad;
@@ -655,6 +690,8 @@ export class SkySystem {
 
   _updateSunVisual(x, y, z, color, visibility) {
     if (!this.sunMesh || !this.sunMaterial) return;
+    // Misma dirección para el disco visible y las sombras sobre la finca.
+    if (visibility > 0 && y > 0 && this.sunLight) this.sunLight.position.set(x, Math.max(0.5, y), z);
     const weatherFade = 1 - Math.min(0.82, this.weatherOvercast * 0.55 + this.weatherStorminess * 0.40);
     const alpha = THREE.MathUtils.clamp(visibility * weatherFade, 0, 1);
     this.sunMesh.position.set(x, Math.max(-10, y), z);

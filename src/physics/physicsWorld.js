@@ -27,7 +27,7 @@ export class PhysicsWorld {
       this.boxMaterial,
       {
         friction: 0.45,
-        restitution: 0.35 // Rebote elástico visible para demostración
+        restitution: 0.12
       }
     );
     this.world.addContactMaterial(boxGroundContact);
@@ -160,8 +160,8 @@ export class PhysicsWorld {
       shape: boxShape,
       position: new CANNON.Vec3(x, y, z),
       material: this.boxMaterial,
-      linearDamping: 0.05,
-      angularDamping: 0.05
+      linearDamping: 0.18,
+      angularDamping: 0.3
     });
 
     // Pequeño impulso angular aleatorio para que ruede y muestre rebote natural
@@ -263,5 +263,16 @@ export class PhysicsWorld {
 
   getBodiesCount() {
     return this.syncBodies.length;
+  }
+
+  getPlayerObstacles(playerY = 0) {
+    const result = [];
+    for (const { body, id } of this.crates) {
+      body.updateAABB();
+      const { lowerBound: min, upperBound: max } = body.aabb;
+      if (min.y > playerY + 1.75 || max.y < playerY + 0.05) continue;
+      result.push({ id, dynamicCrate: true, type: 'box', minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z });
+    }
+    return result;
   }
 }

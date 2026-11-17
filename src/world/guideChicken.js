@@ -6,7 +6,7 @@ export const GUIDE_STEPS = [
     id: 'welcome',
     badge: 'Bienvenida y Controles',
     title: '¡Kikirikí! Soy Rudy, tu gallina guía e IA agrícola',
-    body: 'Bienvenido a AgroRescate 3D. Tu misión es gestionar la finca y comparar qué enfoque agrícola logra mejor cosecha cuidando el agua, tu energía y la salud del suelo.',
+    body: 'Tu objetivo es aumentar el saldo inicial en $100.000 COP mediante las cosechas. Empieza por un surco: prepara su tierra manteniendo E y vuelve a mantener E para sembrar. Cada lote tiene cinco surcos independientes.',
     tips: [
       'Camina con W, A, S, D y mantén Shift para correr más rápido.',
       'Mueve el ratón para girar la cámara (click en el mapa para bloquear puntero, ESC para liberarlo).',
@@ -51,7 +51,7 @@ export const GUIDE_STEPS = [
     tips: [
       'Observa la fase del día en la barra superior (Mañana, Mediodía, Tarde y Noche).',
       'Cambia de modalidad agrícola en el panel superior o lateral para comparar sus mecánicas.',
-      'Atajos útiles: R alterna lluvia ambiental y F lanza una caja física donde estés parado.'
+      'B equipa o guarda el abono. El clima cambia automáticamente: vigila lluvia, calor y tormentas.'
     ],
     spokenText:
       'El día avanza de forma continua entre mañana, mediodía, tarde y noche, y el clima cambia tu finca. Mi asesor automático te avisará con viñetas y voz cuando cambie el clima o necesites actuar.'
@@ -64,7 +64,7 @@ export const GUIDE_STEPS = [
     tips: [
       'Cuando mi marcador brille en rojo o ámbar, tengo una alerta urgente sobre tus cultivos.',
       'Abre 📊 Comparativa o 📊 Demo 3 Modos para evaluar rendimiento y ahorro hídrico.',
-      'Pulsa 🐔 Rudy en la barra inferior o acércate a mí con E para ver el diagnóstico o activar/pausar las viñetas.'
+      'Mis recomendaciones llegan solas. El botón 🐔 Rudy permite consultas opcionales; E queda para tus labores.'
     ],
     spokenText:
       'Ahora funciono en modo automático: te daré recomendaciones en viñetas con voz según tu modalidad, clima, presupuesto y energía. Mucho éxito trabajando la tierra.'
@@ -339,7 +339,31 @@ export class GuideChicken {
    * @param {number} delta
    * @param {THREE.Vector3 | { x: number, z: number } | null} [playerPosition]
    */
-  update(delta, playerPosition = null) {
+  update(delta, playerPosition = null, navigation = {}) {
+    let moving = false;
+    let walkingYaw = this.visualPivot.rotation.y;
+    if (navigation.enabled && playerPosition) {
+      const dx = playerPosition.x - this.position.x, dz = playerPosition.z - this.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > 7.5 || distance < 4) {
+        const retreat = distance < 4;
+        const angle = Math.atan2(dx, dz) + (retreat ? Math.PI : 0);
+        const step = Math.min(0.12, Math.max(0, delta) * 1.8, retreat ? 4 - distance : distance - 6.5);
+        for (const turn of [0, 0.55, -0.55, 1.1, -1.1, 1.57, -1.57]) {
+          const yaw = angle + turn;
+          const x = this.position.x + Math.sin(yaw) * step, z = this.position.z + Math.cos(yaw) * step;
+          const bounds = navigation.bounds;
+          if (bounds && (x < bounds.minX + 0.5 || x > bounds.maxX - 0.5 || z < bounds.minZ + 0.5 || z > bounds.maxZ - 0.5)) continue;
+          const blocked = (navigation.obstacles || []).some(o => o.id !== 'guide_chicken' && (o.type === 'box' ? x > o.minX - 0.35 && x < o.maxX + 0.35 && z > o.minZ - 0.35 && z < o.maxZ + 0.35 : Math.hypot(x - o.x, z - o.z) < o.r + 0.35));
+          if (blocked) continue;
+          this.position.x = x; this.position.z = z;
+          this.group.position.copy(this.position);
+          moving = step > 0;
+          walkingYaw = yaw;
+          break;
+        }
+      }
+    }
     if (this.mixer) {
       this.mixer.update(delta);
     } else if (this.visualModel) {
@@ -377,6 +401,16 @@ export class GuideChicken {
       if (distSq > 0.001 && distSq <= this.lookRange * this.lookRange) {
         targetYaw = Math.atan2(dx, dz);
       }
+    }
+    if (moving) {
+      targetYaw = walkingYaw;
+      const gait = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.012;
+      this.visualPivot.position.y += Math.abs(Math.sin(gait)) * 0.035;
+      this.visualPivot.rotation.z = Math.sin(gait) * 0.06;
+      this.visualPivot.rotation.x = 0.08;
+    } else {
+      this.visualPivot.rotation.z *= Math.exp(-delta * 8);
+      this.visualPivot.rotation.x = this.isTalking ? Math.sin(Date.now() * 0.008) * 0.05 : 0;
     }
 
     let diff = targetYaw - this.visualPivot.rotation.y;

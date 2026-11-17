@@ -200,6 +200,7 @@ export class HUD {
       this.loadingScreen.classList.add('fade-out');
       setTimeout(() => {
         this.loadingScreen.style.display = 'none';
+        this.loadingScreen.classList.add('hidden');
         if (this.startOverlay) {
           this.startOverlay.classList.remove('hidden');
         }
@@ -384,8 +385,8 @@ export class HUD {
   showToast(message, type = 'info', durationMs = 3800) {
     if (!this.toastContainer || !this.doc) return;
 
-    while (this.toastContainer.children.length >= 3) {
-      this.toastContainer.removeChild(this.toastContainer.firstChild);
+    while (this.toastContainer.children.length >= 1) {
+      this.toastContainer.removeChild(this.toastContainer.children[0]);
     }
 
     const toast = this.doc.createElement('div');
@@ -1178,11 +1179,17 @@ export class HUD {
   }
 
   triggerAutoRudyBubble(options = {}) {
-    if (!options.force && !this.autoRudyEnabled) return null;
+    this._refreshRudyState();
+    if (!this.autoRudyEnabled) return null;
     const bubble = generateAutoRudyBubble(this.lastState, this.currentDayPhase, {
       recentKeys: this._rudyRecentKeys
     });
     if (!bubble) return null;
+    this._rudyAdviceHistory ||= new Map();
+    const adviceKey = `${this.lastState?.day || 1}:${bubble.urgency}:${bubble.key}`;
+    if (this._rudyAdviceHistory.has(adviceKey)) return null;
+    this._rudyAdviceHistory.set(adviceKey, true);
+    if (this._rudyAdviceHistory.size > 80) this._rudyAdviceHistory.delete(this._rudyAdviceHistory.keys().next().value);
 
     this._rudyRecentKeys.push(bubble.key);
     if (this._rudyRecentKeys.length > 5) {
@@ -1254,6 +1261,7 @@ export class HUD {
   }
 
   refreshRudyAI(options = {}) {
+    this._refreshRudyState();
     const analysis = analyzeFarmWithRudyAI(this.lastState, this.currentDayPhase);
     this._renderRudyAIResponse({
       badge: `IA · Salud ${analysis.score}/100`,
@@ -1266,6 +1274,7 @@ export class HUD {
   }
 
   askRudy(question, options = {}) {
+    this._refreshRudyState();
     const answer = askRudyAI(question, this.lastState, this.currentDayPhase);
     this._renderRudyAIResponse({
       badge: 'Rudy IA · Respuesta',
@@ -1275,6 +1284,11 @@ export class HUD {
       spokenText: answer.spokenText
     }, { speak: options.speak !== false });
     return answer;
+  }
+
+  _refreshRudyState() {
+    const state = this.adapter?.simulation?.getState?.();
+    if (state && typeof state.then !== 'function') this.lastState = state;
   }
 
   _renderRudyAIResponse(payload, options = {}) {
@@ -1531,7 +1545,8 @@ export class HUD {
 
     refs.btnCompost.disabled = !avail.canCompost;
     refs.btnCompost.textContent =
-      state.compostCost > 0 ? `♻️ Compost (${formatCOP(state.compostCost)})` : '♻️ Compost (Gratis)';
+      activePlot.fertilizerAdvice ? `♻️ ${activePlot.fertilizerAdvice.label} · 1 dosis` : state.compostCost > 0 ? `♻️ Compost (${formatCOP(state.compostCost)})` : '♻️ Compost (Gratis)';
+    refs.btnCompost.title = activePlot.fertilizerAdvice?.reason || '';
     refs.btnCompost.style.display =
       state.mode === SIMULATION_MODES.ECOLOGICAL || activePlot.isPlanted ? '' : 'none';
 
@@ -1627,7 +1642,7 @@ export class HUD {
         const evap = state.evaporationRate ?? 11;
         const compostState = activePlot.composted
           ? `Cobertura orgánica activa (evap. ${evap}%/día, prima +25%).`
-          : `Sin compost aún (evap. ${evap}%/día). En P3 el compost es gratis.`;
+          : `Sin compost aún (evap. ${evap}%/día). Requiere compost maduro del inventario.`;
         refs.modeBoxText.textContent = `${compostState} Aplicaciones: ${state.compostApplications ?? 0}.`;
       } else {
         refs.modeBoxTitle.textContent = '🪣 Lote P1 · Subsistencia (En 3 en 1)';
@@ -1660,7 +1675,7 @@ export class HUD {
       const evap = state.evaporationRate ?? 11;
       const compostState = activePlot.composted
         ? `Cobertura orgánica activa (evap. ${evap}%/día, prima +25%).`
-        : `Sin compost aplicado aún (evap. ${evap}%/día). Aplica compost gratis.`;
+        : `Sin compost aplicado aún (evap. ${evap}%/día). Produce compost en la compostera.`;
       refs.modeBoxText.textContent = `${compostState} Aplicaciones: ${state.compostApplications ?? 0}.`;
     } else {
       refs.modeBoxTitle.textContent = '🪣 Riego Manual (Subsistencia)';
@@ -1756,6 +1771,10 @@ export class HUD {
    */
   setDayPhase(phaseName, formattedTime = '', clockInfo = null) {
     if (!phaseName) return;
+    for (const id of ['hud-game-clock', 'live-game-clock']) {
+      const clock = this.doc?.getElementById(id);
+      if (clock && formattedTime) clock.textContent = formattedTime;
+    }
     this.currentDayPhase = phaseName;
     if (this.hudDayPhase) {
       const icons = {
@@ -1812,6 +1831,7 @@ export class HUD {
   }
 
   async _executeAction(actionName, arg) {
+    if (actionName === 'applyCompost' && this.onEquipFertilizer) return this.onEquipFertilizer();
     if (this.actionHandlers && typeof this.actionHandlers[actionName] === 'function') {
       return this.actionHandlers[actionName](arg);
     }

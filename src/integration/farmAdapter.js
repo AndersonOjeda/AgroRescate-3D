@@ -9,6 +9,7 @@ export class FarmAdapter {
   constructor(externalSimulationModule = null) {
     // Si el compañero 3 inyecta su módulo, se usa; de lo contrario, se usa la simulación de respaldo
     this.simulation = externalSimulationModule || new FarmSimulation('precision');
+    if (!externalSimulationModule) this.simulation.enableDynamicWeather = true;
     this.listeners = new Map();
     this.cropPlotVisuals = new Map(); // Mapa de instancias de CropPlot 3D
   }
@@ -64,6 +65,8 @@ export class FarmAdapter {
       if (visual && typeof visual.setVisualState === 'function') {
         visual.setVisualState(plotData.visualState);
         visual.setPestPressure?.(plotData.pestPressure || 0);
+        visual.setTrampleDamage?.(plotData.trampledPlants || {});
+        if (plotData.rows) visual.setRowStates?.(plotData.rows);
       }
     }
   }
@@ -193,10 +196,10 @@ export class FarmAdapter {
   /**
    * Aplica compost orgánico
    */
-  async applyCompost() {
+  async applyCompost(plotId) {
     let result;
     if (typeof this.simulation.applyCompost === 'function') {
-      result = await Promise.resolve(this.simulation.applyCompost());
+      result = await Promise.resolve(this.simulation.applyCompost(plotId));
     } else {
       result = { success: true, message: 'Compost orgánico aplicado' };
     }
@@ -225,11 +228,18 @@ export class FarmAdapter {
 
   /** Prepara el terreno de una parcela (habilita la siembra) */
   prepareSoil(plotId) { return this._run('prepareSoil', 'soilPrepared', plotId); }
+  useComposter() { return this._run('useComposter', 'compostProduction'); }
+  buyFertilizer(kind) { return this._run('buyFertilizer', 'fertilizerPurchased', kind); }
 
   /** Descansa en la casa campesina y recupera energía */
-  restAtFarmerHouse() { return this._run('restAtFarmerHouse', 'farmerRested'); }
+  async restAtFarmerHouse(options) {
+    const result = await this._run('restAtFarmerHouse', 'farmerRested', options);
+    if (result.success && result.slept) this.emit('dayAdvanced', { day: result.state.day, result });
+    return result;
+  }
 
   controlPests(plotId) { return this._run('controlPests', 'pestsControlled', plotId); }
+  trampleCrop(plotId, plantId, rowIndex = null) { return this._run('trampleCrop', 'cropTrampled', plotId, plantId, rowIndex); }
 
   /** Selecciona variedad de semilla para la siembra */
   setSelectedSeedVariety(seedId) {

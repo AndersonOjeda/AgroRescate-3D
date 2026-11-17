@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { applyProceduralFarmerRig } from './farmerRig.js';
+import { attachHoeAtHand, solveSupportGrip } from './toolGrip.js';
 
 /**
  * Escala, centra en XZ, apoya en Y=0 y activa sombras en un modelo GLB de personaje.
@@ -295,8 +296,7 @@ export class PlayerController {
             if (this.hoeToolMesh.parent) {
               this.hoeToolMesh.parent.remove(this.hoeToolMesh);
             }
-            this.hoeToolMesh.position.set(-0.24, -0.02, 0.04);
-            this.rig.bones[6].add(this.hoeToolMesh);
+            attachHoeAtHand(this.hoeToolMesh, this.rig.bones[6]);
           }
         }
       }
@@ -320,8 +320,7 @@ export class PlayerController {
     this.hoeToolMesh.visible = false;
 
     if (this.rig && this.rig.bones && this.rig.bones[6]) {
-      this.hoeToolMesh.position.set(-0.24, -0.02, 0.04);
-      this.rig.bones[6].add(this.hoeToolMesh);
+      attachHoeAtHand(this.hoeToolMesh, this.rig.bones[6]);
     } else if (this.parts && this.parts.rightArm) {
       this.hoeToolMesh.position.set(0, -0.34, 0.08);
       this.parts.rightArm.add(this.hoeToolMesh);
@@ -426,7 +425,7 @@ export class PlayerController {
    */
   playActionAnimation(animName = 'action', duration = null) {
     const BASE_DURATIONS = { hoe: 1.80, plant: 1.40, harvest: 1.60, tired: 2.40, compost: 1.80, action: 0.75 };
-    const isLabor = animName === 'hoe' || animName === 'plant' || animName === 'harvest';
+    const isLabor = ['hoe', 'plant', 'harvest', 'compost'].includes(animName);
     const effort = Number.isFinite(duration) && duration > 0
       ? duration / (BASE_DURATIONS[animName] ?? 0.75)
       : isLabor ? this.getEffortMultiplier() : 1;
@@ -436,6 +435,19 @@ export class PlayerController {
     this._lastLaborAnim = isLabor ? animName : null;
     // Tras una faena pesada con poca energía, el campesino se detiene a recobrar el aliento
     this._pendingTired = isLabor && this.fatigue >= 0.55;
+    this._laborFeet = [];
+    if (isLabor && this.rig?.bones) {
+      this.mesh.updateWorldMatrix(true, true);
+      for (const side of ['left', 'right']) {
+        const thigh = this.rig.bones.find(b => b.name === `${side}Thigh`);
+        const shin = this.rig.bones.find(b => b.name === `${side}Shin`);
+        if (!thigh || !shin) continue;
+        const offset = new THREE.Vector3(0, -Math.abs(shin.position.y) * 0.9, 0);
+        const target = shin.localToWorld(offset.clone());
+        target.y = this.position.y + 0.04;
+        this._laborFeet.push({ thigh, shin, offset, target });
+      }
+    }
     const actionAnim = this.animations[animName] || this.animations.action;
     if (!actionAnim) {
       if (this.parts && this.parts.pelvis) {
@@ -890,6 +902,7 @@ export class PlayerController {
       'results-modal',
       'report-modal',
       'farmer-house-modal',
+      'farm-victory',
       'warehouse-store-modal'
     ];
     return modalIds.some((id) => {
@@ -1420,6 +1433,24 @@ export class PlayerController {
         shin.rotateX(1.05 * lift);
       } else if (this.parts?.leftLeg) {
         this.parts.leftLeg.rotation.x -= 0.85 * lift;
+      }
+    }
+    if (this._isPlayingAction && ['hoe', 'plant', 'harvest', 'compost'].includes(this.currentAnimName)) {
+      for (const foot of this._laborFeet || []) solveSupportGrip(foot.thigh, foot.shin, foot.offset, foot.target, 5);
+      const spine = this.rig?.bones?.find(bone => bone.name === 'spine');
+      if (spine) {
+        const exertion = 0.008 + this.fatigue * 0.018;
+        spine.rotateX(Math.sin(performance.now() * 0.009) * exertion);
+      }
+    }
+    if (this._isPlayingAction && this.currentAnimName === 'hoe' && this.hoeToolMesh?.visible && this.rig?.bones) {
+      const upper = this.rig.bones.find(bone => bone.name === 'leftUpperArm');
+      const fore = this.rig.bones.find(bone => bone.name === 'leftForeArm');
+      if (upper && fore) {
+        const grip = new THREE.Vector3(0, 0.45, 0);
+        this.hoeToolMesh.updateWorldMatrix(true, true);
+        this.hoeToolMesh.localToWorld(grip);
+        solveSupportGrip(upper, fore, new THREE.Vector3(Math.abs(fore.position.x), 0, 0), grip);
       }
     }
     // Calcular posición de cámara en 3ra persona con esféricas

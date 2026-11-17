@@ -1601,12 +1601,12 @@ body.is-touch-device .crosshair {
 .live-crop-dashboard { position: fixed; bottom: 78px; left: 16px; width: min(350px, 40vw); max-height: 245px; overflow-y: auto; z-index: 23; background: rgba(10, 20, 28, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(82, 121, 106, 0.75); border-radius: 14px; padding: 11px 12px; pointer-events: auto; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
 
 /* Ocultar tableros de juego mientras la pantalla de carga o inicio esté visible */
-#app:has(#loading-screen:not(.hidden)) .live-crop-dashboard,
-#app:has(#loading-screen:not(.hidden)) .hud-top,
-#app:has(#loading-screen:not(.hidden)) .hud-bottom,
-#app:has(#loading-screen:not(.hidden)) .mission-hud,
-#app:has(#loading-screen:not(.hidden)) .agro-hud-dock,
-#app:has(#loading-screen:not(.hidden)) .agro-rudy-bubble,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .live-crop-dashboard,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .hud-top,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .hud-bottom,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .mission-hud,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .agro-hud-dock,
+#app:has(#loading-screen:not(.hidden):not(.fade-out)) .agro-rudy-bubble,
 #app:has(#start-overlay:not(.hidden)) .live-crop-dashboard,
 #app:has(#start-overlay:not(.hidden)) .hud-top,
 #app:has(#start-overlay:not(.hidden)) .hud-bottom,
@@ -1616,6 +1616,16 @@ body.is-touch-device .crosshair {
   display: none !important;
 }
 .live-crop-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #a7f3d0; }
+.live-crop-dashboard { z-index: 100001; max-height: min(420px, 55dvh); }
+.live-player-vitals { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding-bottom: 8px; border-bottom: 1px solid #52796a; margin-bottom: 8px; }
+.live-player-vitals label { font-size: 13px; color: #fef3c7; }
+.live-player-vitals strong { margin-left: 8px; }
+.live-player-vitals progress { grid-column: 1; width: 100%; height: 12px; accent-color: #fbbf24; }
+.live-player-vitals time { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.game-clock { font: 700 20px var(--font-mono); color: #fef3c7; font-variant-numeric: tabular-nums; }
+.stat-group[hidden] { display: none !important; }
+.fertilizer-reading { display: block; font-size: 10px; color: #c4b5fd; margin-top: 6px; }
+.fertilizer-reading progress { display: block; width: 100%; height: 7px; accent-color: #a78bfa; }
 .live-crop-heading span { font-size: 11px; color: #e2e8f0; background: rgba(255, 255, 255, 0.08); padding: 2px 8px; border-radius: 999px; }
 .sun-field-guide { font-size: 10px; color: #fde68a; display: block; max-width: 260px; line-height: 1.4; }
 .live-crop-dashboard ul { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 6px; }
@@ -1845,4 +1855,89 @@ body.is-touch-device .crosshair {
   font-size: 0.85rem;
   line-height: 1.7;
   color: var(--text-main);
+}
+
+/* HUD compacto de aventura: barras sobre el escenario, sin tablero opaco. */
+.live-crop-dashboard {
+  top: max(18px, env(safe-area-inset-top)); bottom: auto; left: 18px;
+  width: 286px; max-height: 310px; overflow: visible; padding: 10px 12px;
+  background: linear-gradient(110deg, rgba(7, 15, 19, .83), rgba(7, 15, 19, .25));
+  border: none; border-left: 2px solid #c8ac69; border-radius: 3px;
+  box-shadow: none; backdrop-filter: blur(3px); pointer-events: none;
+}
+.live-player-vitals { padding: 0 45px 7px 0; margin-bottom: 5px; border-color: #ffffff21; }
+.live-player-vitals label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.live-player-vitals progress { height: 9px; border-radius: 0; accent-color: #93c47d; }
+.live-player-vitals .game-clock { font-size: 16px; }
+#corner-celestial { position: absolute; right: 8px; top: 7px; }
+#corner-celestial .celestial-dial { width: 40px; height: 40px; }
+.live-crop-dashboard .live-crop-heading { margin: 5px 0; }
+.live-crop-dashboard .live-crop-heading > strong { display: none; }
+.live-crop-dashboard .live-crop-heading span { background: none; padding: 0; font-size: 10px; }
+.live-crop-dashboard #fertilizer-stock { display: none; }
+.live-crop-dashboard li { background: none !important; border: none !important; padding: 0; border-radius: 0; }
+.live-crop-dashboard li:not(.is-active-plot) { display: none; }
+.live-crop-dashboard .live-plot-head strong { font-size: 10px; font-weight: 500; color: #cbd5e1; }
+.live-crop-dashboard .live-plot-badge, .live-crop-dashboard .live-plot-rows { display: none; }
+.live-crop-dashboard .live-crop-metrics { display: grid; grid-template-columns: 1fr; gap: 5px; margin-top: 6px; }
+.live-crop-dashboard .metric-stat { padding: 0; background: none; border: none; }
+.live-crop-dashboard .metric-stat-head { font-size: 10px; margin-bottom: 2px; }
+.live-crop-dashboard .metric-stat-head strong { font-size: 10px; font-weight: 500; }
+.live-crop-dashboard .metric-bar-track { height: 5px; border-radius: 0; background: #ffffff26; }
+.live-crop-dashboard .metric-bar-fill { border-radius: 0; transition: width .25s ease; }
+.live-crop-dashboard .fertilizer-reading { font-size: 10px; margin-top: 5px; }
+.live-crop-dashboard .fertilizer-reading progress { height: 5px; }
+.live-crop-dashboard .live-plot-notice { font-size: 10px; max-height: 30px; overflow: hidden; margin-top: 6px; color: #d8cfb5; }
+.corner-budget { display: flex; align-items: baseline; justify-content: space-between; padding: 5px 0 7px; border-bottom: 1px solid #ffffff26; color: #d6d0bf; font-size: 11px; }
+.live-crop-dashboard .corner-budget strong { color: #fde68a; font-size: 15px; font-variant-numeric: tabular-nums; }
+.hud-top { left: auto; right: 16px; transform: none; width: min(760px, calc(100% - 350px)); }
+.hud-top .stat-group:has(#meter-energy), .hud-top .stat-group:has(#meter-soil), .hud-top .stat-group:has(#meter-water), .hud-top .stat-group-day { display: none; }
+.hud-top .farm-status-panel { padding: 7px 12px; gap: 10px; }
+@media (max-width: 700px) {
+  .live-crop-dashboard { left: 8px; top: max(8px, env(safe-area-inset-top)); width: min(230px, 54vw); padding: 8px; max-height: 270px; }
+  .live-player-vitals { padding-right: 34px; gap: 3px 6px; }
+  .live-player-vitals .game-clock { font-size: 13px; }
+  #corner-celestial { right: 3px; top: 5px; }
+  #corner-celestial .celestial-dial { width: 32px; height: 32px; }
+  .hud-top { left: auto; right: 8px; top: 8px; width: min(155px, 39vw); }
+  .hud-top .stat-group:not(:first-child), .hud-top .stat-divider, .hud-top .btn-advance { display: none; }
+  .hud-top .farm-status-panel { padding: 6px; gap: 4px; }
+  .hud-top .mode-dropdown { max-width: 110px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .live-crop-dashboard .metric-bar-fill { transition: none; } }
+
+/* Información progresiva: HUD esencial y un único menú de herramientas. */
+.game-utility-menu { position: fixed; right: 16px; bottom: 16px; z-index: 90; width: 190px; }
+.game-utility-menu > summary { cursor: pointer; list-style: none; padding: 10px 16px; border: 1px solid #ffffff30; border-radius: 10px; background: #101c28df; color: #f1f5f9; text-align: center; font-weight: 600; }
+.game-utility-content { position: absolute; bottom: 48px; right: 0; width: min(330px, 90vw); max-height: 72dvh; overflow-y: auto; padding: 12px; background: #101c28f5; border: 1px solid #526474; border-radius: 12px; display: grid; gap: 10px; }
+.game-utility-menu #hud-top, .game-utility-menu #hud-bottom { position: static; transform: none; width: auto; max-width: none; display: block; padding: 0; }
+.game-utility-menu .farm-status-panel { background: none; box-shadow: none; padding: 0; border: 0; flex-wrap: wrap; }
+.game-utility-menu .stat-group:has(#hud-budget), .game-utility-menu .stat-group:has(#hud-harvest), .game-utility-menu .stat-divider { display: none; }
+.game-utility-menu .hud-controls-right { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.game-utility-menu .hud-btn { font-size: 12px; padding: 9px; white-space: normal; }
+.menu-goal { font-size: 12px; line-height: 1.5; color: #e8d9a4; }
+.menu-goal progress { margin-top: 7px; }
+.hud-zone { display: none !important; }
+.mission-hud { top: 18px; right: 18px; width: min(270px, 33vw); padding: 9px 12px; background: #0b1720a6; border: 0; box-shadow: none; backdrop-filter: blur(3px); }
+.mission-hud .farm-current-need, #mission-progress, #mission-harvest-status { display: none; }
+.mission-hud .mission-title { font-size: 11px; color: #d5c69c; }
+.mission-hud .mission-tasks { margin: 4px 0 0; }
+.mission-tasks li.done, .mission-tasks li:not(.done) ~ li { display: none; }
+.mission-tasks li { font-size: 12px; line-height: 1.4; }
+.agro-hud-dock { top: 180px; z-index: 100002; }
+.agro-hud-dock:not(:has(.agro-hud-panel:not(.collapsed))) .agro-hud-toggle { display: none; }
+.agro-hud-panel { max-height: calc(100dvh - 235px); }
+body:not(.near-crop) .live-crop-dashboard #pest-status-list { display: none; }
+.live-crop-dashboard { max-height: 310px; }
+.live-crop-dashboard .live-plot-notice { display: none; }
+.live-crop-dashboard [data-severity="critical"] .live-plot-notice { display: block; }
+.agro-rudy-bubble { max-width: min(320px, 80vw); bottom: 74px; right: 16px; left: auto; }
+.lil-gui { display: none !important; }
+#app:has(#start-overlay:not(.hidden)) .game-utility-menu, #app:has(#loading-screen:not(.hidden):not(.fade-out)) .game-utility-menu { display: none; }
+@media (max-width: 700px) {
+  .game-utility-menu { width: 108px; right: 8px; bottom: 8px; }
+  .mission-hud { top: 8px; right: 8px; width: 37vw; padding: 7px; max-height: 110px; }
+  .mission-hud .mission-title { font-size: 10px; }
+  .mission-tasks li { font-size: 10px; }
+  .agro-hud-dock { top: 170px; left: 8px; }
 }

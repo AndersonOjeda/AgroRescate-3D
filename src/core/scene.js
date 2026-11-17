@@ -22,7 +22,7 @@ export function createScene() {
   sunLight.shadow.mapSize.width = 1024;
   sunLight.shadow.mapSize.height = 1024;
   sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 90;
+  sunLight.shadow.camera.far = 140;
 
   const d = 28;
   sunLight.shadow.camera.left = -d;

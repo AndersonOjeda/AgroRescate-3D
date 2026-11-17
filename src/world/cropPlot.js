@@ -20,8 +20,8 @@ export class CropPlot {
     this.position = new THREE.Vector3(config.x, config.y || 0.05, config.z);
     this.width = config.width || 7;
     this.depth = config.depth || 7;
-    this.rows = config.filas || 4;
-    this.cols = config.columnas || 4;
+    this.rows = config.filas || 5;
+    this.cols = config.columnas || 5;
 
     this.group = new THREE.Group();
     this.group.name = `crop_plot_${this.id}`;
@@ -265,5 +265,23 @@ export class CropPlot {
 
   getVisualState() {
     return this.visualState;
+  }
+
+  setRowStates(rows) {
+    const all = this.plants;
+    for (let index = 0; index < rows.length; index++) {
+      this.plants = all.filter((_, plantIndex) => Math.floor(plantIndex / this.cols) === index);
+      this.setVisualState(rows[index].visualState);
+      this.setTrampleDamage(rows[index].trampledPlants || {});
+    }
+    this.plants = all;
+  }
+
+  setTrampleDamage(damage) {
+    this.plants.forEach(({ group }, index) => {
+      const hits = damage[index] || 0;
+      group.rotation.z = hits * 0.28;
+      group.scale.y *= 1 - hits * 0.22;
+    });
   }
 }
