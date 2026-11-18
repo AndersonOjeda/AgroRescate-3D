@@ -24,6 +24,7 @@ import {
 
 import { advancePests, resetPests, getPestAction } from './pests.js';
 import { fertilizerAdvice, advanceFertilizer } from './fertilizer.js';
+import { WORK_START, isBedtime } from '../gameplay/workSchedule.js';
 
 let activeSimulationInstance = null;
 
@@ -79,9 +80,10 @@ export class FarmSimulation {
     this._continuousWaterAcc = 0;
     this._continuousCostWaterAcc = 0;
     this._continuousHealthAcc = 0;
+    this._energyRecoveryAcc = 0;
 
     this.farmerEnergy = 100;
-    this.timeOfDay = 0.5;
+    this.timeOfDay = WORK_START;
     this.lastSiestaDay = -1;
     this.maxFarmerEnergy = 100;
     this.selectedSeedId = SEED_VARIETIES.NATIVE_COMMUNITY.id;
@@ -315,16 +317,30 @@ export class FarmSimulation {
     return this.farmerEnergy;
   }
 
+  /** Recuperación natural durante una jornada activa: 1 punto cada 4 segundos. */
+  recoverFarmerEnergy(deltaSeconds = 0, pointsPerSecond = 0.25) {
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0 || this.farmerEnergy >= this.maxFarmerEnergy) {
+      return { recovered: 0, farmerEnergy: this.farmerEnergy };
+    }
+    this._energyRecoveryAcc += deltaSeconds * pointsPerSecond;
+    const recovered = Math.floor(this._energyRecoveryAcc);
+    if (recovered <= 0) return { recovered: 0, farmerEnergy: this.farmerEnergy };
+    this._energyRecoveryAcc -= recovered;
+    const previous = this.farmerEnergy;
+    this.farmerEnergy = Math.min(this.maxFarmerEnergy, this.farmerEnergy + recovered);
+    return { recovered: this.farmerEnergy - previous, farmerEnergy: this.farmerEnergy };
+  }
+
   /**
    * El campesino descansa en su casa humilde (agua de panela y reposo).
    */
   getRestAvailability() {
     const raining = ['rain', 'storm', 'flood'].includes(this.currentWeather?.id);
     return { canRest: ((this.timeOfDay >= 0.5 && this.timeOfDay < 0.75) || raining) && this.lastSiestaDay !== this.day,
-      canSleep: this.timeOfDay >= 0.7,
+      canSleep: isBedtime(this.timeOfDay),
       restLabel: raining ? '☕ Refugiarse de la lluvia y descansar' : '☕ Comida o siesta · una vez por tarde',
       restReason: this.lastSiestaDay === this.day ? 'Ya usaste la pausa de descanso de hoy.' : 'Una pausa diaria: durante la tarde o cuando llueve.',
-      sleepReason: 'Dormir: desde el final de la tarde y durante la noche.' };
+      sleepReason: 'La jornada termina a las 18:00. Descansa hasta las 07:00.' };
   }
 
   restAtFarmerHouse({ sleep = false } = {}) {
@@ -332,7 +348,7 @@ export class FarmSimulation {
     if (!(sleep ? availability.canSleep : availability.canRest)) return { success: false, message: sleep ? availability.sleepReason : availability.restReason };
     if (sleep) {
       this.advanceDay();
-      this.timeOfDay = 0.08;
+      this.timeOfDay = WORK_START;
     } else {
       this.lastSiestaDay = this.day;
     }

@@ -268,13 +268,22 @@
       <ul id="mission-tasks" class="mission-tasks"></ul>
       <div id="mission-harvest-status" class="mission-harvest-status">Estado cosecha: En espera</div>
     </aside>
-    <aside class="live-crop-dashboard" aria-label="Cultivos en tiempo real">
-      <div class="live-player-vitals"><label for="live-player-energy">⚡ Energía <strong id="live-player-energy-value">100%</strong></label><progress id="live-player-energy" max="100" value="100"></progress><time id="live-game-clock" class="game-clock" aria-label="Hora del juego">06:42</time></div>
-      <div id="corner-celestial" aria-label="Recorrido del día"></div>
-      <div class="corner-budget"><span>Presupuesto</span><strong id="live-player-budget">— COP</strong></div>
-      <div class="live-crop-heading"><strong>Surco seleccionado</strong><span id="live-crop-weather"></span></div>
-      <small id="fertilizer-stock"></small>
-      <ul id="pest-status-list"></ul>
+    <aside class="live-crop-dashboard" id="live-crop-dashboard" aria-label="Estadísticas de la finca en tiempo real">
+      <div class="live-dashboard-bar">
+        <button type="button" id="btn-toggle-telemetry" class="btn-toggle-telemetry" aria-expanded="true" aria-controls="live-dashboard-body" title="Minimizar o mostrar estadísticas (Tecla T)">🌾 Estado de la finca <span class="telemetry-arrow">▾</span></button>
+      </div>
+      <div class="live-dashboard-body" id="live-dashboard-body">
+        <div class="live-player-vitals"><label for="live-player-energy">⚡ Energía <strong id="live-player-energy-value">100%</strong> <small>+1 cada 4 s</small></label><progress id="live-player-energy" max="100" value="100"></progress><time id="live-game-clock" class="game-clock" aria-label="Hora del juego">07:00</time></div>
+        <div id="corner-celestial" aria-label="Recorrido del día"></div>
+        <div class="farm-live-summary">
+          <span><small>Jornada</small><strong id="live-player-day">Día 1</strong></span>
+          <span><small>Presupuesto</small><strong id="live-player-budget">— COP</strong></span>
+          <span><small>Cosecha</small><strong id="live-player-harvest">0 kg</strong></span>
+        </div>
+        <div class="live-crop-heading"><strong>Parcela seleccionada</strong><span id="live-crop-weather"></span></div>
+        <small id="fertilizer-stock"></small>
+        <ul id="pest-status-list"></ul>
+      </div>
     </aside>
 
     <div id="toast-container" class="toast-container"></div>

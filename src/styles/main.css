@@ -1933,6 +1933,23 @@ body:not(.near-crop) .live-crop-dashboard #pest-status-list { display: none; }
 .live-crop-dashboard [data-severity="critical"] .live-plot-notice { display: block; }
 .agro-rudy-bubble { max-width: min(320px, 80vw); bottom: 74px; right: 16px; left: auto; }
 .lil-gui { display: none !important; }
+
+/* Tablero compacto inspirado en la lectura táctica de Survival, adaptado a AgroRescate. */
+.live-crop-dashboard { pointer-events: auto; overflow: hidden; transition: width .22s ease, max-height .22s ease, background .22s ease; }
+.live-dashboard-bar { display: flex; align-items: center; min-height: 24px; }
+.btn-toggle-telemetry { appearance: none; border: 0; background: transparent; color: #ecfdf5; cursor: pointer; font: 700 11px/1.2 inherit; letter-spacing: .035em; padding: 2px 0; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+.btn-toggle-telemetry:hover, .btn-toggle-telemetry:focus-visible { color: #fde68a; outline: none; }
+.telemetry-arrow { color: #c8ac69; font-size: 14px; }
+.live-dashboard-body { margin-top: 5px; max-height: 275px; overflow-y: auto; scrollbar-width: thin; }
+.live-player-vitals label small { color: #86efac; font-size: 9px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.farm-live-summary { display: grid; grid-template-columns: .7fr 1.35fr .7fr; gap: 5px; padding: 6px 0; border-block: 1px solid #ffffff20; }
+.farm-live-summary span { min-width: 0; display: grid; gap: 2px; }
+.farm-live-summary small { color: #94a3b8; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.farm-live-summary strong { color: #f8fafc; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.farm-live-summary span:nth-child(2) strong { color: #fde68a; }
+.live-crop-dashboard.collapsed { width: 175px; max-height: 34px; padding-block: 5px; background: rgba(7, 15, 19, .78); border-left-color: #86efac; }
+.live-crop-dashboard.collapsed .live-dashboard-body { display: none; }
+@media (max-width: 700px) { .live-crop-dashboard.collapsed { width: 155px; } .farm-live-summary { grid-template-columns: 1fr; } }
 #app:has(#start-overlay:not(.hidden)) .game-utility-menu, #app:has(#loading-screen:not(.hidden):not(.fade-out)) .game-utility-menu { display: none; }
 @media (max-width: 700px) {
   .game-utility-menu { width: 108px; right: 8px; bottom: 8px; }

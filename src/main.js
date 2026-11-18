@@ -29,6 +29,7 @@ import { updatePestPanel } from './ui/pestPanel.js';
 import { organizeGameUI } from './ui/compactLayout.js';
 import { CropPlot } from './world/cropPlot.js';
 import { findTrampledPlant } from './gameplay/trampling.js';
+import { WORK_START, WORK_END, isBedtime } from './gameplay/workSchedule.js';
 
 /**
  * Punto de Entrada Principal de AgroRescate 3D
@@ -1308,13 +1309,13 @@ async function bootstrap() {
   });
 
   farmAdapter.on('dayAdvanced', async ({ result }) => {
-    if (result?.slept) skySystem.timeOfDay = 0.08;
+    if (result?.slept) skySystem.setTimeOfDay(WORK_START);
     if (['storm', 'flood', 'frost', 'heatwave'].includes(result?.state?.currentWeather?.id)) {
       const weather = result.state.currentWeather;
       hud.showToast(`${weather.icon} ${weather.name}: ${weather.description}`, 'warning', 8000);
     }
     if (result?.pestAlerts?.length) hud.showToast(result.pestAlerts.join(' '), 'warning', 7000);
-    if (!naturalDayAdvanceInFlight) {
+    if (!naturalDayAdvanceInFlight && !result?.slept) {
       skySystem.triggerDayNightCycle();
     }
     const state = result?.state || (await farmAdapter.getState());
@@ -1403,12 +1404,12 @@ async function bootstrap() {
     });
   }
 
-  // Ciclo continuo Mañana -> Mediodía -> Tarde -> Noche (48s por día virtual)
+  // Jornada campesina 07:00–18:00: casi cinco minutos reales de trabajo.
   let advanceDayPending = false;
   let naturalDayAdvanceInFlight = false;
   skySystem.setAutoCycle(true, {
-    dayLengthSeconds: 48,
-    startTimeOfDay: 0.08,
+    dayLengthSeconds: 480,
+    startTimeOfDay: WORK_START,
     onDayComplete: async () => {
       const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
       if (inMenu || player._isAnyModalOpen() || naturalDayAdvanceInFlight || advanceDayPending || modals.isPaused) return;
@@ -1507,10 +1508,68 @@ async function bootstrap() {
   window.addEventListener('pointerdown', ensureAudioOnGesture);
   window.addEventListener('keydown', ensureAudioOnGesture);
 
+  const telemetryBtn = document.getElementById('btn-toggle-telemetry');
+  const cropDashboard = document.getElementById('live-crop-dashboard');
+  const toggleTelemetry = () => {
+    if (!telemetryBtn || !cropDashboard) return;
+    cropDashboard.classList.toggle('collapsed');
+    const collapsed = cropDashboard.classList.contains('collapsed');
+    telemetryBtn.setAttribute('aria-expanded', String(!collapsed));
+    const arrow = telemetryBtn.querySelector('.telemetry-arrow');
+    if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+  };
+  telemetryBtn?.addEventListener('click', toggleTelemetry);
+  window.addEventListener('keydown', event => {
+    if (event.code === 'KeyT' && !event.repeat && !['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target?.tagName)) {
+      toggleTelemetry();
+    }
+  });
+
+  modals.onRestStarted = async () => {
+    interactionSystem.stopHold(true);
+    player.cancelActionAnimation();
+    if (isPumpSprayingManually) stopContinuousPump();
+    if (autoIoTActivePlotId) await stopAutoIoTIrrigation();
+  };
+  modals.onSleepCompleted = async () => {
+    const eyes = document.querySelector('.rest-eyes');
+    eyes?.classList.add('dreaming');
+    skySystem.triggerDayNightCycle();
+    await new Promise(resolve => {
+      let previous = performance.now();
+      const step = now => {
+        skySystem.update(Math.min(0.1, Math.max(0, (now - previous) / 1000)));
+        previous = now;
+        if (skySystem.isTransitioning) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+    skySystem.setTimeOfDay(WORK_START);
+    farmAdapter.simulation.timeOfDay = WORK_START;
+    const homeOffset = new THREE.Vector3(houseCoords.x, 0, houseCoords.z).sub(player.position);
+    camera.position.add(homeOffset);
+    player.orbitControls?.target.add(homeOffset);
+    player.setPosition(houseCoords.x, 0, houseCoords.z);
+    player.setFatigueFromEnergy(100);
+    const clock = skySystem.getClockInfo();
+    hud.setDayPhase(skySystem.phaseName, clock.formatted, clock);
+    eyes?.classList.remove('dreaming');
+  };
+
   // 12. BUCLE PRINCIPAL DE JUEGO (ANIMATE TICK)
   let liveStatsElapsed = 0;
   let liveStatsPending = false;
   gameLoop.addUpdateCallback((delta, fps) => {
+    const inMenu = modals.startOverlay && !modals.startOverlay.classList.contains('hidden');
+    if (!inMenu && !modals.isPaused && !player._isAnyModalOpen() && isBedtime(skySystem.timeOfDay)) {
+      skySystem.setTimeOfDay(WORK_END);
+      farmAdapter.simulation.timeOfDay = WORK_END;
+      void modals.restAtHouse({ sleep: true, automatic: true });
+    }
+    if (!inMenu && !modals.isPaused && !player._isAnyModalOpen()) {
+      farmAdapter.simulation.recoverFarmerEnergy?.(delta);
+    }
     farmAdapter.simulation.timeOfDay = skySystem.timeOfDay;
     liveStatsElapsed += delta;
     if (liveStatsElapsed >= 0.25 && !liveStatsPending) {

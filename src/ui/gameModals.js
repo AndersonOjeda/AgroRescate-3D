@@ -38,6 +38,40 @@ export class GameModalsController {
     this._bindEvents();
   }
 
+  async restAtHouse({ sleep = false, automatic = false } = {}) {
+    if (this.houseActionPending) return;
+    this.houseActionPending = true;
+    this.player?.unlock();
+    const buttons = ['btn-house-rest', 'btn-house-sleep'].map(id => document.getElementById(id));
+    buttons.forEach(button => { if (button) button.disabled = true; });
+    try {
+      await this.onRestStarted?.();
+      const result = await withRestTransition(async () => {
+        const restResult = await this.farmAdapter.restAtFarmerHouse({ sleep });
+        if (!restResult.success) return restResult;
+        if (sleep) await this.onSleepCompleted?.({ automatic });
+        if (automatic) this.houseModal?.classList.add('hidden');
+        else await this.openFarmerHouse();
+        return restResult;
+      }, sleep);
+      this.hud?.showToast(
+        result?.success ? (sleep ? '07:00 · Nueva jornada. Descansaste y recuperaste tu energía.' : result.message) : result?.message || 'No se pudo completar el descanso.',
+        result?.success ? 'success' : 'warning',
+        5000
+      );
+      if (result?.success) this.audioSystem?.playSuccess();
+      return result;
+    } catch {
+      this.hud?.showToast('No se pudo completar el descanso. Inténtalo otra vez.', 'warning');
+    } finally {
+      this.houseActionPending = false;
+      const state = await this.farmAdapter.getState();
+      buttons.forEach((button, index) => {
+        if (button) button.disabled = !(index === 0 ? state.restAvailability?.canRest : state.restAvailability?.canSleep);
+      });
+    }
+  }
+
   recordDecision(label) {
     if (!label) return;
     this.decisions.push(label);
@@ -148,32 +182,8 @@ export class GameModalsController {
     // Casa Campesina
     document.getElementById('btn-close-house')?.addEventListener('click', () => this.closeFarmerHouse());
     document.getElementById('btn-house-continue')?.addEventListener('click', () => this.closeFarmerHouse());
-    const houseAction = async (sleep) => {
-      if (this.houseActionPending) return;
-      this.houseActionPending = true;
-      const buttons = ['btn-house-rest', 'btn-house-sleep'].map(id => document.getElementById(id));
-      buttons.forEach(button => { if (button) button.disabled = true; });
-      try {
-        await withRestTransition(async () => {
-        const result = await this.farmAdapter.restAtFarmerHouse({ sleep });
-        if (!result.success) { this.hud?.showToast(result.message, 'warning'); return; }
-        this.hud?.showToast(sleep ? 'Amaneció un nuevo día. Revisa el clima y las parcelas antes de salir.' : result.message, 'success', 5000);
-        this.audioSystem?.playSuccess();
-        await this.openFarmerHouse();
-        }, sleep);
-      } catch {
-        this.hud?.showToast('No se pudo completar el descanso. Inténtalo otra vez.', 'warning');
-      } finally {
-        this.houseActionPending = false;
-        const state = await this.farmAdapter.getState();
-        const availability = state.restAvailability;
-        buttons.forEach((button, index) => {
-          if (button) button.disabled = !(index === 0 ? availability?.canRest : availability?.canSleep);
-        });
-      }
-    };
-    document.getElementById('btn-house-rest')?.addEventListener('click', () => houseAction(false));
-    document.getElementById('btn-house-sleep')?.addEventListener('click', () => houseAction(true));
+    document.getElementById('btn-house-rest')?.addEventListener('click', () => this.restAtHouse({ sleep: false }));
+    document.getElementById('btn-house-sleep')?.addEventListener('click', () => this.restAtHouse({ sleep: true }));
 
     // Volumen (General, Música, Efectos) y Calidad gráfica sincronizados entre menú y pausa
     const STORAGE_KEY = 'agrorescate_settings_v1';

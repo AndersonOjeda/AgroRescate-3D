@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WORK_START } from '../gameplay/workSchedule.js';
 
 const DAY_SKY = new THREE.Color(0xa0d8ef);
 const SUNSET_SKY = new THREE.Color(0xf59e6b);
@@ -45,8 +46,8 @@ export class SkySystem {
 
     // Ciclo natural continuo (Madrugada -> Mañana -> Mediodía -> Tarde -> Anochecer -> Noche)
     this.autoCycleEnabled = false;
-    this.dayLengthSeconds = 48; // 48s reales = 1 día completo (12s por fase)
-    this.timeOfDay = 0.08;      // 0..1 (0.00-0.25 Mañana, 0.25-0.50 Mediodía, 0.50-0.75 Tarde, 0.75-1.00 Noche)
+    this.dayLengthSeconds = 480; // La jornada 07:00–18:00 dura aproximadamente cinco minutos.
+    this.timeOfDay = WORK_START;
     this.onDayComplete = null;
 
     // Dinámica climática aplicada a nubes y disco solar
@@ -262,6 +263,14 @@ export class SkySystem {
     this.cycleProgress = 0;
   }
 
+  // Aplica una hora exacta y cancela cualquier transición solar pendiente.
+  setTimeOfDay(time) {
+    this.isTransitioning = false;
+    this.cycleProgress = 0;
+    this.timeOfDay = ((time % 1) + 1) % 1;
+    this._applyTimeOfDay(this.timeOfDay);
+  }
+
   /**
    * Actualiza el desplazamiento de nubes, acumulación climática y el ciclo día/noche cada frame.
    * @param {number} delta
@@ -295,7 +304,7 @@ export class SkySystem {
       if (this.cycleProgress >= 1) {
         this.cycleProgress = 1;
         this.isTransitioning = false;
-        this.timeOfDay = 0.08;
+        this.timeOfDay = WORK_START;
         if (this.autoCycleEnabled) {
           this._applyTimeOfDay(this.timeOfDay);
         } else {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { SkySystem } from '../src/systems/skySystem.js';
 import { AudioSystem } from '../src/systems/audioSystem.js';
+import { WORK_START, WORK_END } from '../src/gameplay/workSchedule.js';
 
 function createSkyTestFixture() {
   const scene = new THREE.Scene();
@@ -36,6 +37,31 @@ function createFakeAudioChannel() {
 }
 
 describe('SkySystem — Nubes 3D y Ciclo Día-Noche-Día', () => {
+  it('deja casi cinco minutos reales de trabajo entre las 07:00 y las 18:00', () => {
+    const sky = new SkySystem(createSkyTestFixture());
+    sky.setAutoCycle(true, { startTimeOfDay: WORK_START, dayLengthSeconds: 480 });
+    sky.update(299);
+    expect(sky.getClockInfo().hours).toBe(17);
+    sky.update(1);
+    expect(sky.getClockInfo().hours).toBe(18);
+  });
+
+  it('despierta a las 07:00 y cancela el ciclo solar pendiente', () => {
+    const sky = new SkySystem(createSkyTestFixture());
+    const nextDay = vi.fn();
+    sky.setAutoCycle(true, { startTimeOfDay: WORK_END, onDayComplete: nextDay });
+    sky.triggerDayNightCycle();
+    sky.update(1);
+    sky.setTimeOfDay(WORK_START);
+    expect(sky.isTransitioning).toBe(false);
+    expect(sky.cycleProgress).toBe(0);
+    expect(sky.getClockInfo().formatted).toBe('07:00');
+    sky.update(0.1);
+    expect(sky.timeOfDay).toBeGreaterThan(WORK_START);
+    expect(sky.timeOfDay).toBeLessThan(WORK_END);
+    expect(nextDay).not.toHaveBeenCalled();
+  });
+
   it('sincroniza reloj, recorrido Este-Oeste y dirección de las sombras', () => {
     const fixture = createSkyTestFixture();
     const sky = new SkySystem(fixture);

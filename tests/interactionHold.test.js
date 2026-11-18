@@ -92,6 +92,14 @@ describe('InteractionSystem — Esfuerzo Físico Campesino (Hold [E])', () => {
 });
 
 describe('Fatiga y Desgaste Físico del Campesino', () => {
+  it('recupera energía gradualmente sin superar el máximo', () => {
+    const sim = new FarmSimulation('subsistence');
+    sim.farmerEnergy = 10;
+    expect(sim.recoverFarmerEnergy(3).recovered).toBe(0);
+    expect(sim.recoverFarmerEnergy(1)).toMatchObject({ recovered: 1, farmerEnergy: 11 });
+    expect(sim.recoverFarmerEnergy(400)).toMatchObject({ farmerEnergy: 100 });
+    expect(sim.recoverFarmerEnergy(4)).toMatchObject({ recovered: 0, farmerEnergy: 100 });
+  });
   it('impide labrar el suelo si el campesino está exhausto (<20 energía)', () => {
     const sim = new FarmSimulation('subsistence');
     expect(sim.farmerEnergy).toBe(100);
@@ -103,6 +111,7 @@ describe('Fatiga y Desgaste Físico del Campesino', () => {
     expect(res.message).toMatch(/fuerzas|exhausto/i);
 
     // Descansar en Casa Campesina con agua de panela
+    sim.timeOfDay = 0.5;
     const restRes = sim.restAtFarmerHouse();
     expect(restRes.success).toBe(true);
     expect(sim.farmerEnergy).toBe(100);

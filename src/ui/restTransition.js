@@ -26,7 +26,7 @@ export async function withRestTransition(action, sleep, doc = document) {
 
   const subtitle = doc.createElement('small');
   subtitle.className = 'rest-eyes-sub';
-  subtitle.textContent = sleep ? 'Descansando profundamente en la Casa Rural' : 'Tomando un respiro en el corredor';
+  subtitle.textContent = sleep ? 'Fin de la jornada · 18:00 — 07:00 · Casa Rural' : 'Tomando un respiro en el corredor';
 
   const breathBar = doc.createElement('div');
   breathBar.className = 'rest-eyes-progress';
@@ -54,12 +54,13 @@ export async function withRestTransition(action, sleep, doc = document) {
     // Cierre completo y suave de párpados
     overlay.classList.add('closed');
     await wait(700);
-    await action();
+    const result = await action();
     overlay.classList.add('restored');
-    icon.textContent = sleep ? '🌅' : '✨';
-    message.textContent = sleep ? 'Un nuevo día en la casa rural…' : '¡Energía renovada! Listo para volver al campo…';
-    subtitle.textContent = sleep ? 'Abriendo los ojos con el primer sol' : 'Fuerzas recuperadas';
+    icon.textContent = result?.success === false ? 'ℹ️' : sleep ? '🌅' : '✨';
+    message.textContent = result?.success === false ? 'No se completó el descanso.' : sleep ? '07:00 · Un nuevo día en la Casa Rural' : '¡Energía renovada! Listo para volver al campo…';
+    subtitle.textContent = result?.success === false ? result.message : sleep ? 'Una noche de descanso · Energía recuperada' : 'Fuerzas recuperadas';
     await wait(650);
+    return result;
   } finally {
     overlay.classList.remove('closed');
     overlay.classList.add('waking');
